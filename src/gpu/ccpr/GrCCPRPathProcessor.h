@@ -27,8 +27,6 @@ class GrShaderCaps;
 class GrCCPRPathProcessor : public GrGeometryProcessor {
 public:
     static constexpr int kPerInstanceIndexCount = 6 * 3;
-    static sk_sp<GrBuffer> FindOrMakeIndexBuffer(GrOnFlushResourceProvider*);
-    static sk_sp<GrBuffer> FindOrMakeVertexBuffer(GrOnFlushResourceProvider*);
 
     enum class InstanceAttribs {
         kDevBounds,
@@ -41,18 +39,21 @@ public:
     static constexpr int kNumInstanceAttribs = 1 + (int)InstanceAttribs::kColor;
 
     struct Instance {
-        SkRect                   fDevBounds;
-        SkRect                   fDevBounds45; // Bounding box in "| 1  -1 | * devCoords" space.
-                                               //                  | 1   1 |
-        std::array<float, 4>     fViewMatrix;  // {kScaleX, kSkewy, kSkewX, kScaleY}
-        std::array<float, 2>     fViewTranslate;
-        std::array<int16_t, 2>   fAtlasOffset;
-        uint32_t                 fColor;
+        SkRect fDevBounds;
+        SkRect fDevBounds45; // Bounding box in "| 1  -1 | * devCoords" space.
+                             //                  | 1   1 |
+        std::array<float, 4> fViewMatrix;  // {kScaleX, kSkewy, kSkewX, kScaleY}
+        std::array<float, 2> fViewTranslate;
+        std::array<int16_t, 2> fAtlasOffset;
+        uint32_t fColor;
 
         GR_STATIC_ASSERT(SK_SCALAR_IS_FLOAT);
     };
 
     GR_STATIC_ASSERT(4 * 16 == sizeof(Instance));
+
+    static sk_sp<const GrBuffer> FindIndexBuffer(GrOnFlushResourceProvider*);
+    static sk_sp<const GrBuffer> FindVertexBuffer(GrOnFlushResourceProvider*);
 
     GrCCPRPathProcessor(GrResourceProvider*, sk_sp<GrTextureProxy> atlas, SkPath::FillType,
                        const GrShaderCaps&);
@@ -77,8 +78,8 @@ public:
     GrGLSLPrimitiveProcessor* createGLSLInstance(const GrShaderCaps&) const override;
 
 private:
-    const SkPath::FillType   fFillType;
-    TextureSampler           fAtlasAccess;
+    const SkPath::FillType fFillType;
+    const TextureSampler fAtlasAccess;
 
     typedef GrGeometryProcessor INHERITED;
 };

@@ -215,17 +215,15 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(ImageFilterCache_ImageBackedGPU, reporter, ct
     }
     GrTexture* tex = srcProxy->priv().peekTexture();
 
-    GrBackendTexture backendTex = GrTest::CreateBackendTexture(context->contextPriv().getBackend(),
-                                                               kFullSize,
-                                                               kFullSize,
-                                                               kRGBA_8888_GrPixelConfig,
-                                                               GrMipMapped::kNo,
-                                                               tex->getTextureHandle());
+    GrBackendTexture backendTex = tex->getBackendTexture();
+
     GrSurfaceOrigin texOrigin = kTopLeft_GrSurfaceOrigin;
     sk_sp<SkImage> srcImage(SkImage::MakeFromTexture(context,
                                                      backendTex,
                                                      texOrigin,
-                                                     kPremul_SkAlphaType, nullptr));
+                                                     kRGBA_8888_SkColorType,
+                                                     kPremul_SkAlphaType, nullptr,
+                                                     nullptr, nullptr));
     if (!srcImage) {
         return;
     }

@@ -1050,8 +1050,8 @@ static void test_lcd_coverage_fallback_case(skiatest::Reporter* reporter, const 
     TEST_ASSERT(blendInfo.fWriteColor);
 }
 
-DEF_GPUTEST(PorterDuffNoDualSourceBlending, reporter, /*factory*/) {
-    GrContextOptions opts;
+DEF_GPUTEST(PorterDuffNoDualSourceBlending, reporter, options) {
+    GrContextOptions opts = options;
     opts.fSuppressDualSourceBlending = true;
     sk_gpu_test::GrContextFactory mockFactory(opts);
     GrContext* ctx = mockFactory.get(sk_gpu_test::GrContextFactory::kNullGL_ContextType);
@@ -1066,14 +1066,9 @@ DEF_GPUTEST(PorterDuffNoDualSourceBlending, reporter, /*factory*/) {
         return;
     }
 
-    GrBackendObject backendTexHandle =
-        ctx->getGpu()->createTestingOnlyBackendTexture(nullptr, 100, 100, kRGBA_8888_GrPixelConfig);
-    GrBackendTexture backendTex = GrTest::CreateBackendTexture(ctx->contextPriv().getBackend(),
-                                                               100,
-                                                               100,
-                                                               kRGBA_8888_GrPixelConfig,
-                                                               GrMipMapped::kNo,
-                                                               backendTexHandle);
+    GrBackendTexture backendTex =
+        ctx->getGpu()->createTestingOnlyBackendTexture(nullptr, 100, 100, kRGBA_8888_GrPixelConfig,
+                                                       false, GrMipMapped::kNo);
 
     GrXferProcessor::DstProxy fakeDstProxy;
     {
@@ -1104,7 +1099,7 @@ DEF_GPUTEST(PorterDuffNoDualSourceBlending, reporter, /*factory*/) {
             }
         }
     }
-    ctx->getGpu()->deleteTestingOnlyBackendTexture(backendTexHandle);
+    ctx->getGpu()->deleteTestingOnlyBackendTexture(&backendTex);
 }
 
 #endif

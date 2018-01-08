@@ -368,10 +368,14 @@ GrPixelConfig SkImageInfo2GrPixelConfig(const SkImageInfo& info, const GrCaps& c
 bool GrPixelConfigToColorType(GrPixelConfig config, SkColorType* ctOut) {
     SkColorType ct;
     switch (config) {
-        case kAlpha_8_GrPixelConfig:
+        case kAlpha_8_GrPixelConfig: // fall through
+        case kAlpha_8_as_Alpha_GrPixelConfig: // fall through
+        case kAlpha_8_as_Red_GrPixelConfig:
             ct = kAlpha_8_SkColorType;
             break;
-        case kGray_8_GrPixelConfig:
+        case kGray_8_GrPixelConfig: // fall through
+        case kGray_8_as_Lum_GrPixelConfig: // fall through
+        case kGray_8_as_Red_GrPixelConfig:
             ct = kGray_8_SkColorType;
             break;
         case kRGB_565_GrPixelConfig:
@@ -444,9 +448,6 @@ static inline bool skpaint_to_grpaint_impl(GrContext* context,
         } else if (const auto* shader = as_SB(skPaint.getShader())) {
             shaderFP = shader->asFragmentProcessor(SkShaderBase::AsFPArgs(
                     context, &viewM, nullptr, skPaint.getFilterQuality(), &colorSpaceInfo));
-            if (!shaderFP) {
-                return false;
-            }
         }
     }
 
@@ -480,7 +481,7 @@ static inline bool skpaint_to_grpaint_impl(GrContext* context,
                 // color channels. It's value should be treated as the same in ANY color space.
                 grPaint->addColorFragmentProcessor(GrConstColorProcessor::Make(
                     GrColor4f::FromGrColor(paintAlpha),
-                    GrConstColorProcessor::kModulateRGBA_InputMode));
+                    GrConstColorProcessor::InputMode::kModulateRGBA));
             }
         } else {
             // The shader's FP sees the paint unpremul color
@@ -492,7 +493,7 @@ static inline bool skpaint_to_grpaint_impl(GrContext* context,
             // There is a blend between the primitive color and the paint color. The blend considers
             // the opaque paint color. The paint's alpha is applied to the post-blended color.
             auto processor = GrConstColorProcessor::Make(origColor.opaque(),
-                                                         GrConstColorProcessor::kIgnore_InputMode);
+                                                         GrConstColorProcessor::InputMode::kIgnore);
             processor = GrXfermodeFragmentProcessor::MakeFromSrcProcessor(std::move(processor),
                                                                           *primColorMode);
             if (processor) {
@@ -508,7 +509,7 @@ static inline bool skpaint_to_grpaint_impl(GrContext* context,
                 // color channels. It's value should be treated as the same in ANY color space.
                 grPaint->addColorFragmentProcessor(GrConstColorProcessor::Make(
                     GrColor4f::FromGrColor(paintAlpha),
-                    GrConstColorProcessor::kModulateRGBA_InputMode));
+                    GrConstColorProcessor::InputMode::kModulateRGBA));
             }
         } else {
             // No shader, no primitive color.

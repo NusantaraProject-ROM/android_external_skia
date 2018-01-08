@@ -77,7 +77,7 @@ sk_sp<GrTexture> GrResourceProvider::createTexture(const GrSurfaceDesc& desc, Sk
                                                    SkDestinationSurfaceColorMode mipColorMode) {
     ASSERT_SINGLE_OWNER
 
-    SkASSERT(mipLevelCount > 1);
+    SkASSERT(mipLevelCount > 0);
 
     if (this->isAbandoned()) {
         return nullptr;
@@ -310,6 +310,25 @@ sk_sp<GrTextureProxy> GrResourceProvider::findOrCreateProxyByUniqueKey(const GrU
                                                                        GrSurfaceOrigin origin) {
     ASSERT_SINGLE_OWNER
     return this->isAbandoned() ? nullptr : fCache->findOrCreateProxyByUniqueKey(key, origin);
+}
+
+sk_sp<const GrBuffer> GrResourceProvider::findOrMakeStaticBuffer(GrBufferType intendedType,
+                                                                 size_t size,
+                                                                 const void* data,
+                                                                 const GrUniqueKey& key) {
+    if (auto buffer = this->findByUniqueKey<GrBuffer>(key)) {
+        return buffer;
+    }
+    if (auto buffer = this->createBuffer(size, intendedType, kStatic_GrAccessPattern, 0,
+                                         data)) {
+        // We shouldn't bin and/or cachestatic buffers.
+        SkASSERT(buffer->sizeInBytes() == size);
+        SkASSERT(!buffer->resourcePriv().getScratchKey().isValid());
+        SkASSERT(!buffer->resourcePriv().hasPendingIO_debugOnly());
+        buffer->resourcePriv().setUniqueKey(key);
+        return sk_sp<const GrBuffer>(buffer);
+    }
+    return nullptr;
 }
 
 sk_sp<const GrBuffer> GrResourceProvider::createPatternedIndexBuffer(const uint16_t* pattern,

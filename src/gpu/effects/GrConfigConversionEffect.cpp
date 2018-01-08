@@ -13,6 +13,7 @@
 #include "glsl/GrGLSLFragmentProcessor.h"
 #include "glsl/GrGLSLFragmentShaderBuilder.h"
 #include "glsl/GrGLSLProgramBuilder.h"
+#include "GrTexture.h"
 #include "SkSLCPP.h"
 #include "SkSLUtil.h"
 class GrGLSLConfigConversionEffect : public GrGLSLFragmentProcessor {
@@ -33,7 +34,7 @@ public:
                 "? half3(0.0) : half3(floor(float3(float3((%s.xyz / %s.w) * 255.0) + 0.5)) / "
                 "255.0);\n        break;\n}\n",
                 args.fOutputColor, args.fInputColor ? args.fInputColor : "half4(1)",
-                _outer.pmConversion(), args.fOutputColor, args.fOutputColor, args.fOutputColor,
+                (int)_outer.pmConversion(), args.fOutputColor, args.fOutputColor, args.fOutputColor,
                 args.fOutputColor, args.fOutputColor, args.fOutputColor, args.fOutputColor);
     }
 
@@ -46,7 +47,7 @@ GrGLSLFragmentProcessor* GrConfigConversionEffect::onCreateGLSLInstance() const 
 }
 void GrConfigConversionEffect::onGetGLSLProcessorKey(const GrShaderCaps& caps,
                                                      GrProcessorKeyBuilder* b) const {
-    b->add32(fPmConversion);
+    b->add32((int32_t)fPmConversion);
 }
 bool GrConfigConversionEffect::onIsEqual(const GrFragmentProcessor& other) const {
     const GrConfigConversionEffect& that = other.cast<GrConfigConversionEffect>();
@@ -64,7 +65,8 @@ GR_DEFINE_FRAGMENT_PROCESSOR_TEST(GrConfigConversionEffect);
 #if GR_TEST_UTILS
 std::unique_ptr<GrFragmentProcessor> GrConfigConversionEffect::TestCreate(
         GrProcessorTestData* data) {
-    PMConversion pmConv = static_cast<PMConversion>(data->fRandom->nextULessThan(kPMConversionCnt));
+    PMConversion pmConv = static_cast<PMConversion>(
+            data->fRandom->nextULessThan((int)PMConversion::kPMConversionCnt));
     return std::unique_ptr<GrFragmentProcessor>(new GrConfigConversionEffect(pmConv));
 }
 #endif

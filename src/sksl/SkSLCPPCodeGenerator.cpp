@@ -13,7 +13,8 @@
 namespace SkSL {
 
 static bool needs_uniform_var(const Variable& var) {
-    return (var.fModifiers.fFlags & Modifiers::kUniform_Flag);
+    return (var.fModifiers.fFlags & Modifiers::kUniform_Flag) &&
+           var.fType.kind() != Type::kSampler_Kind;
 }
 
 CPPCodeGenerator::CPPCodeGenerator(const Context* context, const Program* program,
@@ -115,12 +116,22 @@ void CPPCodeGenerator::writeIndexExpression(const IndexExpression& i) {
 }
 
 static String default_value(const Type& type) {
+    if (type.fName == "bool") {
+        return "false";
+    }
     switch (type.kind()) {
         case Type::kScalar_Kind: return "0";
         case Type::kVector_Kind: return type.name() + "(0)";
         case Type::kMatrix_Kind: return type.name() + "(1)";
         default: ABORT("unsupported default_value type\n");
     }
+}
+
+static String default_value(const Variable& var) {
+    if (var.fModifiers.fLayout.fCType == "GrColor4f") {
+        return "GrColor4f::kIllegalConstructor";
+    }
+    return default_value(var.fType);
 }
 
 static bool is_private(const Variable& var) {
@@ -152,12 +163,26 @@ void CPPCodeGenerator::writeRuntimeValue(const Type& type, const Layout& layout,
             fFormatArgs.push_back("SkGetPackedG32(" + cppCode + ") / 255.0");
             fFormatArgs.push_back("SkGetPackedB32(" + cppCode + ") / 255.0");
             fFormatArgs.push_back("SkGetPackedA32(" + cppCode + ") / 255.0");
+        } else if (layout.fCType == "GrColor4f") {
+            fFormatArgs.push_back(cppCode + ".fRGBA[0]");
+            fFormatArgs.push_back(cppCode + ".fRGBA[1]");
+            fFormatArgs.push_back(cppCode + ".fRGBA[2]");
+            fFormatArgs.push_back(cppCode + ".fRGBA[3]");
         } else {
             fFormatArgs.push_back(cppCode + ".left()");
             fFormatArgs.push_back(cppCode + ".top()");
             fFormatArgs.push_back(cppCode + ".right()");
             fFormatArgs.push_back(cppCode + ".bottom()");
         }
+    } else if (type.kind() == Type::kEnum_Kind) {
+        this->write("%d");
+        fFormatArgs.push_back("(int) " + cppCode);
+    } else if (type == *fContext.fInt4_Type || type == *fContext.fShort4_Type) {
+        this->write(type.name() + "(%d, %d, %d, %d)");
+        fFormatArgs.push_back(cppCode + ".left()");
+        fFormatArgs.push_back(cppCode + ".top()");
+        fFormatArgs.push_back(cppCode + ".right()");
+        fFormatArgs.push_back(cppCode + ".bottom()");
     } else {
         printf("unsupported runtime value type '%s'\n", String(type.fName).c_str());
         ASSERT(false);
@@ -421,10 +446,11 @@ void CPPCodeGenerator::writePrivateVars() {
                                       "fragmentProcessor variables must be declared 'in'");
                         return;
                     }
-                    this->writef("%s %s;\n",
+                    this->writef("%s %s = %s;\n",
                                  HCodeGenerator::FieldType(fContext, decl.fVar->fType,
                                                            decl.fVar->fModifiers.fLayout).c_str(),
-                                 String(decl.fVar->fName).c_str());
+                                 String(decl.fVar->fName).c_str(),
+                                 default_value(*decl.fVar).c_str());
                 }
             }
         }
@@ -570,6 +596,7 @@ void CPPCodeGenerator::writeSetData(std::vector<const Variable*>& uniforms) {
         this->writef("        }\n");
     }
     if (section) {
+        int samplerIndex = 0;
         for (const auto& p : fProgram.fElements) {
             if (ProgramElement::kVar_Kind == p->fKind) {
                 const VarDeclarations* decls = (const VarDeclarations*) p.get();
@@ -577,7 +604,15 @@ void CPPCodeGenerator::writeSetData(std::vector<const Variable*>& uniforms) {
                     VarDeclaration& decl = (VarDeclaration&) *raw;
                     String nameString(decl.fVar->fName);
                     const char* name = nameString.c_str();
-                    if (needs_uniform_var(*decl.fVar)) {
+                    if (decl.fVar->fType.kind() == Type::kSampler_Kind) {
+                        this->writef("        GrSurfaceProxy& %sProxy = "
+                                     "*_outer.textureSampler(%d).proxy();\n",
+                                     name, samplerIndex);
+                        this->writef("        GrTexture& %s = *%sProxy.priv().peekTexture();\n",
+                                     name, name);
+                        this->writef("        (void) %s;\n", name);
+                        ++samplerIndex;
+                    } else if (needs_uniform_var(*decl.fVar)) {
                         this->writef("        UniformHandle& %s = %sVar;\n"
                                      "        (void) %s;\n",
                                      name, HCodeGenerator::FieldName(name).c_str(), name);
@@ -694,7 +729,7 @@ void CPPCodeGenerator::writeGetKey() {
                     this->writef("    b->add32(%s.height());\n",
                                  HCodeGenerator::FieldName(name).c_str());
                 } else {
-                    this->writef("    b->add32(%s);\n",
+                    this->writef("    b->add32((int32_t) %s);\n",
                                  HCodeGenerator::FieldName(name).c_str());
                 }
                 break;
@@ -736,6 +771,7 @@ bool CPPCodeGenerator::generateCode() {
     this->writef("#include \"glsl/GrGLSLFragmentProcessor.h\"\n"
                  "#include \"glsl/GrGLSLFragmentShaderBuilder.h\"\n"
                  "#include \"glsl/GrGLSLProgramBuilder.h\"\n"
+                 "#include \"GrTexture.h\"\n"
                  "#include \"SkSLCPP.h\"\n"
                  "#include \"SkSLUtil.h\"\n"
                  "class GrGLSL%s : public GrGLSLFragmentProcessor {\n"

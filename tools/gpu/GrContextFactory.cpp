@@ -14,9 +14,6 @@
 #endif
 #include "gl/command_buffer/GLTestContext_command_buffer.h"
 #include "gl/debug/DebugGLTestContext.h"
-#if SK_MESA
-    #include "gl/mesa/GLTestContext_mesa.h"
-#endif
 #ifdef SK_VULKAN
 #include "vk/VkTestContext.h"
 #endif
@@ -55,8 +52,9 @@ GrContextFactory::~GrContextFactory() {
 
 void GrContextFactory::destroyContexts() {
     for (Context& context : fContexts) {
+        SkScopeExit restore(nullptr);
         if (context.fTestContext) {
-            context.fTestContext->makeCurrent();
+            restore = context.fTestContext->makeCurrentAndAutoRestore();
         }
         if (!context.fGrContext->unique()) {
             context.fGrContext->releaseResourcesAndAbandonContext();
@@ -72,7 +70,7 @@ void GrContextFactory::abandonContexts() {
     for (Context& context : fContexts) {
         if (!context.fAbandoned) {
             if (context.fTestContext) {
-                context.fTestContext->makeCurrent();
+                auto restore = context.fTestContext->makeCurrentAndAutoRestore();
                 context.fTestContext->testAbandon();
                 delete(context.fTestContext);
                 context.fTestContext = nullptr;
@@ -85,9 +83,10 @@ void GrContextFactory::abandonContexts() {
 
 void GrContextFactory::releaseResourcesAndAbandonContexts() {
     for (Context& context : fContexts) {
+        SkScopeExit restore(nullptr);
         if (!context.fAbandoned) {
             if (context.fTestContext) {
-                context.fTestContext->makeCurrent();
+                restore = context.fTestContext->makeCurrentAndAutoRestore();
             }
             context.fGrContext->releaseResourcesAndAbandonContext();
             context.fAbandoned = true;
@@ -174,11 +173,6 @@ ContextInfo GrContextFactory::getContextInfoInternal(ContextType type, ContextOv
                     glCtx = CommandBufferGLTestContext::Create(glShareContext);
                     break;
 #endif
-#if SK_MESA
-                case kMESA_ContextType:
-                    glCtx = CreateMesaGLTestContext(glShareContext);
-                    break;
-#endif
                 case kNullGL_ContextType:
                     glCtx = CreateNullGLTestContext(
                             ContextOverrides::kRequireNVPRSupport & overrides, glShareContext);
@@ -245,14 +239,11 @@ ContextInfo GrContextFactory::getContextInfoInternal(ContextType type, ContextOv
         default:
             return ContextInfo();
     }
-    testCtx->makeCurrent();
+
     SkASSERT(testCtx && testCtx->backend() == backend);
     GrContextOptions grOptions = fGlobalOptions;
     if (ContextOverrides::kDisableNVPR & overrides) {
         grOptions.fSuppressPathRendering = true;
-    }
-    if (ContextOverrides::kUseInstanced & overrides) {
-        grOptions.fEnableInstancedRendering = true;
     }
     if (ContextOverrides::kAllowSRGBWithoutDecodeControl & overrides) {
         grOptions.fRequireDecodeDisableForSRGB = false;
@@ -260,17 +251,16 @@ ContextInfo GrContextFactory::getContextInfoInternal(ContextType type, ContextOv
     if (ContextOverrides::kAvoidStencilBuffers & overrides) {
         grOptions.fAvoidStencilBuffers = true;
     }
-    sk_sp<GrContext> grCtx = testCtx->makeGrContext(grOptions);
+    sk_sp<GrContext> grCtx;
+    {
+        auto restore = testCtx->makeCurrentAndAutoRestore();
+        grCtx = testCtx->makeGrContext(grOptions);
+    }
     if (!grCtx.get()) {
         return ContextInfo();
     }
     if (ContextOverrides::kRequireNVPRSupport & overrides) {
         if (!grCtx->caps()->shaderCaps()->pathRenderingSupport()) {
-            return ContextInfo();
-        }
-    }
-    if (ContextOverrides::kUseInstanced & overrides) {
-        if (GrCaps::InstancedSupport::kNone == grCtx->caps()->instancedSupport()) {
             return ContextInfo();
         }
     }
@@ -290,6 +280,7 @@ ContextInfo GrContextFactory::getContextInfoInternal(ContextType type, ContextOv
     context.fShareContext = shareContext;
     context.fShareIndex = shareIndex;
     context.fOptions = grOptions;
+    context.fTestContext->makeCurrent();
     return ContextInfo(context.fType, context.fTestContext, context.fGrContext, context.fOptions);
 }
 

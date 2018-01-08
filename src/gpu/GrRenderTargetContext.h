@@ -8,7 +8,6 @@
 #ifndef GrRenderTargetContext_DEFINED
 #define GrRenderTargetContext_DEFINED
 
-#include "../private/GrInstancedPipelineInfo.h"
 #include "../private/GrRenderTargetProxy.h"
 #include "GrColor.h"
 #include "GrContext.h"
@@ -31,6 +30,7 @@ class GrFixedClip;
 class GrRenderTarget;
 class GrRenderTargetContextPriv;
 class GrRenderTargetOpList;
+class GrShape;
 class GrStyle;
 class GrTextureProxy;
 struct GrUserStencilSettings;
@@ -80,14 +80,19 @@ public:
      */
     void discard();
 
+    enum class CanClearFullscreen : bool {
+        kNo = false,
+        kYes = true
+    };
+
     /**
      * Clear the entire or rect of the render target, ignoring any clips.
      * @param rect  the rect to clear or the whole thing if rect is NULL.
      * @param color the color to clear to.
-     * @param canIgnoreRect allows partial clears to be converted to whole
-     *                      clears on platforms for which that is cheap
+     * @param CanClearFullscreen allows partial clears to be converted to fullscreen clears on
+     *                           tiling platforms where that is an optimization.
      */
-    void clear(const SkIRect* rect, GrColor color, bool canIgnoreRect);
+    void clear(const SkIRect* rect, GrColor color, CanClearFullscreen);
 
     /**
      *  Draw everywhere (respecting the clip) with the paint.
@@ -410,7 +415,7 @@ private:
     friend void test_draw_op(GrRenderTargetContext*, std::unique_ptr<GrFragmentProcessor>,
                              sk_sp<GrTextureProxy>);
 
-    void internalClear(const GrFixedClip&, const GrColor, bool canIgnoreClip);
+    void internalClear(const GrFixedClip&, const GrColor, CanClearFullscreen);
 
     // Only consumes the GrPaint if successful.
     bool drawFilledDRRect(const GrClip& clip,
@@ -428,8 +433,8 @@ private:
                         const SkRect& rect,
                         const GrUserStencilSettings* ss);
 
-    void internalDrawPath(
-            const GrClip&, GrPaint&&, GrAA, const SkMatrix&, const SkPath&, const GrStyle&);
+    void drawShapeUsingPathRenderer(const GrClip&, GrPaint&&, GrAA, const SkMatrix&,
+                                    const GrShape&);
 
     // These perform processing specific to Gr[Mesh]DrawOp-derived ops before recording them into
     // the op list. They return the id of the opList to which the op was added, or 0, if it was
@@ -453,7 +458,6 @@ private:
     // In MDB-mode the GrOpList can be closed by some other renderTargetContext that has picked
     // it up. For this reason, the GrOpList should only ever be accessed via 'getOpList'.
     sk_sp<GrRenderTargetOpList> fOpList;
-    GrInstancedPipelineInfo fInstancedPipelineInfo;
 
     SkSurfaceProps fSurfaceProps;
     bool fManagedOpList;

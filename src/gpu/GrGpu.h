@@ -8,6 +8,7 @@
 #ifndef GrGpu_DEFINED
 #define GrGpu_DEFINED
 
+#include "GrCaps.h"
 #include "GrGpuCommandBuffer.h"
 #include "GrProgramDesc.h"
 #include "GrSwizzle.h"
@@ -15,7 +16,6 @@
 #include "GrTextureProducer.h"
 #include "GrTypes.h"
 #include "GrXferProcessor.h"
-#include "instanced/InstancedRendering.h"
 #include "SkPath.h"
 #include "SkTArray.h"
 #include <map>
@@ -42,12 +42,6 @@ class GrSurface;
 class GrTexture;
 class SkJSONWriter;
 
-namespace gr_instanced {
-    class InstancedOp;
-    class InstancedRendering;
-    class OpAllocator;
-}
-
 class GrGpu : public SkRefCnt {
 public:
     /**
@@ -55,7 +49,7 @@ public:
      * not supported (at compile-time or run-time) this returns nullptr. The context will not be
      * fully constructed and should not be used by GrGpu until after this function returns.
      */
-    static GrGpu* Create(GrBackend, GrBackendContext, const GrContextOptions&, GrContext* context);
+    static sk_sp<GrGpu> Make(GrBackend, GrBackendContext, const GrContextOptions&, GrContext*);
 
     ////////////////////////////////////////////////////////////////////////////
 
@@ -69,6 +63,7 @@ public:
      * Gets the capabilities of the draw target.
      */
     const GrCaps* caps() const { return fCaps.get(); }
+    sk_sp<const GrCaps> refCaps() const { return fCaps; }
 
     GrPathRendering* pathRendering() { return fPathRendering.get();  }
 
@@ -150,12 +145,6 @@ public:
      */
     GrBuffer* createBuffer(size_t size, GrBufferType intendedType, GrAccessPattern accessPattern,
                            const void* data = nullptr);
-
-    /**
-     * Creates an instanced rendering object if it is supported on this platform.
-     */
-    std::unique_ptr<gr_instanced::OpAllocator> createInstancedRenderingAllocator();
-    gr_instanced::InstancedRendering* createInstancedRendering();
 
     /**
      * Resolves MSAA.
@@ -465,17 +454,17 @@ public:
     /** Creates a texture directly in the backend API without wrapping it in a GrTexture. This is
         only to be used for testing (particularly for testing the methods that import an externally
         created texture into Skia. Must be matched with a call to deleteTestingOnlyTexture(). */
-    virtual GrBackendObject createTestingOnlyBackendTexture(
+    virtual GrBackendTexture createTestingOnlyBackendTexture(
                                                       void* pixels, int w, int h,
                                                       GrPixelConfig config,
-                                                      bool isRenderTarget = false,
-                                                      GrMipMapped mipMapped = GrMipMapped::kNo) = 0;
+                                                      bool isRenderTarget,
+                                                      GrMipMapped mipMapped) = 0;
     /** Check a handle represents an actual texture in the backend API that has not been freed. */
-    virtual bool isTestingOnlyBackendTexture(GrBackendObject) const = 0;
+    virtual bool isTestingOnlyBackendTexture(const GrBackendTexture&) const = 0;
     /** If ownership of the backend texture has been transferred pass true for abandonTexture. This
         will do any necessary cleanup of the handle without freeing the texture in the backend
         API. */
-    virtual void deleteTestingOnlyBackendTexture(GrBackendObject,
+    virtual void deleteTestingOnlyBackendTexture(GrBackendTexture*,
                                                  bool abandonTexture = false) = 0;
 
     // width and height may be larger than rt (if underlying API allows it).
@@ -566,11 +555,6 @@ private:
     virtual GrBuffer* onCreateBuffer(size_t size, GrBufferType intendedType, GrAccessPattern,
                                      const void* data) = 0;
 
-    virtual gr_instanced::InstancedRendering* onCreateInstancedRendering() = 0;
-    virtual std::unique_ptr<gr_instanced::OpAllocator> onCreateInstancedRenderingAllocator() {
-        return nullptr;
-    }
-
     virtual bool onIsACopyNeededForTextureParams(GrTextureProxy* proxy, const GrSamplerState&,
                                                  GrTextureProducer::CopyParams*,
                                                  SkScalar scaleAdjust[2]) const {
@@ -643,7 +627,6 @@ private:
     GrContext*                             fContext;
 
     friend class GrPathRendering;
-    friend class gr_instanced::InstancedOp; // for xferBarrier
     typedef SkRefCnt INHERITED;
 };
 

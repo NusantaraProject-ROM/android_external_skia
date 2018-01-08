@@ -8,6 +8,7 @@
 #include "SkSLHCodeGenerator.h"
 
 #include "SkSLUtil.h"
+#include "ir/SkSLEnum.h"
 #include "ir/SkSLFunctionDeclaration.h"
 #include "ir/SkSLFunctionDefinition.h"
 #include "ir/SkSLSection.h"
@@ -265,6 +266,11 @@ bool HCodeGenerator::generateCode() {
     this->writef("class %s : public GrFragmentProcessor {\n"
                  "public:\n",
                  fFullName.c_str());
+    for (const auto& p : fProgram.fElements) {
+        if (ProgramElement::kEnum_Kind == p->fKind && !((Enum&) *p).fBuiltin) {
+            this->writef("%s\n", p->description().c_str());
+        }
+    }
     this->writeSection(CLASS_SECTION);
     for (const auto& param : fSectionAndParameterHelper.getParameters()) {
         if (param->fType.kind() == Type::kSampler_Kind ||

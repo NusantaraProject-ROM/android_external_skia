@@ -11,6 +11,7 @@
 #include <chrono>
 #include "GrTypes.h"
 #include "SkRefCnt.h"
+#include "GrSharedEnums.h"
 
 class GrCaps;
 
@@ -84,7 +85,7 @@ enum class GrFSAAType {
  * Not all drawing code paths support using mixed samples when available and instead use
  * coverage-based aa.
  */
-enum class GrAllowMixedSamples { kNo, kYes };
+enum class GrAllowMixedSamples : bool { kNo = false, kYes = true };
 
 GrAAType GrChooseAAType(GrAA, GrFSAAType, GrAllowMixedSamples, const GrCaps&);
 
@@ -93,14 +94,9 @@ GrAAType GrChooseAAType(GrAA, GrFSAAType, GrAllowMixedSamples, const GrCaps&);
  * range. This is important for blending - the latter category may require manual clamping.
  */
 enum class GrPixelConfigIsClamped : bool {
-    kNo,   // F16 or F32
-    kYes,  // Any UNORM type
+    kNo = false,   // F16 or F32
+    kYes = true,  // Any UNORM type
 };
-
-static inline GrPixelConfigIsClamped GrGetPixelConfigIsClamped(GrPixelConfig config) {
-    return GrPixelConfigIsFloatingPoint(config) ? GrPixelConfigIsClamped::kNo
-                                                : GrPixelConfigIsClamped::kYes;
-}
 
 /**
  * Types of shader-language-specific boxed variables we can create. (Currently only GrGLShaderVars,
@@ -144,8 +140,6 @@ enum GrSLType {
     kBufferSampler_GrSLType,
     kTexture2D_GrSLType,
     kSampler_GrSLType,
-    kImageStorage2D_GrSLType,
-    kIImageStorage2D_GrSLType,
 };
 
 enum GrShaderType {
@@ -229,12 +223,64 @@ static inline bool GrSLTypeIsFloatType(GrSLType type) {
         case kUint2_GrSLType:
         case kTexture2D_GrSLType:
         case kSampler_GrSLType:
-        case kImageStorage2D_GrSLType:
-        case kIImageStorage2D_GrSLType:
             return false;
     }
     SK_ABORT("Unexpected type");
     return false;
+}
+
+/** If the type represents a single value or vector return the vector length, else -1. */
+static inline int GrSLTypeVecLength(GrSLType type) {
+    switch (type) {
+        case kFloat_GrSLType:
+        case kHalf_GrSLType:
+        case kBool_GrSLType:
+        case kShort_GrSLType:
+        case kUShort_GrSLType:
+        case kInt_GrSLType:
+        case kUint_GrSLType:
+            return 1;
+
+        case kFloat2_GrSLType:
+        case kHalf2_GrSLType:
+        case kShort2_GrSLType:
+        case kUShort2_GrSLType:
+        case kInt2_GrSLType:
+        case kUint2_GrSLType:
+            return 2;
+
+        case kFloat3_GrSLType:
+        case kHalf3_GrSLType:
+        case kShort3_GrSLType:
+        case kUShort3_GrSLType:
+        case kInt3_GrSLType:
+            return 3;
+
+        case kFloat4_GrSLType:
+        case kHalf4_GrSLType:
+        case kShort4_GrSLType:
+        case kUShort4_GrSLType:
+        case kInt4_GrSLType:
+            return 4;
+
+        case kFloat2x2_GrSLType:
+        case kFloat3x3_GrSLType:
+        case kFloat4x4_GrSLType:
+        case kHalf2x2_GrSLType:
+        case kHalf3x3_GrSLType:
+        case kHalf4x4_GrSLType:
+        case kVoid_GrSLType:
+        case kTexture2DSampler_GrSLType:
+        case kITexture2DSampler_GrSLType:
+        case kTextureExternalSampler_GrSLType:
+        case kTexture2DRectSampler_GrSLType:
+        case kBufferSampler_GrSLType:
+        case kTexture2D_GrSLType:
+        case kSampler_GrSLType:
+            return -1;
+    }
+    SK_ABORT("Unexpected type");
+    return -1;
 }
 
 static inline bool GrSLTypeIs2DCombinedSamplerType(GrSLType type) {
@@ -278,8 +324,6 @@ static inline bool GrSLTypeIs2DCombinedSamplerType(GrSLType type) {
         case kUShort4_GrSLType:
         case kTexture2D_GrSLType:
         case kSampler_GrSLType:
-        case kImageStorage2D_GrSLType:
-        case kIImageStorage2D_GrSLType:
             return false;
     }
     SK_ABORT("Unexpected type");
@@ -327,57 +371,6 @@ static inline bool GrSLTypeIsCombinedSamplerType(GrSLType type) {
         case kUShort4_GrSLType:
         case kTexture2D_GrSLType:
         case kSampler_GrSLType:
-        case kImageStorage2D_GrSLType:
-        case kIImageStorage2D_GrSLType:
-            return false;
-    }
-    SK_ABORT("Unexpected type");
-    return false;
-}
-
-static inline bool GrSLTypeIsImageStorage(GrSLType type) {
-    switch (type) {
-        case kImageStorage2D_GrSLType:
-        case kIImageStorage2D_GrSLType:
-            return true;
-
-        case kVoid_GrSLType:
-        case kFloat_GrSLType:
-        case kFloat2_GrSLType:
-        case kFloat3_GrSLType:
-        case kFloat4_GrSLType:
-        case kFloat2x2_GrSLType:
-        case kFloat3x3_GrSLType:
-        case kFloat4x4_GrSLType:
-        case kHalf_GrSLType:
-        case kHalf2_GrSLType:
-        case kHalf3_GrSLType:
-        case kHalf4_GrSLType:
-        case kHalf2x2_GrSLType:
-        case kHalf3x3_GrSLType:
-        case kHalf4x4_GrSLType:
-        case kInt_GrSLType:
-        case kInt2_GrSLType:
-        case kInt3_GrSLType:
-        case kInt4_GrSLType:
-        case kUint_GrSLType:
-        case kUint2_GrSLType:
-        case kBool_GrSLType:
-        case kShort_GrSLType:
-        case kShort2_GrSLType:
-        case kShort3_GrSLType:
-        case kShort4_GrSLType:
-        case kUShort_GrSLType:
-        case kUShort2_GrSLType:
-        case kUShort3_GrSLType:
-        case kUShort4_GrSLType:
-        case kTexture2D_GrSLType:
-        case kSampler_GrSLType:
-        case kTexture2DSampler_GrSLType:
-        case kITexture2DSampler_GrSLType:
-        case kTextureExternalSampler_GrSLType:
-        case kTexture2DRectSampler_GrSLType:
-        case kBufferSampler_GrSLType:
             return false;
     }
     SK_ABORT("Unexpected type");
@@ -393,8 +386,6 @@ static inline bool GrSLTypeAcceptsPrecision(GrSLType type) {
         case kBufferSampler_GrSLType:
         case kTexture2D_GrSLType:
         case kSampler_GrSLType:
-        case kImageStorage2D_GrSLType:
-        case kIImageStorage2D_GrSLType:
             return true;
 
         case kVoid_GrSLType:
@@ -466,8 +457,6 @@ static inline bool GrSLTypeTemporarilyAcceptsPrecision(GrSLType type) {
         case kBufferSampler_GrSLType:
         case kTexture2D_GrSLType:
         case kSampler_GrSLType:
-        case kImageStorage2D_GrSLType:
-        case kIImageStorage2D_GrSLType:
             return true;
 
         case kVoid_GrSLType:
@@ -609,86 +598,36 @@ static inline GrSLType GrVertexAttribTypeToSLType(GrVertexAttribType type) {
 
 //////////////////////////////////////////////////////////////////////////////
 
-enum class GrImageStorageFormat {
-    kRGBA8,
-    kRGBA8i,
-    kRGBA16f,
-    kRGBA32f,
-};
+static const int kGrClipEdgeTypeCnt = (int) GrClipEdgeType::kLast + 1;
 
-/**
- * Describes types of caching and compiler optimizations allowed for certain variable types
- * (currently only image storages).
- **/
-enum class GrSLMemoryModel {
-    /** No special restrctions on memory accesses or compiler optimizations */
-    kNone,
-    /** Cache coherent across shader invocations */
-    kCoherent,
-    /**
-     * Disallows compiler from eliding loads or stores that appear redundant in a single
-     * invocation. Implies coherent.
-     */
-    kVolatile
-};
-
-/**
- * If kYes then the memory backing the varialble is only accessed via the variable. This is
- * currently only used with image storages.
- */
-enum class GrSLRestrict {
-    kYes,
-    kNo,
-};
-
-//////////////////////////////////////////////////////////////////////////////
-
-/**
- * We have coverage effects that clip rendering to the edge of some geometric primitive.
- * This enum specifies how that clipping is performed. Not all factories that take a
- * GrProcessorEdgeType will succeed with all values and it is up to the caller to check for
- * a NULL return.
- */
-enum GrPrimitiveEdgeType {
-    kFillBW_GrProcessorEdgeType,
-    kFillAA_GrProcessorEdgeType,
-    kInverseFillBW_GrProcessorEdgeType,
-    kInverseFillAA_GrProcessorEdgeType,
-    kHairlineAA_GrProcessorEdgeType,
-
-    kLast_GrProcessorEdgeType = kHairlineAA_GrProcessorEdgeType
-};
-
-static const int kGrProcessorEdgeTypeCnt = kLast_GrProcessorEdgeType + 1;
-
-static inline bool GrProcessorEdgeTypeIsFill(const GrPrimitiveEdgeType edgeType) {
-    return (kFillAA_GrProcessorEdgeType == edgeType || kFillBW_GrProcessorEdgeType == edgeType);
+static inline bool GrProcessorEdgeTypeIsFill(const GrClipEdgeType edgeType) {
+    return (GrClipEdgeType::kFillAA == edgeType || GrClipEdgeType::kFillBW == edgeType);
 }
 
-static inline bool GrProcessorEdgeTypeIsInverseFill(const GrPrimitiveEdgeType edgeType) {
-    return (kInverseFillAA_GrProcessorEdgeType == edgeType ||
-            kInverseFillBW_GrProcessorEdgeType == edgeType);
+static inline bool GrProcessorEdgeTypeIsInverseFill(const GrClipEdgeType edgeType) {
+    return (GrClipEdgeType::kInverseFillAA == edgeType ||
+            GrClipEdgeType::kInverseFillBW == edgeType);
 }
 
-static inline bool GrProcessorEdgeTypeIsAA(const GrPrimitiveEdgeType edgeType) {
-    return (kFillBW_GrProcessorEdgeType != edgeType &&
-            kInverseFillBW_GrProcessorEdgeType != edgeType);
+static inline bool GrProcessorEdgeTypeIsAA(const GrClipEdgeType edgeType) {
+    return (GrClipEdgeType::kFillBW != edgeType &&
+            GrClipEdgeType::kInverseFillBW != edgeType);
 }
 
-static inline GrPrimitiveEdgeType GrInvertProcessorEdgeType(const GrPrimitiveEdgeType edgeType) {
+static inline GrClipEdgeType GrInvertProcessorEdgeType(const GrClipEdgeType edgeType) {
     switch (edgeType) {
-        case kFillBW_GrProcessorEdgeType:
-            return kInverseFillBW_GrProcessorEdgeType;
-        case kFillAA_GrProcessorEdgeType:
-            return kInverseFillAA_GrProcessorEdgeType;
-        case kInverseFillBW_GrProcessorEdgeType:
-            return kFillBW_GrProcessorEdgeType;
-        case kInverseFillAA_GrProcessorEdgeType:
-            return kFillAA_GrProcessorEdgeType;
-        case kHairlineAA_GrProcessorEdgeType:
+        case GrClipEdgeType::kFillBW:
+            return GrClipEdgeType::kInverseFillBW;
+        case GrClipEdgeType::kFillAA:
+            return GrClipEdgeType::kInverseFillAA;
+        case GrClipEdgeType::kInverseFillBW:
+            return GrClipEdgeType::kFillBW;
+        case GrClipEdgeType::kInverseFillAA:
+            return GrClipEdgeType::kFillAA;
+        case GrClipEdgeType::kHairlineAA:
             SK_ABORT("Hairline fill isn't invertible.");
     }
-    return kFillAA_GrProcessorEdgeType;  // suppress warning.
+    return GrClipEdgeType::kFillAA;  // suppress warning.
 }
 
 /**
@@ -804,9 +743,7 @@ enum class GpuPathRenderers {
     kTessellating      = 1 << 7,
 
     kAll               = (kTessellating | (kTessellating - 1)),
-
-    // Temporarily disabling CCPR while we sort out issues with clipping.
-    kDefault           = kAll & ~kCoverageCounting,
+    kDefault           = kAll
 };
 
 /**
@@ -819,5 +756,296 @@ enum class  GrMipMapsStatus {
 };
 
 GR_MAKE_BITFIELD_CLASS_OPS(GpuPathRenderers)
+
+/**
+ * We want to extend the GrPixelConfig enum to add cases for dealing with alpha_8 which is
+ * internally either alpha8 or red8. Also for Gray_8 which can be luminance_8 or red_8.
+ */
+static constexpr GrPixelConfig kAlpha_8_as_Alpha_GrPixelConfig = kPrivateConfig1_GrPixelConfig;
+static constexpr GrPixelConfig kAlpha_8_as_Red_GrPixelConfig = kPrivateConfig2_GrPixelConfig;
+static constexpr GrPixelConfig kAlpha_half_as_Red_GrPixelConfig = kPrivateConfig3_GrPixelConfig;
+static constexpr GrPixelConfig kGray_8_as_Lum_GrPixelConfig = kPrivateConfig4_GrPixelConfig;
+static constexpr GrPixelConfig kGray_8_as_Red_GrPixelConfig = kPrivateConfig5_GrPixelConfig;
+
+/**
+ * Utility functions for GrPixelConfig
+ */
+// Returns true if the pixel config is 32 bits per pixel
+static inline bool GrPixelConfigIs8888Unorm(GrPixelConfig config) {
+    switch (config) {
+        case kRGBA_8888_GrPixelConfig:
+        case kBGRA_8888_GrPixelConfig:
+        case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
+            return true;
+        case kUnknown_GrPixelConfig:
+        case kAlpha_8_GrPixelConfig:
+        case kAlpha_8_as_Alpha_GrPixelConfig:
+        case kAlpha_8_as_Red_GrPixelConfig:
+        case kGray_8_GrPixelConfig:
+        case kGray_8_as_Lum_GrPixelConfig:
+        case kGray_8_as_Red_GrPixelConfig:
+        case kRGB_565_GrPixelConfig:
+        case kRGBA_4444_GrPixelConfig:
+        case kRGBA_8888_sint_GrPixelConfig:
+        case kRGBA_float_GrPixelConfig:
+        case kRG_float_GrPixelConfig:
+        case kAlpha_half_GrPixelConfig:
+        case kAlpha_half_as_Red_GrPixelConfig:
+        case kRGBA_half_GrPixelConfig:
+            return false;
+    }
+    SK_ABORT("Invalid pixel config");
+    return false;
+}
+
+// Returns true if the color (non-alpha) components represent sRGB values. It does NOT indicate that
+// all three color components are present in the config or anything about their order.
+static inline bool GrPixelConfigIsSRGB(GrPixelConfig config) {
+    switch (config) {
+        case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
+            return true;
+        case kUnknown_GrPixelConfig:
+        case kAlpha_8_GrPixelConfig:
+        case kAlpha_8_as_Alpha_GrPixelConfig:
+        case kAlpha_8_as_Red_GrPixelConfig:
+        case kGray_8_GrPixelConfig:
+        case kGray_8_as_Lum_GrPixelConfig:
+        case kGray_8_as_Red_GrPixelConfig:
+        case kRGB_565_GrPixelConfig:
+        case kRGBA_4444_GrPixelConfig:
+        case kRGBA_8888_GrPixelConfig:
+        case kBGRA_8888_GrPixelConfig:
+        case kRGBA_8888_sint_GrPixelConfig:
+        case kRGBA_float_GrPixelConfig:
+        case kRG_float_GrPixelConfig:
+        case kAlpha_half_GrPixelConfig:
+        case kAlpha_half_as_Red_GrPixelConfig:
+        case kRGBA_half_GrPixelConfig:
+            return false;
+    }
+    SK_ABORT("Invalid pixel config");
+    return false;
+}
+
+// Takes a config and returns the equivalent config with the R and B order
+// swapped if such a config exists. Otherwise, kUnknown_GrPixelConfig
+static inline GrPixelConfig GrPixelConfigSwapRAndB(GrPixelConfig config) {
+    switch (config) {
+        case kBGRA_8888_GrPixelConfig:
+            return kRGBA_8888_GrPixelConfig;
+        case kRGBA_8888_GrPixelConfig:
+            return kBGRA_8888_GrPixelConfig;
+        case kSBGRA_8888_GrPixelConfig:
+            return kSRGBA_8888_GrPixelConfig;
+        case kSRGBA_8888_GrPixelConfig:
+            return kSBGRA_8888_GrPixelConfig;
+        case kUnknown_GrPixelConfig:
+        case kAlpha_8_GrPixelConfig:
+        case kAlpha_8_as_Alpha_GrPixelConfig:
+        case kAlpha_8_as_Red_GrPixelConfig:
+        case kGray_8_GrPixelConfig:
+        case kGray_8_as_Lum_GrPixelConfig:
+        case kGray_8_as_Red_GrPixelConfig:
+        case kRGB_565_GrPixelConfig:
+        case kRGBA_4444_GrPixelConfig:
+        case kRGBA_8888_sint_GrPixelConfig:
+        case kRGBA_float_GrPixelConfig:
+        case kRG_float_GrPixelConfig:
+        case kAlpha_half_GrPixelConfig:
+        case kAlpha_half_as_Red_GrPixelConfig:
+        case kRGBA_half_GrPixelConfig:
+            return kUnknown_GrPixelConfig;
+    }
+    SK_ABORT("Invalid pixel config");
+    return kUnknown_GrPixelConfig;
+}
+
+static inline size_t GrBytesPerPixel(GrPixelConfig config) {
+    switch (config) {
+        case kAlpha_8_GrPixelConfig:
+        case kAlpha_8_as_Alpha_GrPixelConfig:
+        case kAlpha_8_as_Red_GrPixelConfig:
+        case kGray_8_GrPixelConfig:
+        case kGray_8_as_Lum_GrPixelConfig:
+        case kGray_8_as_Red_GrPixelConfig:
+            return 1;
+        case kRGB_565_GrPixelConfig:
+        case kRGBA_4444_GrPixelConfig:
+        case kAlpha_half_GrPixelConfig:
+        case kAlpha_half_as_Red_GrPixelConfig:
+            return 2;
+        case kRGBA_8888_GrPixelConfig:
+        case kBGRA_8888_GrPixelConfig:
+        case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
+        case kRGBA_8888_sint_GrPixelConfig:
+            return 4;
+        case kRGBA_half_GrPixelConfig:
+            return 8;
+        case kRGBA_float_GrPixelConfig:
+            return 16;
+        case kRG_float_GrPixelConfig:
+            return 8;
+        case kUnknown_GrPixelConfig:
+            return 0;
+    }
+    SK_ABORT("Invalid pixel config");
+    return 0;
+}
+
+static inline bool GrPixelConfigIsOpaque(GrPixelConfig config) {
+    switch (config) {
+        case kRGB_565_GrPixelConfig:
+        case kGray_8_GrPixelConfig:
+        case kGray_8_as_Lum_GrPixelConfig:
+        case kGray_8_as_Red_GrPixelConfig:
+        case kRG_float_GrPixelConfig:
+            return true;
+        case kAlpha_8_GrPixelConfig:
+        case kAlpha_8_as_Alpha_GrPixelConfig:
+        case kAlpha_8_as_Red_GrPixelConfig:
+        case kRGBA_4444_GrPixelConfig:
+        case kAlpha_half_GrPixelConfig:
+        case kAlpha_half_as_Red_GrPixelConfig:
+        case kRGBA_8888_GrPixelConfig:
+        case kBGRA_8888_GrPixelConfig:
+        case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
+        case kRGBA_8888_sint_GrPixelConfig:
+        case kRGBA_half_GrPixelConfig:
+        case kRGBA_float_GrPixelConfig:
+        case kUnknown_GrPixelConfig:
+            return false;
+    }
+    SK_ABORT("Invalid pixel config");
+    return false;
+}
+
+static inline bool GrPixelConfigIsAlphaOnly(GrPixelConfig config) {
+    switch (config) {
+        case kAlpha_8_GrPixelConfig:
+        case kAlpha_8_as_Alpha_GrPixelConfig:
+        case kAlpha_8_as_Red_GrPixelConfig:
+        case kAlpha_half_GrPixelConfig:
+        case kAlpha_half_as_Red_GrPixelConfig:
+            return true;
+        case kUnknown_GrPixelConfig:
+        case kGray_8_GrPixelConfig:
+        case kGray_8_as_Lum_GrPixelConfig:
+        case kGray_8_as_Red_GrPixelConfig:
+        case kRGB_565_GrPixelConfig:
+        case kRGBA_4444_GrPixelConfig:
+        case kRGBA_8888_GrPixelConfig:
+        case kBGRA_8888_GrPixelConfig:
+        case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
+        case kRGBA_8888_sint_GrPixelConfig:
+        case kRGBA_float_GrPixelConfig:
+        case kRG_float_GrPixelConfig:
+        case kRGBA_half_GrPixelConfig:
+            return false;
+    }
+    SK_ABORT("Invalid pixel config.");
+    return false;
+}
+
+static inline bool GrPixelConfigIsFloatingPoint(GrPixelConfig config) {
+    switch (config) {
+        case kRGBA_float_GrPixelConfig:
+        case kRG_float_GrPixelConfig:
+        case kAlpha_half_GrPixelConfig:
+        case kAlpha_half_as_Red_GrPixelConfig:
+        case kRGBA_half_GrPixelConfig:
+            return true;
+        case kUnknown_GrPixelConfig:
+        case kAlpha_8_GrPixelConfig:
+        case kAlpha_8_as_Alpha_GrPixelConfig:
+        case kAlpha_8_as_Red_GrPixelConfig:
+        case kGray_8_GrPixelConfig:
+        case kGray_8_as_Lum_GrPixelConfig:
+        case kGray_8_as_Red_GrPixelConfig:
+        case kRGB_565_GrPixelConfig:
+        case kRGBA_4444_GrPixelConfig:
+        case kRGBA_8888_GrPixelConfig:
+        case kBGRA_8888_GrPixelConfig:
+        case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
+        case kRGBA_8888_sint_GrPixelConfig:
+            return false;
+    }
+    SK_ABORT("Invalid pixel config");
+    return false;
+}
+
+static inline bool GrPixelConfigIsSint(GrPixelConfig config) {
+    return config == kRGBA_8888_sint_GrPixelConfig;
+}
+
+static inline bool GrPixelConfigIsUnorm(GrPixelConfig config) {
+    switch (config) {
+        case kAlpha_8_GrPixelConfig:
+        case kAlpha_8_as_Alpha_GrPixelConfig:
+        case kAlpha_8_as_Red_GrPixelConfig:
+        case kGray_8_GrPixelConfig:
+        case kGray_8_as_Lum_GrPixelConfig:
+        case kGray_8_as_Red_GrPixelConfig:
+        case kRGB_565_GrPixelConfig:
+        case kRGBA_4444_GrPixelConfig:
+        case kRGBA_8888_GrPixelConfig:
+        case kBGRA_8888_GrPixelConfig:
+        case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
+            return true;
+        case kUnknown_GrPixelConfig:
+        case kAlpha_half_GrPixelConfig:
+        case kAlpha_half_as_Red_GrPixelConfig:
+        case kRGBA_8888_sint_GrPixelConfig:
+        case kRGBA_float_GrPixelConfig:
+        case kRG_float_GrPixelConfig:
+        case kRGBA_half_GrPixelConfig:
+            return false;
+    }
+    SK_ABORT("Invalid pixel config.");
+    return false;
+}
+
+/**
+ * Precision qualifier that should be used with a sampler.
+ */
+static inline GrSLPrecision GrSLSamplerPrecision(GrPixelConfig config) {
+    switch (config) {
+        case kUnknown_GrPixelConfig:
+        case kAlpha_8_GrPixelConfig:
+        case kAlpha_8_as_Alpha_GrPixelConfig:
+        case kAlpha_8_as_Red_GrPixelConfig:
+        case kGray_8_GrPixelConfig:
+        case kGray_8_as_Lum_GrPixelConfig:
+        case kGray_8_as_Red_GrPixelConfig:
+        case kRGB_565_GrPixelConfig:
+        case kRGBA_4444_GrPixelConfig:
+        case kRGBA_8888_GrPixelConfig:
+        case kBGRA_8888_GrPixelConfig:
+        case kSRGBA_8888_GrPixelConfig:
+        case kSBGRA_8888_GrPixelConfig:
+        case kRGBA_8888_sint_GrPixelConfig:
+            return kLow_GrSLPrecision;
+        case kRGBA_float_GrPixelConfig:
+        case kRG_float_GrPixelConfig:
+            return kHigh_GrSLPrecision;
+        case kAlpha_half_GrPixelConfig:
+        case kAlpha_half_as_Red_GrPixelConfig:
+        case kRGBA_half_GrPixelConfig:
+            return kMedium_GrSLPrecision;
+    }
+    SK_ABORT("Unexpected type");
+    return kHigh_GrSLPrecision;
+}
+
+static inline GrPixelConfigIsClamped GrGetPixelConfigIsClamped(GrPixelConfig config) {
+    return GrPixelConfigIsFloatingPoint(config) ? GrPixelConfigIsClamped::kNo
+                                                : GrPixelConfigIsClamped::kYes;
+}
 
 #endif

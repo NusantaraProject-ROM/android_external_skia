@@ -10,55 +10,36 @@
 #include "glsl/GrGLSLFragmentShaderBuilder.h"
 #include "glsl/GrGLSLVertexGeoBuilder.h"
 
-void GrCCPRTriangleShader::appendInputPointFetch(const GrCCPRCoverageProcessor& proc,
-                                                 GrGLSLShaderBuilder* s,
-                                                 const TexelBufferHandle& pointsBuffer,
-                                                 const char* pointId) const {
-    s->appendTexelFetch(pointsBuffer,
-                        SkStringPrintf("%s[%s]", proc.instanceAttrib(), pointId).c_str());
-}
+using Shader = GrCCPRCoverageProcessor::Shader;
 
-void GrCCPRTriangleShader::emitWind(GrGLSLShaderBuilder* s, const char* pts,
-                                    const char* outputWind) const {
-    s->codeAppendf("%s = sign(determinant(float2x2(%s[1] - %s[0], %s[2] - %s[0])));",
-                   outputWind, pts, pts, pts, pts);
-}
-
-GrCCPRTriangleHullShader::WindHandling
-GrCCPRTriangleHullShader::onEmitVaryings(GrGLSLVaryingHandler*, SkString* code,
-                                         const char* /*position*/, const char* /*coverage*/,
-                                         const char* /*wind*/) {
-    return WindHandling::kNotHandled; // No varyings.Let the base class handle wind.
-}
-
-void GrCCPRTriangleHullShader::onEmitFragmentCode(GrGLSLPPFragmentBuilder* f,
-                                                  const char* outputCoverage) const {
-    f->codeAppendf("%s = 1;", outputCoverage);
-}
-
-GrCCPRTriangleEdgeShader::WindHandling
-GrCCPRTriangleEdgeShader::onEmitVaryings(GrGLSLVaryingHandler* varyingHandler, SkString* code,
-                                         const char* position, const char* coverage,
-                                         const char* wind) {
-    varyingHandler->addVarying("coverage_times_wind", &fCoverageTimesWind);
-    code->appendf("%s = %s * %s;", fCoverageTimesWind.gsOut(), coverage, wind);
+Shader::WindHandling GrCCPRTriangleShader::onEmitVaryings(GrGLSLVaryingHandler* varyingHandler,
+                                                          SkString* code, const char* /*position*/,
+                                                          const char* coverage, const char* wind) {
+    if (!coverage) {
+        varyingHandler->addFlatVarying("wind", &fCoverageTimesWind);
+        code->appendf("%s = %s;", fCoverageTimesWind.gsOut(), wind);
+    } else {
+        varyingHandler->addVarying("coverage_times_wind", &fCoverageTimesWind);
+        code->appendf("%s = %s * %s;", fCoverageTimesWind.gsOut(), coverage, wind);
+    }
     return WindHandling::kHandled;
 }
 
-void GrCCPRTriangleEdgeShader::onEmitFragmentCode(GrGLSLPPFragmentBuilder* f,
-                                                  const char* outputCoverage) const {
+void GrCCPRTriangleShader::onEmitFragmentCode(GrGLSLPPFragmentBuilder* f,
+                                              const char* outputCoverage) const {
     f->codeAppendf("%s = %s;", outputCoverage, fCoverageTimesWind.fsIn());
 }
 
-void GrCCPRTriangleCornerShader::emitSetupCode(GrGLSLShaderBuilder* s, const char* pts,
-                                               const char* cornerId, const char* wind,
+void GrCCPRTriangleCornerShader::emitSetupCode(GrGLSLVertexGeoBuilder* s, const char* pts,
+                                               const char* repetitionID, const char* wind,
                                                GeometryVars* vars) const {
-    s->codeAppendf("float2 corner = %s[sk_InvocationID];", pts);
+    s->codeAppendf("float2 corner = %s[%s];", pts, repetitionID);
     vars->fCornerVars.fPoint = "corner";
 
-    s->codeAppendf("float2x2 vectors = float2x2(corner - %s[(sk_InvocationID + 2) %% 3], "
-                                               "corner - %s[(sk_InvocationID + 1) %% 3]);",
-                                               pts, pts);
+    s->codeAppendf("float2x2 vectors = float2x2(corner - %s[0 != %s ? %s - 1 : 2], "
+                                               "corner - %s[2 != %s ? %s + 1 : 0]);",
+                                               pts, repetitionID, repetitionID, pts, repetitionID,
+                                               repetitionID);
 
     // Make sure neither vector is 0 to avoid a divide-by-zero. Wind will be zero anyway if this
     // is the case, so whatever we output won't have any effect as long it isn't NaN or Inf.
@@ -103,10 +84,12 @@ void GrCCPRTriangleCornerShader::emitSetupCode(GrGLSLShaderBuilder* s, const cha
     s->codeAppend ("}");
 }
 
-GrCCPRTriangleCornerShader::WindHandling
+Shader::WindHandling
 GrCCPRTriangleCornerShader::onEmitVaryings(GrGLSLVaryingHandler* varyingHandler, SkString* code,
-                                           const char* position, const char* /*coverage*/,
+                                           const char* position, const char* coverage,
                                            const char* /*wind*/) {
+    SkASSERT(!coverage);
+
     varyingHandler->addVarying("corner_location_in_aa_boxes", &fCornerLocationInAABoxes);
     varyingHandler->addFlatVarying("bisect_in_aa_boxes", &fBisectInAABoxes);
     code->appendf("for (int i = 0; i < 2; ++i) {");

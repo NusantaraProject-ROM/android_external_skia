@@ -69,7 +69,7 @@ protected:
         return backend == kNonRendering_Backend;
     }
     void onDelayedSetup() override {
-        sk_sp<SkImage> img(GetResourceAsImage("color_wheel.png"));
+        sk_sp<SkImage> img(GetResourceAsImage("images/color_wheel.png"));
         if (img) {
             // force decoding, throw away reference to encoded data.
             SkAutoPixmapStorage pixmap;
@@ -84,7 +84,7 @@ protected:
             return;
         }
         while (loops-- > 0) {
-            auto object = SkPDFCreateBitmapObject(fImage, nullptr);
+            auto object = SkPDFCreateBitmapObject(fImage);
             SkASSERT(object);
             if (!object) {
                 return;
@@ -108,7 +108,7 @@ protected:
         return backend == kNonRendering_Backend;
     }
     void onDelayedSetup() override {
-        sk_sp<SkImage> img(GetResourceAsImage("mandrill_512_q075.jpg"));
+        sk_sp<SkImage> img(GetResourceAsImage("images/mandrill_512_q075.jpg"));
         if (!img) { return; }
         sk_sp<SkData> encoded = img->refEncodedData();
         SkASSERT(encoded);
@@ -121,7 +121,7 @@ protected:
             return;
         }
         while (loops-- > 0) {
-            auto object = SkPDFCreateBitmapObject(fImage, nullptr);
+            auto object = SkPDFCreateBitmapObject(fImage);
             SkASSERT(object);
             if (!object) {
                 return;
@@ -214,8 +214,7 @@ struct PDFShaderBench : public Benchmark {
         SkASSERT(fShader);
         while (loops-- > 0) {
             SkNullWStream nullStream;
-            SkPDFDocument doc(&nullStream, nullptr, 72,
-                              SkDocument::PDFMetadata(), nullptr, false);
+            SkPDFDocument doc(&nullStream, nullptr, SkDocument::PDFMetadata());
             sk_sp<SkPDFObject> shader = SkPDFMakeShader(&doc, fShader.get(), SkMatrix::I(),
                                                         {0, 0, 400, 400}, SK_ColorBLACK);
         }

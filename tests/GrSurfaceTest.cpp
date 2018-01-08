@@ -48,14 +48,8 @@ DEF_GPUTEST_FOR_NULLGL_CONTEXT(GrSurface, reporter, ctxInfo) {
     REPORTER_ASSERT(reporter, tex1.get() == tex1->asTexture());
     REPORTER_ASSERT(reporter, static_cast<GrSurface*>(tex1.get()) == tex1->asTexture());
 
-    GrBackendObject backendTexHandle = context->getGpu()->createTestingOnlyBackendTexture(
-        nullptr, 256, 256, kRGBA_8888_GrPixelConfig);
-    GrBackendTexture backendTex = GrTest::CreateBackendTexture(context->contextPriv().getBackend(),
-                                                               256,
-                                                               256,
-                                                               kRGBA_8888_GrPixelConfig,
-                                                               GrMipMapped::kNo,
-                                                               backendTexHandle);
+    GrBackendTexture backendTex = context->getGpu()->createTestingOnlyBackendTexture(
+        nullptr, 256, 256, kRGBA_8888_GrPixelConfig, false, GrMipMapped::kNo);
 
     sk_sp<GrSurface> texRT2 = context->resourceProvider()->wrapRenderableBackendTexture(
             backendTex, 0, kBorrow_GrWrapOwnership);
@@ -69,7 +63,7 @@ DEF_GPUTEST_FOR_NULLGL_CONTEXT(GrSurface, reporter, ctxInfo) {
     REPORTER_ASSERT(reporter, static_cast<GrSurface*>(texRT2->asRenderTarget()) ==
                     static_cast<GrSurface*>(texRT2->asTexture()));
 
-    context->getGpu()->deleteTestingOnlyBackendTexture(backendTexHandle);
+    context->getGpu()->deleteTestingOnlyBackendTexture(&backendTex);
 }
 
 // This test checks that the isConfigTexturable and isConfigRenderable are
@@ -82,7 +76,11 @@ DEF_GPUTEST_FOR_ALL_CONTEXTS(GrSurfaceRenderability, reporter, ctxInfo) {
     GrPixelConfig configs[] = {
         kUnknown_GrPixelConfig,
         kAlpha_8_GrPixelConfig,
+        kAlpha_8_as_Alpha_GrPixelConfig,
+        kAlpha_8_as_Red_GrPixelConfig,
         kGray_8_GrPixelConfig,
+        kGray_8_as_Lum_GrPixelConfig,
+        kGray_8_as_Red_GrPixelConfig,
         kRGB_565_GrPixelConfig,
         kRGBA_4444_GrPixelConfig,
         kRGBA_8888_GrPixelConfig,
@@ -93,6 +91,7 @@ DEF_GPUTEST_FOR_ALL_CONTEXTS(GrSurfaceRenderability, reporter, ctxInfo) {
         kRGBA_float_GrPixelConfig,
         kRG_float_GrPixelConfig,
         kAlpha_half_GrPixelConfig,
+        kAlpha_half_as_Red_GrPixelConfig,
         kRGBA_half_GrPixelConfig,
     };
     SkASSERT(kGrPixelConfigCnt == SK_ARRAY_COUNT(configs));

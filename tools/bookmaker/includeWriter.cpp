@@ -64,9 +64,7 @@ void IncludeWriter::descriptionOut(const Definition* def) {
                 commentStart = prop->fContentStart;
                 commentLen = (int) (prop->fContentEnd - commentStart);
                 if (commentLen > 0) {
-                    if (Wrote::kNone != this->rewriteBlock(commentLen, commentStart, Phrase::kNo)) {
-                        this->lfcr();
-                    }
+                    this->writeBlockIndent(commentLen, commentStart);
                 }
                 commentStart = prop->fTerminator;
                 commentLen = (int) (def->fContentEnd - commentStart);
@@ -635,7 +633,7 @@ void IncludeWriter::methodOut(const Definition* method, const Definition& child)
             this->indentToColumn(column);
             int partLen = (int) (partEnd - partStart);
             // FIXME : detect this earlier; assert if #Return is empty
-            SkASSERT(partLen > 0 && partLen < 200);
+            SkASSERT(partLen > 0 && partLen < 300);  // may assert if param desc is especially long
             fIndent = column;
             this->rewriteBlock(partLen, partStart, Phrase::kYes);
             fIndent = saveIndent;
@@ -973,34 +971,40 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
                     continue;
                 }
             }
-            if (Definition::Type::kBracket == child.fType && Bracket::kParen == child.fBracket) {
-                if (!clonedMethod) {
-                    if (inConstructor) {
-                        fContinuation = child.fContentStart;
-                    }
+            if (Definition::Type::kBracket == child.fType) {
+                if (Bracket::kAngle == child.fBracket) {
                     continue;
                 }
-                int alternate = 1;
-                ptrdiff_t childLen = child.fContentEnd - child.fContentStart;
-                SkASSERT(')' == child.fContentStart[childLen]);
-                ++childLen;
-                do {
-                    TextParser params(clonedMethod->fFileName, clonedMethod->fStart,
-                        clonedMethod->fContentStart, clonedMethod->fLineCount);
-                    params.skipToEndBracket('(');
-                    if (params.startsWith(child.fContentStart, childLen)) {
-                        this->methodOut(clonedMethod, child);
-                        break;
+                if (Bracket::kParen == child.fBracket) {
+                    if (!clonedMethod) {
+                        if (inConstructor) {
+                            fContinuation = child.fContentStart;
+                        }
+                        continue;
                     }
-                    ++alternate;
-                    string alternateMethod = methodName + '_' + to_string(alternate);
-                    clonedMethod = root->find(alternateMethod, RootDefinition::AllowParens::kNo);
-                } while (clonedMethod);
-                if (!clonedMethod) {
-                    return this->reportError<bool>("cloned method not found");
+                    int alternate = 1;
+                    ptrdiff_t childLen = child.fContentEnd - child.fContentStart;
+                    SkASSERT(')' == child.fContentStart[childLen]);
+                    ++childLen;
+                    do {
+                        TextParser params(clonedMethod->fFileName, clonedMethod->fStart,
+                            clonedMethod->fContentStart, clonedMethod->fLineCount);
+                        params.skipToEndBracket('(');
+                        if (params.startsWith(child.fContentStart, childLen)) {
+                            this->methodOut(clonedMethod, child);
+                            break;
+                        }
+                        ++alternate;
+                        string alternateMethod = methodName + '_' + to_string(alternate);
+                        clonedMethod = root->find(alternateMethod,
+                                RootDefinition::AllowParens::kNo);
+                    } while (clonedMethod);
+                    if (!clonedMethod) {
+                        return this->reportError<bool>("cloned method not found");
+                    }
+                    clonedMethod = nullptr;
+                    continue;
                 }
-                clonedMethod = nullptr;
-                continue;
             }
             if (Definition::Type::kWord == child.fType) {
                 if (clonedMethod) {
@@ -1103,7 +1107,6 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
         }
         if (Definition::Type::kKeyWord == child.fType) {
             if (fIndentNext) {
-                SkDebugf("");
     // too soon
 #if 0  // makes struct Lattice indent when it oughtn't
                 if (KeyWord::kEnum == child.fKeyWord) {
@@ -1432,6 +1435,7 @@ bool IncludeWriter::populate(BmhParser& bmhParser) {
         root->clearVisited();
         fStart = includeMapper.second.fContentStart;
         fEnd = includeMapper.second.fContentEnd;
+        fAnonymousEnumCount = 1;
         allPassed &= this->populate(&includeMapper.second, nullptr, root);
         this->writeBlock((int) (fEnd - fStart), fStart);
         fIndent = 0;
@@ -1701,6 +1705,7 @@ IncludeWriter::Wrote IncludeWriter::rewriteBlock(int size, const char* data, Phr
             if (lastPrintable >= lastWrite) {
                 if (' ' == data[lastWrite]) {
                     this->writeSpace();
+                    lastWrite++;
                 }
                 this->writeBlock(lastPrintable - lastWrite + 1, &data[lastWrite]);
             }

@@ -8,7 +8,10 @@
 #include "Resources.h"
 #include "SkCommandLineFlags.h"
 #include "SkFixed.h"
+#include "SkFontMgr_android.h"
 #include "SkFontMgr_android_parser.h"
+#include "SkOSFile.h"
+#include "SkTypeface.h"
 #include "Test.h"
 
 #include <cmath>
@@ -219,4 +222,26 @@ DEF_TEST(FontMgrAndroidParser, reporter) {
     if (resourcesMissing) {
         SkDebugf("---- Resource files missing for FontConfigParser test\n");
     }
+}
+
+DEF_TEST(FontMgrAndroidLegacyMakeTypeface, reporter) {
+    constexpr char fontsXmlFilename[] = "fonts/fonts.xml";
+    SkString basePath = GetResourcePath("fonts/");
+    SkString fontsXml = GetResourcePath(fontsXmlFilename);
+
+    if (!sk_exists(fontsXml.c_str())) {
+        ERRORF(reporter, "file missing: %s\n", fontsXmlFilename);
+        return;
+    }
+
+    SkFontMgr_Android_CustomFonts custom;
+    custom.fSystemFontUse = SkFontMgr_Android_CustomFonts::kOnlyCustom;
+    custom.fBasePath = basePath.c_str();
+    custom.fFontsXml = fontsXml.c_str();
+    custom.fFallbackFontsXml = nullptr;
+    custom.fIsolated = false;
+
+    sk_sp<SkFontMgr> fm(SkFontMgr_New_Android(&custom));
+    sk_sp<SkTypeface> t(fm->legacyMakeTypeface("non-existent-font", SkFontStyle()));
+    REPORTER_ASSERT(reporter, nullptr == t);
 }

@@ -52,6 +52,7 @@
 #include "SkPaintImageFilter.h"
 #include "SkPerlinNoiseShader.h"
 #include "SkPictureImageFilter.h"
+#include "SkReadBuffer.h"
 #include "SkRRectsGaussianEdgeMaskFilter.h"
 #include "SkTableColorFilter.h"
 #include "SkTextBlob.h"
@@ -920,20 +921,12 @@ static sk_sp<SkImageFilter> make_fuzz_imageFilter(Fuzz* fuzz, int depth) {
             return SkPictureImageFilter::Make(std::move(picture), cropRect);
         }
         case 22: {
-            SkRect cropRect;
-            SkFilterQuality filterQuality;
-            fuzz->next(&cropRect, &filterQuality);
-            sk_sp<SkPicture> picture = make_fuzz_picture(fuzz, depth - 1);
-            return SkPictureImageFilter::MakeForLocalSpace(std::move(picture), cropRect,
-                                                           filterQuality);
-        }
-        case 23: {
             SkRect src, dst;
             fuzz->next(&src, &dst);
             sk_sp<SkImageFilter> input = make_fuzz_imageFilter(fuzz, depth - 1);
             return SkTileImageFilter::Make(src, dst, std::move(input));
         }
-        case 24: {
+        case 23: {
             SkBlendMode blendMode;
             bool useCropRect;
             fuzz->next(&useCropRect, &blendMode);
@@ -1332,14 +1325,15 @@ static void fuzz_canvas(Fuzz* fuzz, SkCanvas* canvas, int depth = 9) {
                 break;
             case 24: {
                 fuzz_paint(fuzz, &paint, depth - 1);
-                uint8_t pointMode;
-                fuzz->nextRange(&pointMode, 0, 3);
+                SkCanvas::PointMode pointMode;
+                fuzz_enum_range(fuzz, &pointMode,
+                                SkCanvas::kPoints_PointMode, SkCanvas::kPolygon_PointMode);
                 size_t count;
                 constexpr int kMaxCount = 30;
                 fuzz->nextRange(&count, 0, kMaxCount);
                 SkPoint pts[kMaxCount];
                 fuzz->nextN(pts, count);
-                canvas->drawPoints((SkCanvas::PointMode)pointMode, count, pts, paint);
+                canvas->drawPoints(pointMode, count, pts, paint);
                 break;
             }
             case 25: {
@@ -1555,7 +1549,7 @@ static void fuzz_canvas(Fuzz* fuzz, SkCanvas* canvas, int depth = 9) {
                 }
                 constexpr int kMax = 6;
                 int xDivs[kMax], yDivs[kMax];
-                SkCanvas::Lattice lattice{xDivs, yDivs, nullptr, 0, 0, nullptr};
+                SkCanvas::Lattice lattice{xDivs, yDivs, nullptr, 0, 0, nullptr, nullptr};
                 fuzz->nextRange(&lattice.fXCount, 2, kMax);
                 fuzz->nextRange(&lattice.fYCount, 2, kMax);
                 fuzz->nextN(xDivs, lattice.fXCount);
@@ -1573,7 +1567,7 @@ static void fuzz_canvas(Fuzz* fuzz, SkCanvas* canvas, int depth = 9) {
                 }
                 constexpr int kMax = 6;
                 int xDivs[kMax], yDivs[kMax];
-                SkCanvas::Lattice lattice{xDivs, yDivs, nullptr, 0, 0, nullptr};
+                SkCanvas::Lattice lattice{xDivs, yDivs, nullptr, 0, 0, nullptr, nullptr};
                 fuzz->nextRange(&lattice.fXCount, 2, kMax);
                 fuzz->nextRange(&lattice.fYCount, 2, kMax);
                 fuzz->nextN(xDivs, lattice.fXCount);
@@ -1768,6 +1762,22 @@ DEF_FUZZ(RasterN32Canvas, fuzz) {
     auto surface = SkSurface::MakeRasterN32Premul(kCanvasSize.width(), kCanvasSize.height());
     SkASSERT(surface && surface->getCanvas());
     fuzz_canvas(fuzz, surface->getCanvas());
+}
+
+DEF_FUZZ(RasterN32CanvasViaSerialization, fuzz) {
+    SkPictureRecorder recorder;
+    fuzz_canvas(fuzz, recorder.beginRecording(SkIntToScalar(kCanvasSize.width()),
+                                              SkIntToScalar(kCanvasSize.height())));
+    sk_sp<SkPicture> pic(recorder.finishRecordingAsPicture());
+    if (!pic) { fuzz->signalBug(); }
+    sk_sp<SkData> data = pic->serialize();
+    if (!data) { fuzz->signalBug(); }
+    SkReadBuffer rb(data->data(), data->size());
+    auto deserialized = SkPicture::MakeFromBuffer(rb);
+    if (!deserialized) { fuzz->signalBug(); }
+    auto surface = SkSurface::MakeRasterN32Premul(kCanvasSize.width(), kCanvasSize.height());
+    SkASSERT(surface && surface->getCanvas());
+    surface->getCanvas()->drawPicture(deserialized);
 }
 
 #if SK_SUPPORT_GPU

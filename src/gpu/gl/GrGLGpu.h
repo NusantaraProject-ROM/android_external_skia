@@ -28,18 +28,14 @@ class GrGLBuffer;
 class GrPipeline;
 class GrSwizzle;
 
-namespace gr_instanced { class GLInstancedRendering; }
-
 #ifdef SK_DEBUG
 #define PROGRAM_CACHE_STATS
 #endif
 
 class GrGLGpu final : public GrGpu, private GrMesh::SendToGpuImpl {
 public:
-    static GrGpu* Create(GrBackendContext backendContext, const GrContextOptions& options,
-                         GrContext* context);
-    static GrGpu* Create(const GrGLInterface*, const GrContextOptions& options,
-                         GrContext* context);
+    static sk_sp<GrGpu> Make(GrBackendContext backendContext, const GrContextOptions&, GrContext*);
+    static sk_sp<GrGpu> Make(sk_sp<const GrGLInterface>, const GrContextOptions&, GrContext*);
     ~GrGLGpu() override;
 
     void disconnect(DisconnectType) override;
@@ -63,8 +59,6 @@ public:
                      GrGLTexture* texture, GrSurfaceOrigin textureOrigin);
 
     void bindTexelBuffer(int unitIdx, GrPixelConfig, GrGLBuffer*);
-
-    void bindImageStorage(int unitIdx, GrIOType, GrGLTexture *);
 
     void generateMipmaps(const GrSamplerState& params, bool allowSRGBInputs, GrGLTexture* texture,
                          GrSurfaceOrigin textureOrigin);
@@ -165,12 +159,12 @@ public:
                                                                 int width,
                                                                 int height) override;
 
-    GrBackendObject createTestingOnlyBackendTexture(void* pixels, int w, int h,
-                                                    GrPixelConfig config,
-                                                    bool isRenderTarget,
-                                                    GrMipMapped mipMapped) override;
-    bool isTestingOnlyBackendTexture(GrBackendObject) const override;
-    void deleteTestingOnlyBackendTexture(GrBackendObject, bool abandonTexture) override;
+    GrBackendTexture createTestingOnlyBackendTexture(void* pixels, int w, int h,
+                                                     GrPixelConfig config,
+                                                     bool isRenderTarget,
+                                                     GrMipMapped mipMapped) override;
+    bool isTestingOnlyBackendTexture(const GrBackendTexture&) const override;
+    void deleteTestingOnlyBackendTexture(GrBackendTexture*, bool abandonTexture = false) override;
 
     void resetShaderCacheForTesting() const override;
 
@@ -191,7 +185,7 @@ public:
     void insertEventMarker(const char*);
 
 private:
-    GrGLGpu(GrGLContext* ctx, GrContext* context);
+    GrGLGpu(std::unique_ptr<GrGLContext>, GrContext*);
 
     // GrGpu overrides
     void onResetContext(uint32_t resetBits) override;
@@ -212,9 +206,6 @@ private:
     sk_sp<GrRenderTarget> onWrapBackendRenderTarget(const GrBackendRenderTarget&) override;
     sk_sp<GrRenderTarget> onWrapBackendTextureAsRenderTarget(const GrBackendTexture&,
                                                              int sampleCnt) override;
-
-    std::unique_ptr<gr_instanced::OpAllocator> onCreateInstancedRenderingAllocator() override;
-    gr_instanced::InstancedRendering* onCreateInstancedRendering() override;
 
     // Given a GrPixelConfig return the index into the stencil format array on GrGLCaps to a
     // compatible stencil format, or negative if there is no compatible stencil format.
@@ -417,12 +408,12 @@ private:
 
     void onDumpJSON(SkJSONWriter*) const override;
 
-    sk_sp<GrGLContext>          fGLContext;
-
     bool createCopyProgram(GrTexture* srcTexture);
     bool createMipmapProgram(int progIdx);
     bool createStencilClipClearProgram();
     bool createClearColorProgram();
+
+    std::unique_ptr<GrGLContext> fGLContext;
 
     // GL program-related state
     ProgramCache*               fProgramCache;
@@ -592,12 +583,6 @@ private:
     TriState                                fHWSRGBFramebuffer;
     SkTArray<GrGpuResource::UniqueID, true> fHWBoundTextureUniqueIDs;
 
-    struct Image {
-        GrGpuResource::UniqueID fTextureUniqueID;
-        GrIOType                fIOType;
-    };
-    SkTArray<Image, true>                   fHWBoundImageStorages;
-
     struct BufferTexture {
         BufferTexture() : fTextureID(0), fKnownBound(false),
                           fAttachedBufferUniqueID(SK_InvalidUniqueID),
@@ -658,7 +643,6 @@ private:
 
     typedef GrGpu INHERITED;
     friend class GrGLPathRendering; // For accessing setTextureUnit.
-    friend class gr_instanced::GLInstancedRendering; // For accessing flushGLState.
 };
 
 #endif

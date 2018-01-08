@@ -1025,7 +1025,7 @@ public:
 
         @return  bounds of clip in local coordinates
     */
-    SkRect getLocalClipBounds() const { return this->onGetLocalClipBounds(); }
+    SkRect getLocalClipBounds() const;
 
     /** Return bounds of clip, transformed by inverse of SkMatrix. If clip is empty,
         return false, and set bounds to SkRect::MakeEmpty, where all SkRect sides equal zero.
@@ -1037,7 +1037,7 @@ public:
         @return        true if clip bounds is not empty
     */
     bool getLocalClipBounds(SkRect* bounds) const {
-        *bounds = this->onGetLocalClipBounds();
+        *bounds = this->getLocalClipBounds();
         return !bounds->isEmpty();
     }
 
@@ -1048,7 +1048,7 @@ public:
 
         @return  bounds of clip in SkBaseDevice coordinates
     */
-    SkIRect getDeviceClipBounds() const { return this->onGetDeviceClipBounds(); }
+    SkIRect getDeviceClipBounds() const;
 
     /** Return SkIRect bounds of clip, unaffected by SkMatrix. If clip is empty,
         return false, and set bounds to SkRect::MakeEmpty, where all SkRect sides equal zero.
@@ -1059,7 +1059,7 @@ public:
         @return        true if clip bounds is not empty
     */
     bool getDeviceClipBounds(SkIRect* bounds) const {
-        *bounds = this->onGetDeviceClipBounds();
+        *bounds = this->getDeviceClipBounds();
         return !bounds->isEmpty();
     }
 
@@ -1760,12 +1760,19 @@ public:
     */
     struct Lattice {
 
-        /** \enum SkCanvas::Lattice::Flags
-            Optional setting per rectangular grid entry to make it transparent.
+        /** \enum SkCanvas::Lattice::RectType
+            Optional setting per rectangular grid entry.
         */
-        enum Flags : uint8_t {
+        enum RectType : uint8_t {
+            kDefault = 0,
+
             /** Set to skip lattice rectangle by making it transparent. */
-            kTransparent_Flags = 1 << 0,
+            kTransparent,
+
+            /** The lattice rectangle is a fixed color. The color value is stored
+                in fColors.
+            */
+            kFixedColor,
         };
 
         /** Array of x-coordinates that divide the bitmap vertically.
@@ -1784,13 +1791,13 @@ public:
         */
         const int*     fYDivs;
 
-        /** Optional array of flags, one per rectangular grid entry:
+        /** Optional array of rectangle types, one per rectangular grid entry:
             array length must be (fXCount + 1) * (fYCount + 1).
 
             Array entries correspond to the rectangular grid entries, ascending
             left to right and then top to bottom.
         */
-        const Flags*   fFlags;
+        const RectType* fRectTypes;
 
         /** Number of entries in fXDivs array; one less than the number of
             horizontal divisions.
@@ -1806,6 +1813,15 @@ public:
             If nullptr, source bounds is dimensions of SkBitmap or SkImage.
         */
         const SkIRect* fBounds;
+
+
+        /** Optional array of colors, one per rectangular grid entry:
+            array length must be (fXCount + 1) * (fYCount + 1).
+
+            Array entries correspond to the rectangular grid entries, ascending
+            left to right and then top to bottom.
+        */
+        const SkColor* fColors;
 
     };
 
@@ -2470,10 +2486,6 @@ protected:
     virtual void didTranslate(SkScalar dx, SkScalar dy) {
         this->didConcat(SkMatrix::MakeTrans(dx, dy));
     }
-
-    virtual SkRect onGetLocalClipBounds() const;
-    virtual SkIRect onGetDeviceClipBounds() const;
-
 
     virtual void onDrawAnnotation(const SkRect& rect, const char key[], SkData* value);
     virtual void onDrawDRRect(const SkRRect& outer, const SkRRect& inner, const SkPaint& paint);

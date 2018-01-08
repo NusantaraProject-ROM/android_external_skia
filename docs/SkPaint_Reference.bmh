@@ -1,4 +1,4 @@
-﻿#Topic Paint
+#Topic Paint
 #Alias Paint_Reference
 
 #Class SkPaint
@@ -571,6 +571,7 @@ can reconstitute the paint at a later time.
     class PaintDumper : public SkWriteBuffer {
     public:
         bool isCrossProcess() const override { return false; };
+        void writePad32(const void* buffer, size_t bytes) override {}
         void writeByteArray(const void* data, size_t size) override {}
         void writeBool(bool value) override {}
         void writeScalar(SkScalar value) override {}
@@ -591,7 +592,6 @@ can reconstitute the paint at a later time.
         void writeRegion(const SkRegion& region) override {}
         void writePath(const SkPath& path) override {}
         size_t writeStream(SkStream* stream, size_t length) override { return 0; }
-        void writeBitmap(const SkBitmap& bitmap) override {}
         void writeImage(const SkImage*) override {}
         void writeTypeface(SkTypeface* typeface) override {}
         void writePaint(const SkPaint& paint) override {}
@@ -1395,7 +1395,7 @@ kEmbeddedBitmapText_Flag at compile time.
     SkPaint paint;
     paint.setAntiAlias(true);
     paint.setTextSize(13);
-    paint.setTypeface(MakeResourceAsTypeface("/fonts/hintgasp.ttf"));
+    paint.setTypeface(MakeResourceAsTypeface("fonts/hintgasp.ttf"));
     for (bool embedded : { false, true}) {
         paint.setEmbeddedBitmapText(embedded);
         offscreen.drawString("A", embedded ? 5 : 15, 15, paint);
@@ -1906,8 +1906,8 @@ on the output device, which may have more or fewer bits, and may have a differen
     Unpremultiplied, packing 8-bit components for Alpha, Red, Blue, and Green. 
 
     #Param color    Unpremultiplied Color_ARGB ##
-        
-    #Example
+    
+    #Example
         SkPaint green1, green2;
         unsigned a = 255;
         unsigned r = 0;
@@ -2598,7 +2598,7 @@ void draw(SkCanvas* canvas) {
 
 #Method Join getStrokeJoin() const
 
-    The geometry drawn at the corners of strokes. 
+    The geometry drawn at the corners of strokes.
 
     #Return  one of: kMiter_Join, kRound_Join, kBevel_Join ##
 
@@ -2617,7 +2617,7 @@ void draw(SkCanvas* canvas) {
 
 #Method void setStrokeJoin(Join join)
 
-    The geometry drawn at the corners of strokes. 
+    The geometry drawn at the corners of strokes.
 
     #Param join  one of: kMiter_Join, kRound_Join, kBevel_Join;
                  otherwise, has no effect 
@@ -3109,7 +3109,8 @@ If Paint has no Path_Effect, the path geometry is unaltered when filled or strok
     #Example
     void draw(SkCanvas* canvas) {
         SkPaint paint1, paint2;
-        paint1.setPathEffect(SkArcToPathEffect::Make(10));
+        SkScalar intervals[] = {1, 2};
+        paint1.setPathEffect(SkDashPathEffect::Make(intervals, SK_ARRAY_COUNT(intervals), 10));
         SkDebugf("path effect unique: %s\n", paint1.getPathEffect()->unique() ? "true" : "false");
         paint2.setPathEffect(paint1.refPathEffect());
         SkDebugf("path effect unique: %s\n", paint1.getPathEffect()->unique() ? "true" : "false");
@@ -3476,7 +3477,7 @@ Mask_Filter and Rasterizer.
         SkRegion region;
         region.op( 10, 10, 50, 50, SkRegion::kUnion_Op);
         region.op( 10, 50, 90, 90, SkRegion::kUnion_Op);
-        paint.setImageFilter(SkImageFilter::MakeBlur(5.0f, 5.0f, nullptr));
+        paint.setImageFilter(SkBlurImageFilter::Make(5.0f, 5.0f, nullptr));
         canvas->drawRegion(region, paint);
         paint.setImageFilter(nullptr);
         paint.setMaskFilter(SkBlurMaskFilter::Make(kNormal_SkBlurStyle, 5));
@@ -3496,7 +3497,7 @@ Mask_Filter and Rasterizer.
         void draw(SkCanvas* canvas) {
            SkPaint paint;
            SkDebugf("nullptr %c= image filter\n", paint.getImageFilter() ? '!' : '=');
-           paint.setImageFilter(SkImageFilter::MakeBlur(kOuter_SkBlurStyle, 3, nullptr, nullptr));
+           paint.setImageFilter(SkBlurImageFilter::Make(kOuter_SkBlurStyle, 3, nullptr, nullptr));
            SkDebugf("nullptr %c= image filter\n", paint.getImageFilter() ? '!' : '=');
         }
 
@@ -4132,7 +4133,7 @@ Font dimensions specify the anchor to the left of the glyph at baseline as the o
 X-axis values to the left of the glyph are negative, and to the right of the left glyph edge
 are positive.
 Y-axis values above the baseline are negative, and below the baseline are positive.
- 
+
 #Example
 #Width 512
 void draw(SkCanvas* canvas) {
@@ -4156,10 +4157,9 @@ void draw(SkCanvas* canvas) {
     canvas->drawLine(xmin, pt.fY - 145, pt.fX, pt.fY - 145, paint);
     canvas->drawLine(pt.fX + fm.fXMax, pt.fY - 160, pt.fX, pt.fY - 160, paint);
     SkScalar upos = pt.fY + fm.fUnderlinePosition;
-    canvas->drawLine(pt.fX + 25, upos, pt.fX + 130, upos, paint);
-    SkScalar urad = fm.fUnderlineThickness / 2;
-    canvas->drawLine(pt.fX + 130, upos - urad, pt.fX + 160, upos - urad, paint);
-    canvas->drawLine(pt.fX + 130, upos + urad, pt.fX + 160, upos + urad, paint);
+    canvas->drawLine(pt.fX + 25, upos, pt.fX + 160, upos, paint);
+    SkScalar ut = fm.fUnderlineThickness;
+    canvas->drawLine(pt.fX + 130, upos + ut, pt.fX + 160, upos + ut, paint);
     paint.setTextSize(12);
     canvas->drawString("x-min",          pt.fX - 50, pt.fY - 148, paint);
     canvas->drawString("x-max",          pt.fX + 140, pt.fY - 150, paint);
@@ -4216,9 +4216,13 @@ void draw(SkCanvas* canvas) {
     computed by Font_Manager using Typeface. Values are set to zero if they are
     not available.
 
+    All vertical values relative to the baseline are given y-down. As such, zero is on the
+    baseline, negative values are above the baseline, and positive values are below the
+    baseline.
+
     fUnderlineThickness and fUnderlinePosition have a bit set in fFlags if their values
     are valid, since their value may be zero.
-    
+
     fStrikeoutThickness and fStrikeoutPosition have a bit set in fFlags if their values
     are valid, since their value may be zero.
 
@@ -4255,96 +4259,94 @@ void draw(SkCanvas* canvas) {
     #Member uint32_t    fFlags
         fFlags is set when underline metrics are valid.
     ##
-    
+
     #Member SkScalar    fTop
-        Largest height for any glyph.
-        A measure from the baseline, and is less than or equal to zero.
+        Greatest extent above the baseline for any glyph.
+        Typically less than zero.
     ##
-    
+
     #Member SkScalar    fAscent
         Recommended distance above the baseline to reserve for a line of text.
-        A measure from the baseline, and is less than or equal to zero.
+        Typically less than zero.
     ##
-    
+
     #Member SkScalar    fDescent
         Recommended distance below the baseline to reserve for a line of text.
-        A measure from the baseline, and is greater than or equal to zero.
+        Typically greater than zero.
     ##
-    
+
     #Member SkScalar    fBottom
-        Greatest extent below the baseline for any glyph. 
-        A measure from the baseline, and is greater than or equal to zero.
+        Greatest extent below the baseline for any glyph.
+        Typically greater than zero.
     ##
-    
+
     #Member SkScalar    fLeading
         Recommended distance to add between lines of text.
-        Greater than or equal to zero.
+        Typically greater than or equal to zero.
     ##
-    
+
     #Member SkScalar    fAvgCharWidth
         Average character width, if it is available.
         Zero if no average width is stored in the font.
     ##
-    
+
     #Member SkScalar    fMaxCharWidth
         Maximum character width.
     ##
-    
+
     #Member SkScalar    fXMin
-        Minimum bounding box x value for all Glyphs. 
+        Minimum bounding box x value for all Glyphs.
         Typically less than zero.
     ##
-    
+
     #Member SkScalar    fXMax
         Maximum bounding box x value for all Glyphs.
         Typically greater than zero.
     ##
-    
+
     #Member SkScalar    fXHeight
         Height of a lower-case 'x'.
         May be zero if no lower-case height is stored in the font.
     ##
-    
+
     #Member SkScalar    fCapHeight
         Height of an upper-case letter.
         May be zero if no upper-case height is stored in the font.
     ##
-    
+
     #Member SkScalar    fUnderlineThickness
-        Underline thickness. If the metric
-        is valid, the kUnderlineThicknessIsValid_Flag is set in fFlags.
+        Underline thickness.
+
+        If the metric is valid, the kUnderlineThicknessIsValid_Flag is set in fFlags.
         If kUnderlineThicknessIsValid_Flag is clear, fUnderlineThickness is zero.
     ##
-    
+
     #Member SkScalar    fUnderlinePosition
-       Underline position relative to the baseline.
-       It may be negative, to draw the underline above the baseline, zero
-       to draw the underline on the baseline, or positive to draw the underline
-       below the baseline. 
+       Position of the top of the underline stroke relative to the baseline.
+       Typically positive when valid.
 
        If the metric is valid, the kUnderlinePositionIsValid_Flag is set in fFlags.
        If kUnderlinePositionIsValid_Flag is clear, fUnderlinePosition is zero.
     ##
 
     #Member SkScalar    fStrikeoutThickness
-        Strikeout thickness. If the metric
-        is valid, the kStrikeoutThicknessIsValid_Flag is set in fFlags.
+        Strikeout thickness.
+
+        If the metric is valid, the kStrikeoutThicknessIsValid_Flag is set in fFlags.
         If kStrikeoutThicknessIsValid_Flag is clear, fStrikeoutThickness is zero.
     ##
 
     #Member SkScalar    fStrikeoutPosition
-       Strikeout position relative to the baseline.
-       It may be negative, to draw the strikeout above the baseline, zero
-       to draw the strikeout on the baseline, or positive to draw the strikeout
-       below the baseline. 
+        Position of the bottom of the strikeout stroke relative to the baseline.
+        Typically negative when valid.
 
-       If the metric is valid, the kStrikeoutPositionIsValid_Flag is set in fFlags.
-       If kStrikeoutPositionIsValid_Flag is clear, fStrikeoutPosition is zero.
+        If the metric is valid, the kStrikeoutPositionIsValid_Flag is set in fFlags.
+        If kStrikeoutPositionIsValid_Flag is clear, fStrikeoutPosition is zero.
     ##
 
     #Method bool hasUnderlineThickness(SkScalar* thickness) const
 
-        If Font_Metrics has a valid underline thickness, return true, and set 
+        If Font_Metrics has a valid underline thickness, return true, and set
         thickness to that value. If the underline thickness is not valid,
         return false, and ignore thickness.
 
@@ -4358,7 +4360,7 @@ void draw(SkCanvas* canvas) {
 
     #Method bool hasUnderlinePosition(SkScalar* position) const
 
-        If Font_Metrics has a valid underline position, return true, and set 
+        If Font_Metrics has a valid underline position, return true, and set
         position to that value. If the underline position is not valid,
         return false, and ignore position.
 
@@ -4372,7 +4374,7 @@ void draw(SkCanvas* canvas) {
 
     #Method bool hasStrikeoutThickness(SkScalar* thickness) const
 
-        If Font_Metrics has a valid strikeout thickness, return true, and set 
+        If Font_Metrics has a valid strikeout thickness, return true, and set
         thickness to that value. If the underline thickness is not valid,
         return false, and ignore thickness.
 
@@ -4386,7 +4388,7 @@ void draw(SkCanvas* canvas) {
 
     #Method bool hasStrikeoutPosition(SkScalar* position) const
 
-        If Font_Metrics has a valid strikeout position, return true, and set 
+        If Font_Metrics has a valid strikeout position, return true, and set
         position to that value. If the underline position is not valid,
         return false, and ignore position.
 
@@ -4446,7 +4448,7 @@ void draw(SkCanvas* canvas) {
     dimensions required by stroking and Path_Effect.
     Returns the same result as getFontMetrics.
 
-    #Return         recommended spacing between lines ##
+    #Return         recommended spacing between lines ##
 
     #Example
         SkPaint paint;
@@ -5091,10 +5093,12 @@ void draw(SkCanvas* canvas) {
     bounds describes a pair of lines parallel to the text advance.
     The return count is zero or a multiple of two, and is at most twice the number of Glyphs in
     the string. 
-    Uses Text_Encoding to decode text, Typeface to get the glyph paths,
+    Uses Typeface to get the glyph paths,
     and Text_Size, Fake_Bold, and Path_Effect to scale and modify the glyph paths.
     Uses run array and Text_Align to position intervals.
     
+    Text_Encoding must be set to SkPaint::kGlyphID_TextEncoding.
+
     Pass nullptr for intervals to determine the size of the interval array.
     
     intervals are cached to improve performance for multiple calls.
@@ -5109,6 +5113,7 @@ void draw(SkCanvas* canvas) {
     #Height 143
         void draw(SkCanvas* canvas) {
             SkPaint paint;
+            paint.setTextEncoding(SkPaint::kGlyphID_TextEncoding);
             paint.setTextSize(120);
             SkPoint textPos = { 20, 110 };
             int len = 3;

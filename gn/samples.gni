@@ -8,8 +8,6 @@ _samplecode = get_path_info("../samplecode", "abspath")
 
 samples_sources = [
   "$_samplecode/ClockFaceView.cpp",
-  "$_samplecode/GMSampleView.cpp",
-  "$_samplecode/OverView.cpp",
   "$_samplecode/PerlinPatch.cpp",
   "$_samplecode/Sample2PtRadial.cpp",
   "$_samplecode/SampleAAClip.cpp",
@@ -89,6 +87,7 @@ samples_sources = [
   "$_samplecode/SampleStrokePath.cpp",
   "$_samplecode/SampleStrokeRect.cpp",
   "$_samplecode/SampleSubpixelTranslate.cpp",
+  "$_samplecode/SampleSGInval.cpp",
   "$_samplecode/SampleSVGFile.cpp",
   "$_samplecode/SampleSVGPong.cpp",
   "$_samplecode/SampleText.cpp",

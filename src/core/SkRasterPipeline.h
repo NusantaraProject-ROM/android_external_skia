@@ -53,6 +53,7 @@ struct SkJumper_Engine;
     M(load_f32)  M(load_f32_dst)  M(store_f32)                     \
     M(load_8888) M(load_8888_dst) M(store_8888) M(gather_8888)     \
     M(load_bgra) M(load_bgra_dst) M(store_bgra) M(gather_bgra)     \
+    M(bilerp_clamp_8888)                                           \
     M(load_u16_be) M(load_rgb_u16_be) M(store_u16_be)              \
     M(load_tables_u16_be) M(load_tables_rgb_u16_be) M(load_tables) \
     M(load_rgba) M(store_rgba)                                     \
@@ -70,7 +71,7 @@ struct SkJumper_Engine;
     M(matrix_2x3) M(matrix_3x4) M(matrix_4x5) M(matrix_4x3)        \
     M(matrix_perspective)                                          \
     M(parametric_r) M(parametric_g) M(parametric_b)                \
-    M(parametric_a) M(gamma)                                       \
+    M(parametric_a) M(gamma) M(gamma_dst)                          \
     M(table_r) M(table_g) M(table_b) M(table_a)                    \
     M(lab_to_xyz)                                                  \
                  M(mirror_x)   M(repeat_x)                         \
@@ -85,8 +86,8 @@ struct SkJumper_Engine;
     M(evenly_spaced_2_stop_gradient)                               \
     M(xy_to_unit_angle)                                            \
     M(xy_to_radius)                                                \
-    M(xy_to_2pt_conical_quadratic_min)                             \
-    M(xy_to_2pt_conical_quadratic_max)                             \
+    M(xy_to_2pt_conical_quadratic_first)                           \
+    M(xy_to_2pt_conical_quadratic_second)                          \
     M(xy_to_2pt_conical_linear)                                    \
     M(mask_2pt_conical_degenerates) M(apply_vector_mask)           \
     M(byte_tables) M(byte_tables_rgb)                              \
@@ -125,11 +126,6 @@ public:
 
     void dump() const;
 
-    // Conversion from sRGB can be subtly tricky when premultiplication is involved.
-    // Use these helpers to keep things sane.
-    void append_from_srgb(SkAlphaType);
-    void append_from_srgb_dst(SkAlphaType);
-
     // Appends a stage for the specified matrix.
     // Tries to optimize the stage by analyzing the type of matrix.
     void append_matrix(SkArenaAlloc*, const SkMatrix&);
@@ -150,11 +146,6 @@ public:
 
     bool empty() const { return fStages == nullptr; }
 
-    // Used to track if we're handling values outside [0.0f, 1.0f],
-    // and to clamp back to [0.0f, 1.0f] if so.
-    void set_clamped(bool clamped) { fClamped = clamped; }
-    void clamp_if_unclamped(SkAlphaType);
-
 private:
     struct StageList {
         StageList* prev;
@@ -169,7 +160,6 @@ private:
     StageList*    fStages;
     int           fNumStages;
     int           fSlotsNeeded;
-    bool          fClamped;
 };
 
 template <size_t bytes>

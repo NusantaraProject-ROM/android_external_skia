@@ -62,7 +62,7 @@ string MdOut::addReferences(const char* refStart, const char* refEnd,
             lineStart = false;
         } else {
             leadingSpaces = string(base, wordStart - base);
-         }
+        }
         t.skipToMethodEnd();
         if (base == t.fChar) {
             break;
@@ -105,7 +105,8 @@ string MdOut::addReferences(const char* refStart, const char* refEnd,
                     return result;
                 }
                 if (!foundMatch) {
-                    if (!(def = this->isDefined(t, fullRef, true))) {
+                    if (!(def = this->isDefined(t, fullRef,
+                            BmhParser::Resolvable::kOut != resolvable))) {
                         if (!result.size()) {
                             t.reportError("missing method");
                         }
@@ -262,6 +263,19 @@ bool MdOut::buildReferences(const char* fileOrPath, const char* outDir) {
     return true;
 }
 
+bool MdOut::buildStatus(const char* statusFile, const char* outDir) {
+    StatusIter iter(statusFile, ".bmh", StatusFilter::kInProgress);
+    for (string file; iter.next(&file); ) {
+        SkString p = SkOSPath::Join(iter.baseDir().c_str(), file.c_str());
+        const char* hunk = p.c_str();
+        if (!this->buildRefFromFile(hunk, outDir)) {
+            SkDebugf("failed to parse %s\n", hunk);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool MdOut::buildRefFromFile(const char* name, const char* outDir) {
     fFileName = string(name);
     string filename(name);
@@ -278,8 +292,16 @@ bool MdOut::buildRefFromFile(const char* name, const char* outDir) {
     match += ".bmh";
     fOut = nullptr;
     string fullName;
-    for (const auto& topic : fBmhParser.fTopicMap) {
-        Definition* topicDef = topic.second;
+
+    vector<string> keys;
+    keys.reserve(fBmhParser.fTopicMap.size());
+    for (const auto& it : fBmhParser.fTopicMap) {
+        keys.push_back(it.first);
+    }
+    std::sort(keys.begin(), keys.end());
+    for (auto key : keys) {
+        string s(key);
+        auto topicDef = fBmhParser.fTopicMap.at(s);
         if (topicDef->fParent) {
             continue;
         }
@@ -640,7 +662,7 @@ void MdOut::markTypeOut(Definition* def) {
         case MarkType::kCode:
             this->lfAlways(2);
             fprintf(fOut, "<pre style=\"padding: 1em 1em 1em 1em;"
-                    "width: 50em; background-color: #f0f0f0\">");
+                    "width: 62.5em; background-color: #f0f0f0\">");
             this->lf(1);
             break;
         case MarkType::kColumn:
@@ -705,17 +727,36 @@ void MdOut::markTypeOut(Definition* def) {
             fprintf(fOut, "Example\n"
                             "\n");
             fHasFiddle = true;
+            bool showGpu = false;
+            bool gpuAndCpu = false;
             const Definition* platform = def->hasChild(MarkType::kPlatform);
             if (platform) {
                 TextParser platParse(platform);
                 fHasFiddle = !platParse.strnstr("!fiddle", platParse.fEnd);
+                showGpu = platParse.strnstr("gpu", platParse.fEnd);
+                if (showGpu) {
+                    gpuAndCpu = platParse.strnstr("cpu", platParse.fEnd);
+                }
             }
-            if (fHasFiddle) {
-                fprintf(fOut, "<div><fiddle-embed name=\"%s\">", def->fHash.c_str());
+            if (fHasFiddle && !def->hasChild(MarkType::kError)) {
+                SkASSERT(def->fHash.length() > 0);
+                fprintf(fOut, "<div><fiddle-embed name=\"%s\"", def->fHash.c_str());
+                if (showGpu) {
+                    fprintf(fOut, " gpu=\"true\"");
+                    if (gpuAndCpu) {
+                        fprintf(fOut, " cpu=\"true\"");
+                    }
+                }
+                fprintf(fOut, ">");
             } else {
-                fprintf(fOut, "<pre style=\"padding: 1em 1em 1em 1em;"
-                        "width: 50em; background-color: #f0f0f0\">");
-                this->lf(1);
+                SkASSERT(def->fHash.length() == 0);
+                fprintf(fOut, "<pre style=\"padding: 1em 1em 1em 1em; font-size: 13px"
+                        " width: 62.5em; background-color: #f0f0f0\">");
+                this->lfAlways(1);
+                if (def->fWrapper.length() > 0) {
+                    fprintf(fOut, "%s", def->fWrapper.c_str());
+                }
+                fRespectLeadingSpace = true;
             }
             } break;
         case MarkType::kExperimental:
@@ -774,7 +815,7 @@ void MdOut::markTypeOut(Definition* def) {
             this->writePending();
             string preformattedStr = preformat(formattedStr);
             fprintf(fOut, "<pre style=\"padding: 1em 1em 1em 1em;"
-                                    "width: 50em; background-color: #f0f0f0\">\n"
+                                    "width: 62.5em; background-color: #f0f0f0\">\n"
                             "%s\n"
                             "</pre>",  preformattedStr.c_str());
             this->lf(2);
@@ -936,9 +977,15 @@ void MdOut::markTypeOut(Definition* def) {
             if (fHasFiddle) {
                 fprintf(fOut, "</fiddle-embed></div>");
             } else {
+                this->lfAlways(1);
+                if (def->fWrapper.length() > 0) {
+                    fprintf(fOut, "}");
+                    this->lfAlways(1);
+                }
                 fprintf(fOut, "</pre>");
             }
             this->lf(2);
+            fRespectLeadingSpace = false;
             break;
         case MarkType::kList:
             fInList = false;
@@ -1008,7 +1055,7 @@ void MdOut::mdHeaderOutLF(int depth, int lf) {
 }
 
 void MdOut::resolveOut(const char* start, const char* end, BmhParser::Resolvable resolvable) {
-    if (BmhParser::Resolvable::kLiteral == resolvable && end > start) {
+    if ((BmhParser::Resolvable::kLiteral == resolvable || fRespectLeadingSpace) && end > start) {
         while ('\n' == *start) {
             ++start;
         }
@@ -1017,7 +1064,7 @@ void MdOut::resolveOut(const char* start, const char* end, BmhParser::Resolvable
             ++start;
         }
         if (start > spaceStart) {
-            fIndent =  start - spaceStart;
+            fIndent = start - spaceStart;
         }
         this->writeBlockTrim(end - start, start);
         if ('\n' == end[-1]) {

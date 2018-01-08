@@ -17,9 +17,9 @@
 #include "SkColorSpaceXformCanvas.h"
 #include "SkColorSpace_XYZ.h"
 #include "SkCommonFlags.h"
+#include "SkCommonFlagsGpu.h"
 #include "SkData.h"
 #include "SkDebugCanvas.h"
-#include "SkDeferredCanvas.h"
 #include "SkDeferredDisplayListRecorder.h"
 #include "SkDocument.h"
 #include "SkExecutor.h"
@@ -35,6 +35,7 @@
 #include "SkOSFile.h"
 #include "SkOSPath.h"
 #include "SkOpts.h"
+#include "SkPictureCommon.h"
 #include "SkPictureData.h"
 #include "SkPictureRecorder.h"
 #include "SkPipe.h"
@@ -67,7 +68,6 @@
 DEFINE_bool(multiPage, false, "For document-type backends, render the source"
             " into multiple pages");
 DEFINE_bool(RAW_threading, true, "Allow RAW decodes to run on multiple threads?");
-DECLARE_int32(gpuThreads);
 
 using sk_gpu_test::GrContextFactory;
 
@@ -386,8 +386,7 @@ static bool get_decode_info(SkImageInfo* decodeInfo, SkColorType canvasColorType
             }
 
             if (kRGBA_F16_SkColorType == canvasColorType) {
-                sk_sp<SkColorSpace> linearSpace =
-                        as_CSB(decodeInfo->colorSpace())->makeLinearGamma();
+                sk_sp<SkColorSpace> linearSpace = decodeInfo->colorSpace()->makeLinearGamma();
                 *decodeInfo = decodeInfo->makeColorSpace(std::move(linearSpace));
             }
 
@@ -1067,8 +1066,7 @@ Error ColorCodecSrc::draw(SkCanvas* canvas) const {
     }
 
     // Load the dst ICC profile.  This particular dst is fairly similar to Adobe RGB.
-    sk_sp<SkData> dstData = SkData::MakeFromFileName(
-            GetResourcePath("icc_profiles/HP_ZR30w.icc").c_str());
+    sk_sp<SkData> dstData = GetResourceAsData("icc_profiles/HP_ZR30w.icc");
     if (!dstData) {
         return "Cannot read monitor profile.  Is the resource path set correctly?";
     }
@@ -1085,9 +1083,7 @@ Error ColorCodecSrc::draw(SkCanvas* canvas) const {
         decodeInfo = decodeInfo.makeAlphaType(kPremul_SkAlphaType);
     }
     if (kRGBA_F16_SkColorType == fColorType) {
-        SkASSERT(SkColorSpace_Base::Type::kXYZ == as_CSB(decodeInfo.colorSpace())->type());
-        SkColorSpace_XYZ* csXYZ = static_cast<SkColorSpace_XYZ*>(decodeInfo.colorSpace());
-        decodeInfo = decodeInfo.makeColorSpace(csXYZ->makeLinearGamma());
+        decodeInfo = decodeInfo.makeColorSpace(decodeInfo.colorSpace()->makeLinearGamma());
     }
 
     SkImageInfo bitmapInfo = decodeInfo;
@@ -1180,7 +1176,7 @@ static SkRect get_cull_rect_for_skp(const char* path) {
         return SkRect::MakeEmpty();
     }
     SkPictInfo info;
-    if (!SkPicture::InternalOnly_StreamIsSKP(stream.get(), &info)) {
+    if (!SkPicture_StreamIsSKP(stream.get(), &info)) {
         return SkRect::MakeEmpty();
     }
 
@@ -1589,7 +1585,11 @@ GPUThreadTestingSink::GPUThreadTestingSink(GrContextFactory::ContextType ct,
                                            const GrContextOptions& grCtxOptions)
         : INHERITED(ct, overrides, samples, diText, colorType, alphaType, std::move(colorSpace),
                     threaded, grCtxOptions)
+#if SK_SUPPORT_GPU
         , fExecutor(SkExecutor::MakeFIFOThreadPool(FLAGS_gpuThreads)) {
+#else
+        , fExecutor(nullptr) {
+#endif
     SkASSERT(fExecutor);
 }
 
@@ -1650,7 +1650,9 @@ Error PDFSink::draw(const Src& src, SkBitmap*, SkWStream* dst, SkString*) const 
     metadata.fTitle = src.name();
     metadata.fSubject = "rendering correctness test";
     metadata.fCreator = "Skia/DM";
-    sk_sp<SkDocument> doc = SkDocument::MakePDF(dst, fRasterDpi, metadata, nullptr, fPDFA);
+    metadata.fRasterDPI = fRasterDpi;
+    metadata.fPDFA = fPDFA;
+    sk_sp<SkDocument> doc = SkDocument::MakePDF(dst, metadata);
     if (!doc) {
         return "SkDocument::MakePDF() returned nullptr";
     }
@@ -1956,16 +1958,6 @@ Error ViaPicture::draw(const Src& src, SkBitmap* bitmap, SkWStream* stream, SkSt
         pic = recorder.finishRecordingAsPicture();
         canvas->drawPicture(pic);
         return check_against_reference(bitmap, src, fSink.get());
-    });
-}
-
-/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
-
-Error ViaDefer::draw(const Src& src, SkBitmap* bitmap, SkWStream* stream, SkString* log) const {
-    auto size = src.size();
-    return draw_to_canvas(fSink.get(), bitmap, stream, log, size, [&](SkCanvas* canvas) -> Error {
-        SkDeferredCanvas deferred(canvas, SkDeferredCanvas::kEager);
-        return src.draw(&deferred);
     });
 }
 

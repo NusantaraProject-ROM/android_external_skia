@@ -43,8 +43,6 @@ public:
         return true;
     }
 
-    bool canConfigBeImageStorage(GrPixelConfig) const override { return false; }
-
 #if 0
     /**
      * Returns both a supported and most prefered stencil format to use in draws.
@@ -55,6 +53,15 @@ public:
 #endif
     bool initDescForDstCopy(const GrRenderTargetProxy* src, GrSurfaceDesc* desc,
                             bool* rectsMustMatch, bool* disallowSubrect) const override {
+        return false;
+    }
+
+    bool validateBackendTexture(const GrBackendTexture&, SkColorType,
+                                GrPixelConfig*) const override {
+        return false;
+    }
+    bool validateBackendRenderTarget(const GrBackendRenderTarget&, SkColorType,
+                                     GrPixelConfig*) const override {
         return false;
     }
 

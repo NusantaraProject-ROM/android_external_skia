@@ -71,8 +71,8 @@ inline void regen_vertices(char* vertex, const GrGlyph* glyph, size_t vertexStri
 
     // This is a bit wonky, but sometimes we have LCD text, in which case we won't have color
     // vertices, hence vertexStride - sizeof(SkIPoint16)
-    intptr_t colorOffset = sizeof(SkPoint);
     intptr_t texCoordOffset = vertexStride - sizeof(SkIPoint16);
+    intptr_t colorOffset = texCoordOffset - sizeof(GrColor);
 
     // V0
     if (regenPos) {
@@ -153,7 +153,7 @@ inline void regen_vertices(char* vertex, const GrGlyph* glyph, size_t vertexStri
 Regenerator::VertexRegenerator(GrAtlasTextBlob* blob, int runIdx, int subRunIdx,
                                const SkMatrix& viewMatrix, SkScalar x, SkScalar y, GrColor color,
                                GrDeferredUploadTarget* uploadTarget, GrAtlasGlyphCache* glyphCache,
-                               SkAutoGlyphCache* lazyCache, size_t vertexStride)
+                               SkAutoGlyphCache* lazyCache)
         : fViewMatrix(viewMatrix)
         , fBlob(blob)
         , fUploadTarget(uploadTarget)
@@ -161,7 +161,6 @@ Regenerator::VertexRegenerator(GrAtlasTextBlob* blob, int runIdx, int subRunIdx,
         , fLazyCache(lazyCache)
         , fRun(&blob->fRuns[runIdx])
         , fSubRun(&blob->fRuns[runIdx].fSubRunInfo[subRunIdx])
-        , fVertexStride(vertexStride)
         , fColor(color) {
     // Compute translation if any
     fSubRun->computeTranslation(fViewMatrix, x, y, &fTransX, &fTransY);
@@ -212,9 +211,11 @@ Regenerator::Result Regenerator::doRegen() {
         }
     }
 
+    bool hasW = fSubRun->hasWCoord();
     Result result;
+    auto vertexStride = GetVertexStride(fSubRun->maskFormat(), hasW);
     char* currVertex = fBlob->fVertices + fSubRun->vertexStartIndex() +
-                       fCurrGlyph * kVerticesPerGlyph * fVertexStride;
+                       fCurrGlyph * kVerticesPerGlyph * vertexStride;
     result.fFirstVertex = currVertex;
 
     for (int glyphIdx = fCurrGlyph; glyphIdx < (int)fSubRun->glyphCount(); glyphIdx++) {
@@ -244,10 +245,10 @@ Regenerator::Result Regenerator::doRegen() {
                                                       fUploadTarget->nextDrawToken());
         }
 
-        regen_vertices<regenPos, regenCol, regenTexCoords>(currVertex, glyph, fVertexStride,
+        regen_vertices<regenPos, regenCol, regenTexCoords>(currVertex, glyph, vertexStride,
                                                            fSubRun->drawAsDistanceFields(), fTransX,
                                                            fTransY, fColor);
-        currVertex += fVertexStride * GrAtlasTextOp::kVerticesPerGlyph;
+        currVertex += vertexStride * GrAtlasTextOp::kVerticesPerGlyph;
         ++result.fGlyphsRegenerated;
         ++fCurrGlyph;
     }
@@ -300,9 +301,11 @@ Regenerator::Result Regenerator::regenerate() {
             return this->doRegen<false, true, true, true>();
         case kNoRegen: {
             Result result;
+            bool hasW = fSubRun->hasWCoord();
+            auto vertexStride = GetVertexStride(fSubRun->maskFormat(), hasW);
             result.fGlyphsRegenerated = fSubRun->glyphCount() - fCurrGlyph;
             result.fFirstVertex = fBlob->fVertices + fSubRun->vertexStartIndex() +
-                                  fCurrGlyph * kVerticesPerGlyph * fVertexStride;
+                                  fCurrGlyph * kVerticesPerGlyph * vertexStride;
             fCurrGlyph = fSubRun->glyphCount();
 
             // set use tokens for all of the glyphs in our subrun.  This is only valid if we

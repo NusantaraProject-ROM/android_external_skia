@@ -15,10 +15,14 @@
 
 
 // Turn on/off the explicit distribution of GPU resources at flush time
-//#define MDB_ALLOC_RESOURCES 1
+//#ifndef SK_DISABLE_EXPLICIT_GPU_RESOURCE_ALLOCATION
+//   #define SK_DISABLE_EXPLICIT_GPU_RESOURCE_ALLOCATION
+//#endif
 
 // Turn on/off the sorting of opLists at flush time
-//#define ENABLE_MDB_SORT 1
+#ifndef SK_DISABLE_RENDER_TARGET_SORTING
+   #define SK_DISABLE_RENDER_TARGET_SORTING
+#endif
 
 class GrAuditTrail;
 class GrCaps;
@@ -63,11 +67,6 @@ public:
     // https://bugs.chromium.org/p/skia/issues/detail?id=7111
     virtual void endFlush();
 
-    // TODO: in an MDB world, where the OpLists don't allocate GPU resources, it seems like
-    // these could go away
-    virtual void abandonGpuResources() = 0;
-    virtual void freeGpuResources() = 0;
-
     bool isClosed() const { return this->isSetFlag(kClosed_Flag); }
 
     /*
@@ -98,7 +97,7 @@ public:
      */
     virtual GrRenderTargetOpList* asRenderTargetOpList() { return nullptr; }
 
-    int32_t uniqueID() const { return fUniqueID; }
+    uint32_t uniqueID() const { return fUniqueID; }
 
     /*
      * Dump out the GrOpList dependency DAG

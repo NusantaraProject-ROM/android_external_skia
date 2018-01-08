@@ -615,6 +615,10 @@ static bool ShouldUseAAA(const SkPath& path) {
 
 void SkScan::SAAFillPath(const SkPath& path, SkBlitter* blitter, const SkIRect& ir,
                   const SkIRect& clipBounds, bool containedInClip, bool forceRLE) {
+#if !defined(SK_SUPPORT_LEGACY_AA_BEHAVIOR)
+    containedInClip = clipBounds.contains(ir);
+#endif
+
     bool isInverse = path.isInverseFillType();
 
     // MaskSuperBlitter can't handle drawing outside of ir, so we can't use it
@@ -669,7 +673,7 @@ static bool safeRoundOut(const SkRect& src, SkIRect* dst, int32_t maxInt) {
 }
 
 void SkScan::AntiFillPath(const SkPath& path, const SkRegion& origClip,
-                          SkBlitter* blitter, bool forceRLE) {
+                          SkBlitter* blitter, bool forceRLE, bool forceDAA) {
     if (origClip.isEmpty()) {
         return;
     }
@@ -746,7 +750,7 @@ void SkScan::AntiFillPath(const SkPath& path, const SkRegion& origClip,
 
     SkASSERT(SkIntToScalar(ir.fTop) <= path.getBounds().fTop);
 
-    if (ShouldUseDAA(path)) {
+    if (forceDAA || ShouldUseDAA(path)) {
         SkScan::DAAFillPath(path, blitter, ir, clipRgn->getBounds(),
                             clipper.getClipRect() == nullptr, forceRLE);
     } else if (ShouldUseAAA(path)) {
@@ -787,22 +791,19 @@ void SkScan::FillPath(const SkPath& path, const SkRasterClip& clip,
 }
 
 void SkScan::AntiFillPath(const SkPath& path, const SkRasterClip& clip,
-                          SkBlitter* blitter) {
+                          SkBlitter* blitter, bool forceDAA) {
     if (clip.isEmpty()) {
         return;
     }
 
-    using FillPathProc = void(*)(const SkPath&, const SkRegion&, SkBlitter*, bool);
-    FillPathProc fillPathProc = &SkScan::AntiFillPath;
-
     if (clip.isBW()) {
-        fillPathProc(path, clip.bwRgn(), blitter, false);
+        AntiFillPath(path, clip.bwRgn(), blitter, false, forceDAA);
     } else {
         SkRegion        tmp;
         SkAAClipBlitter aaBlitter;
 
         tmp.setRect(clip.getBounds());
         aaBlitter.init(blitter, &clip.aaRgn());
-        fillPathProc(path, tmp, &aaBlitter, true); // SkAAClipBlitter can blitMask, why forceRLE?
+        AntiFillPath(path, tmp, &aaBlitter, true, forceDAA); // SkAAClipBlitter can blitMask, why forceRLE?
     }
 }

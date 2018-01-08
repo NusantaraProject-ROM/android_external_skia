@@ -17,6 +17,9 @@
 class SkReadBuffer;
 class SkWriteBuffer;
 
+struct SkSerialProcs;
+struct SkDeserialProcs;
+
 typedef void (*SkTypefaceCatalogerProc)(SkTypeface*, void* ctx);
 typedef sk_sp<SkTypeface> (*SkTypefaceResolverProc)(uint32_t id, void* ctx);
 
@@ -50,10 +53,6 @@ public:
      */
     static sk_sp<SkTextBlob> MakeFromBuffer(SkReadBuffer&);
 
-    static const SkTextBlob* CreateFromBuffer(SkReadBuffer& buffer) {
-        return MakeFromBuffer(buffer).release();
-    }
-
     enum GlyphPositioning : uint8_t {
         kDefault_Positioning      = 0, // Default glyph advances -- zero scalars per glyph.
         kHorizontal_Positioning   = 1, // Horizontal positioning -- one scalar per glyph.
@@ -74,6 +73,11 @@ public:
      */
     static sk_sp<SkTextBlob> Deserialize(const void* data, size_t size,
                                          SkTypefaceResolverProc, void* ctx);
+
+    sk_sp<SkData> serialize(const SkSerialProcs&) const;
+    sk_sp<SkData> serialize() const;
+    static sk_sp<SkTextBlob> Deserialize(const void* data, size_t size, const SkDeserialProcs&);
+    static sk_sp<SkTextBlob> Deserialize(const void* data, size_t size);
 
 private:
     friend class SkNVRefCnt<SkTextBlob>;
@@ -96,17 +100,17 @@ private:
 
     // Call when this blob is part of the key to a cache entry. This allows the cache
     // to know automatically those entries can be purged when this SkTextBlob is deleted.
-    void notifyAddedToCache() const {
-        fAddedToCache.store(true);
+    void notifyAddedToCache(uint32_t cacheID) const {
+        fCacheID.store(cacheID);
     }
 
     friend class GrTextBlobCache;
     friend class SkTextBlobBuilder;
     friend class SkTextBlobRunIterator;
 
-    const SkRect           fBounds;
-    const uint32_t         fUniqueID;
-    mutable SkAtomic<bool> fAddedToCache;
+    const SkRect               fBounds;
+    const uint32_t             fUniqueID;
+    mutable SkAtomic<uint32_t> fCacheID;
 
     SkDEBUGCODE(size_t fStorageSize;)
 
@@ -246,7 +250,7 @@ private:
     void allocInternal(const SkPaint& font, SkTextBlob::GlyphPositioning positioning,
                        int count, int textBytes, SkPoint offset, const SkRect* bounds);
     bool mergeRun(const SkPaint& font, SkTextBlob::GlyphPositioning positioning,
-                  int count, SkPoint offset);
+                  uint32_t count, SkPoint offset);
     void updateDeferredBounds();
 
     static SkRect ConservativeRunBounds(const SkTextBlob::RunRecord&);

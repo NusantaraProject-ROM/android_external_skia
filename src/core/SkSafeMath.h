@@ -28,6 +28,30 @@ public:
         return result;
     }
 
+    /**
+     *  Return a + b, unless this result is an overflow/underflow. In those cases, fOK will
+     *  be set to false, and it is undefined what this returns.
+     */
+    int addInt(int a, int b) {
+        if (b < 0 && a < std::numeric_limits<int>::min() - b) {
+            fOK = false;
+            return a;
+        } else if (b > 0 && a > std::numeric_limits<int>::max() - b) {
+            fOK = false;
+            return a;
+        }
+        return a + b;
+    }
+
+    size_t alignUp(size_t x, size_t alignment) {
+        SkASSERT(alignment && !(alignment & (alignment - 1)));
+        return add(x, alignment - 1) & ~(alignment - 1);
+    }
+
+    // These saturate to their results
+    static size_t Add(size_t x, size_t y);
+    static size_t Mul(size_t x, size_t y);
+
 private:
     uint32_t mul32(uint32_t x, uint32_t y) {
         uint64_t bx = x;

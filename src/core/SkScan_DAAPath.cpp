@@ -320,6 +320,9 @@ void gen_alpha_deltas(const SkPath& path, const SkIRect& clipBounds, Deltas& res
 // we do that, be caureful that blitRect may throw exception if the rect is empty.
 void SkScan::DAAFillPath(const SkPath& path, SkBlitter* blitter, const SkIRect& ir,
                          const SkIRect& clipBounds, bool containedInClip, bool forceRLE) {
+#if !defined(SK_SUPPORT_LEGACY_AA_BEHAVIOR)
+    containedInClip = clipBounds.contains(ir);
+#endif
     bool isEvenOdd  = path.getFillType() & 1;
     bool isConvex   = path.isConvex();
     bool isInverse  = path.isInverseFillType();
@@ -334,7 +337,7 @@ void SkScan::DAAFillPath(const SkPath& path, SkBlitter* blitter, const SkIRect& 
         return;
     }
 
-#ifdef GOOGLE3
+#ifdef SK_BUILD_FOR_GOOGLE3
     constexpr int STACK_SIZE = 12 << 10; // 12K stack size alloc; Google3 has 16K limit.
 #else
     constexpr int STACK_SIZE = 64 << 10; // 64k stack size to avoid heap allocation

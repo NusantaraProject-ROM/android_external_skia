@@ -13,6 +13,7 @@
 #include "SkCommonFlags.h"
 #include "SkFontMgr.h"
 #include "SkFontStyle.h"
+#include "SkImage.h"
 #include "SkPixelRef.h"
 #include "SkPM4f.h"
 #include "SkPoint3.h"
@@ -22,141 +23,74 @@
 
 namespace sk_tool_utils {
 
-/* these are the default fonts chosen by Chrome for serif, sans-serif, and monospace */
-static const char* gStandardFontNames[][3] = {
-    { "Times", "Helvetica", "Courier" }, // Mac
-    { "Times New Roman", "Helvetica", "Courier" }, // iOS
-    { "Times New Roman", "Arial", "Courier New" }, // Win
-    { "Times New Roman", "Arial", "Monospace" }, // Ubuntu
-    { "serif", "sans-serif", "monospace" }, // Android
-    { "Tinos", "Arimo", "Cousine" } // ChromeOS
-};
-
-const char* platform_font_name(const char* name) {
-    SkString platform = major_platform_os_name();
-    int index;
-    if (!strcmp(name, "serif")) {
-        index = 0;
-    } else if (!strcmp(name, "san-serif")) {
-        index = 1;
-    } else if (!strcmp(name, "monospace")) {
-        index = 2;
-    } else {
-        return name;
-    }
-    if (platform.equals("Mac")) {
-        return gStandardFontNames[0][index];
-    }
-    if (platform.equals("iOS")) {
-        return gStandardFontNames[1][index];
-    }
-    if (platform.equals("Win")) {
-        return gStandardFontNames[2][index];
-    }
-    if (platform.equals("Ubuntu") || platform.equals("Debian")) {
-        return gStandardFontNames[3][index];
-    }
-    if (platform.equals("Android")) {
-        return gStandardFontNames[4][index];
-    }
-    if (platform.equals("ChromeOS")) {
-        return gStandardFontNames[5][index];
-    }
-    return name;
-}
-
-const char* platform_os_emoji() {
-    const char* osName = platform_os_name();
-    if (!strcmp(osName, "Android") || !strcmp(osName, "Ubuntu") || !strcmp(osName, "Debian")) {
-        return "CBDT";
-    }
-    if (!strncmp(osName, "Mac", 3) || !strncmp(osName, "iOS", 3)) {
-        return "SBIX";
-    }
-    if (!strncmp(osName, "Win", 3)) {
-        return "COLR";
-    }
-    return "";
-}
-
-sk_sp<SkTypeface> emoji_typeface() {
-    if (!strcmp(sk_tool_utils::platform_os_emoji(), "CBDT")) {
-        return MakeResourceAsTypeface("/fonts/Funkster.ttf");
-    }
-    if (!strcmp(sk_tool_utils::platform_os_emoji(), "SBIX")) {
-        return SkTypeface::MakeFromName("Apple Color Emoji", SkFontStyle());
-    }
-    if (!strcmp(sk_tool_utils::platform_os_emoji(), "COLR")) {
-        sk_sp<SkFontMgr> fm(SkFontMgr::RefDefault());
-        const char *colorEmojiFontName = "Segoe UI Emoji";
-        sk_sp<SkTypeface> typeface(fm->matchFamilyStyle(colorEmojiFontName, SkFontStyle()));
-        if (typeface) {
-            return typeface;
-        }
-        sk_sp<SkTypeface> fallback(fm->matchFamilyStyleCharacter(
-            colorEmojiFontName, SkFontStyle(), nullptr /* bcp47 */, 0 /* bcp47Count */,
-            0x1f4b0 /* character: 💰 */));
-        if (fallback) {
-            return fallback;
-        }
-        // If we don't have Segoe UI Emoji and can't find a fallback, try Segoe UI Symbol.
-        // Windows 7 does not have Segoe UI Emoji; Segoe UI Symbol has the (non - color) emoji.
-        return SkTypeface::MakeFromName("Segoe UI Symbol", SkFontStyle());
-    }
-    return nullptr;
-}
-
-const char* emoji_sample_text() {
-    if (!strcmp(sk_tool_utils::platform_os_emoji(), "CBDT")) {
-        return "Hamburgefons";
-    }
-    if (!strcmp(sk_tool_utils::platform_os_emoji(), "SBIX") ||
-        !strcmp(sk_tool_utils::platform_os_emoji(), "COLR"))
-    {
-        return "\xF0\x9F\x92\xB0" "\xF0\x9F\x8F\xA1" "\xF0\x9F\x8E\x85"  // 💰🏡🎅
-               "\xF0\x9F\x8D\xAA" "\xF0\x9F\x8D\x95" "\xF0\x9F\x9A\x80"  // 🍪🍕🚀
-               "\xF0\x9F\x9A\xBB" "\xF0\x9F\x92\xA9" "\xF0\x9F\x93\xB7" // 🚻💩📷
-               "\xF0\x9F\x93\xA6" // 📦
-               "\xF0\x9F\x87\xBA" "\xF0\x9F\x87\xB8" "\xF0\x9F\x87\xA6"; // 🇺🇸🇦
-    }
-    return "";
-}
-
-const char* platform_os_name() {
+static const char* platform_os_name() {
     for (int index = 0; index < FLAGS_key.count(); index += 2) {
         if (!strcmp("os", FLAGS_key[index])) {
             return FLAGS_key[index + 1];
         }
     }
-    // when running SampleApp or dm without a --key pair, omit the platform name
     return "";
 }
 
-// omit version number in returned value
-SkString major_platform_os_name() {
-    SkString name;
-    for (int index = 0; index < FLAGS_key.count(); index += 2) {
-        if (!strcmp("os", FLAGS_key[index])) {
-            const char* platform = FLAGS_key[index + 1];
-            const char* end = platform;
-            while (*end && (*end < '0' || *end > '9')) {
-                ++end;
-            }
-            name.append(platform, end - platform);
-            break;
-        }
+sk_sp<SkTypeface> emoji_typeface() {
+#if defined(SK_BUILD_FOR_WIN)
+    sk_sp<SkFontMgr> fm(SkFontMgr::RefDefault());
+    const char *colorEmojiFontName = "Segoe UI Emoji";
+    sk_sp<SkTypeface> typeface(fm->matchFamilyStyle(colorEmojiFontName, SkFontStyle()));
+    if (typeface) {
+        return typeface;
     }
-    return name;
+    sk_sp<SkTypeface> fallback(fm->matchFamilyStyleCharacter(
+        colorEmojiFontName, SkFontStyle(), nullptr /* bcp47 */, 0 /* bcp47Count */,
+        0x1f4b0 /* character: 💰 */));
+    if (fallback) {
+        return fallback;
+    }
+    // If we don't have Segoe UI Emoji and can't find a fallback, try Segoe UI Symbol.
+    // Windows 7 does not have Segoe UI Emoji; Segoe UI Symbol has the (non - color) emoji.
+    return SkTypeface::MakeFromName("Segoe UI Symbol", SkFontStyle());
+
+#elif defined(SK_BUILD_FOR_MAC) || defined(SK_BUILD_FOR_IOS)
+    return SkTypeface::MakeFromName("Apple Color Emoji", SkFontStyle());
+
+#else
+    return MakeResourceAsTypeface("fonts/Funkster.ttf");
+
+#endif
 }
 
-const char* platform_extra_config(const char* config) {
+const char* emoji_sample_text() {
+#if defined(SK_BUILD_FOR_WIN) || defined(SK_BUILD_FOR_MAC) || defined(SK_BUILD_FOR_IOS)
+    return "\xF0\x9F\x92\xB0" "\xF0\x9F\x8F\xA1" "\xF0\x9F\x8E\x85"  // 💰🏡🎅
+           "\xF0\x9F\x8D\xAA" "\xF0\x9F\x8D\x95" "\xF0\x9F\x9A\x80"  // 🍪🍕🚀
+           "\xF0\x9F\x9A\xBB" "\xF0\x9F\x92\xA9" "\xF0\x9F\x93\xB7"  // 🚻💩📷
+           "\xF0\x9F\x93\xA6"                                        // 📦
+           "\xF0\x9F\x87\xBA" "\xF0\x9F\x87\xB8" "\xF0\x9F\x87\xA6"; // 🇺🇸🇦
+#else
+    return "Hamburgefons";
+#endif
+}
+
+static bool extra_config_contains(const char* substring) {
     for (int index = 0; index < FLAGS_key.count(); index += 2) {
-        if (!strcmp("extra_config", FLAGS_key[index]) && !strcmp(config, FLAGS_key[index + 1])) {
-            return config;
+        if (0 == strcmp("extra_config", FLAGS_key[index])
+                && strstr(FLAGS_key[index + 1], substring)) {
+            return true;
         }
+    }
+    return false;
+}
+
+const char* platform_font_manager() {
+    if (extra_config_contains("GDI")) {
+        return "GDI";
+    }
+    if (extra_config_contains("NativeFonts")){
+        return platform_os_name();
     }
     return "";
 }
+
 
 const char* colortype_name(SkColorType ct) {
     switch (ct) {
@@ -580,11 +514,12 @@ void copy_to_g8(SkBitmap* dst, const SkBitmap& src) {
         return SkMax32(dr, SkMax32(dg, SkMax32(db, da)));
     }
 
-    bool equal_pixels(const SkPixmap& a, const SkPixmap& b, unsigned maxDiff) {
+    bool equal_pixels(const SkPixmap& a, const SkPixmap& b, unsigned maxDiff,
+                      bool respectColorSpace) {
         if (a.width() != b.width() ||
             a.height() != b.height() ||
             a.colorType() != b.colorType() ||
-            a.colorSpace() != b.colorSpace())
+            (respectColorSpace && (a.colorSpace() != b.colorSpace())))
         {
             return false;
         }
@@ -605,8 +540,23 @@ void copy_to_g8(SkBitmap* dst, const SkBitmap& src) {
         return true;
     }
 
-    bool equal_pixels(const SkBitmap& bm0, const SkBitmap& bm1, unsigned maxDiff) {
+    bool equal_pixels(const SkBitmap& bm0, const SkBitmap& bm1, unsigned maxDiff,
+                      bool respectColorSpaces) {
         SkPixmap pm0, pm1;
-        return bm0.peekPixels(&pm0) && bm1.peekPixels(&pm1) && equal_pixels(pm0, pm1, maxDiff);
+        return bm0.peekPixels(&pm0) && bm1.peekPixels(&pm1) &&
+               equal_pixels(pm0, pm1, maxDiff, respectColorSpaces);
+    }
+
+    bool equal_pixels(const SkImage* a, const SkImage* b, unsigned maxDiff,
+                      bool respectColorSpaces) {
+        // ensure that peekPixels will succeed
+        auto imga = a->makeRasterImage();
+        auto imgb = b->makeRasterImage();
+        a = imga.get();
+        b = imgb.get();
+
+        SkPixmap pm0, pm1;
+        return a->peekPixels(&pm0) && b->peekPixels(&pm1) &&
+               equal_pixels(pm0, pm1, maxDiff, respectColorSpaces);
     }
 }  // namespace sk_tool_utils

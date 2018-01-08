@@ -12,34 +12,7 @@
 #include "ccpr/GrCCPRQuadraticShader.h"
 #include "ccpr/GrCCPRTriangleShader.h"
 #include "glsl/GrGLSLFragmentShaderBuilder.h"
-
-static GrVertexAttribType instance_array_format(GrCCPRCoverageProcessor::RenderPass renderPass) {
-    switch (renderPass) {
-        case GrCCPRCoverageProcessor::RenderPass::kTriangleHulls:
-        case GrCCPRCoverageProcessor::RenderPass::kTriangleEdges:
-        case GrCCPRCoverageProcessor::RenderPass::kTriangleCorners:
-            return kInt4_GrVertexAttribType;
-        case GrCCPRCoverageProcessor::RenderPass::kQuadraticHulls:
-        case GrCCPRCoverageProcessor::RenderPass::kQuadraticCorners:
-        case GrCCPRCoverageProcessor::RenderPass::kSerpentineHulls:
-        case GrCCPRCoverageProcessor::RenderPass::kLoopHulls:
-        case GrCCPRCoverageProcessor::RenderPass::kSerpentineCorners:
-        case GrCCPRCoverageProcessor::RenderPass::kLoopCorners:
-            return kInt2_GrVertexAttribType;
-    }
-    SK_ABORT("Unexpected GrCCPRCoverageProcessor::RenderPass.");
-    return kInt4_GrVertexAttribType;
-}
-
-GrCCPRCoverageProcessor::GrCCPRCoverageProcessor(RenderPass renderPass, GrBuffer* pointsBuffer)
-        : INHERITED(kGrCCPRCoverageProcessor_ClassID)
-        , fRenderPass(renderPass)
-        , fInstanceAttrib(this->addInstanceAttrib("instance", instance_array_format(fRenderPass))) {
-    fPointsBufferAccess.reset(kRG_float_GrPixelConfig, pointsBuffer, kVertex_GrShaderFlag);
-    this->addBufferAccess(&fPointsBufferAccess);
-
-    this->setWillUseGeoShader();
-}
+#include "glsl/GrGLSLVertexGeoBuilder.h"
 
 void GrCCPRCoverageProcessor::Shader::emitVaryings(GrGLSLVaryingHandler* varyingHandler,
                                                    SkString* code, const char* position,
@@ -72,7 +45,7 @@ void GrCCPRCoverageProcessor::Shader::emitFragmentCode(const GrCCPRCoverageProce
 #endif
 }
 
-void GrCCPRCoverageProcessor::Shader::EmitEdgeDistanceEquation(GrGLSLShaderBuilder* s,
+void GrCCPRCoverageProcessor::Shader::EmitEdgeDistanceEquation(GrGLSLVertexGeoBuilder* s,
                                                                const char* leftPt,
                                                                const char* rightPt,
                                                                const char* outputDistanceEquation) {
@@ -113,12 +86,9 @@ void GrCCPRCoverageProcessor::getGLSLProcessorKey(const GrShaderCaps&,
 GrGLSLPrimitiveProcessor* GrCCPRCoverageProcessor::createGLSLInstance(const GrShaderCaps&) const {
     std::unique_ptr<Shader> shader;
     switch (fRenderPass) {
-        using CubicType = GrCCPRCubicShader::CubicType;
         case RenderPass::kTriangleHulls:
-            shader = skstd::make_unique<GrCCPRTriangleHullShader>();
-            break;
         case RenderPass::kTriangleEdges:
-            shader = skstd::make_unique<GrCCPRTriangleEdgeShader>();
+            shader = skstd::make_unique<GrCCPRTriangleShader>();
             break;
         case RenderPass::kTriangleCorners:
             shader = skstd::make_unique<GrCCPRTriangleCornerShader>();
@@ -129,43 +99,12 @@ GrGLSLPrimitiveProcessor* GrCCPRCoverageProcessor::createGLSLInstance(const GrSh
         case RenderPass::kQuadraticCorners:
             shader = skstd::make_unique<GrCCPRQuadraticCornerShader>();
             break;
-        case RenderPass::kSerpentineHulls:
-            shader = skstd::make_unique<GrCCPRCubicHullShader>(CubicType::kSerpentine);
+        case RenderPass::kCubicHulls:
+            shader = skstd::make_unique<GrCCPRCubicHullShader>();
             break;
-        case RenderPass::kLoopHulls:
-            shader = skstd::make_unique<GrCCPRCubicHullShader>(CubicType::kLoop);
-            break;
-        case RenderPass::kSerpentineCorners:
-            shader = skstd::make_unique<GrCCPRCubicCornerShader>(CubicType::kSerpentine);
-            break;
-        case RenderPass::kLoopCorners:
-            shader = skstd::make_unique<GrCCPRCubicCornerShader>(CubicType::kLoop);
+        case RenderPass::kCubicCorners:
+            shader = skstd::make_unique<GrCCPRCubicCornerShader>();
             break;
     }
-    return CreateGSImpl(std::move(shader));
-}
-
-const char* GrCCPRCoverageProcessor::GetRenderPassName(RenderPass renderPass) {
-    switch (renderPass) {
-        case RenderPass::kTriangleHulls:
-            return "RenderPass::kTriangleHulls";
-        case RenderPass::kTriangleEdges:
-            return "RenderPass::kTriangleEdges";
-        case RenderPass::kTriangleCorners:
-            return "RenderPass::kTriangleCorners";
-        case RenderPass::kQuadraticHulls:
-            return "RenderPass::kQuadraticHulls";
-        case RenderPass::kQuadraticCorners:
-            return "RenderPass::kQuadraticCorners";
-        case RenderPass::kSerpentineHulls:
-            return "RenderPass::kSerpentineHulls";
-        case RenderPass::kLoopHulls:
-            return "RenderPass::kLoopHulls";
-        case RenderPass::kSerpentineCorners:
-            return "RenderPass::kSerpentineCorners";
-        case RenderPass::kLoopCorners:
-            return "RenderPass::kLoopCorners";
-    }
-    SK_ABORT("Unexpected GrCCPRCoverageProcessor::RenderPass.");
-    return nullptr;
+    return this->createGSImpl(std::move(shader));
 }

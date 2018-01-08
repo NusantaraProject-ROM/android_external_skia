@@ -71,7 +71,7 @@ void SkGaussianColorFilter::toString(SkString* str) const {
 
 std::unique_ptr<GrFragmentProcessor> SkGaussianColorFilter::asFragmentProcessor(
         GrContext*, const GrColorSpaceInfo&) const {
-    return GrBlurredEdgeFragmentProcessor::Make(GrBlurredEdgeFragmentProcessor::kGaussian_Mode);
+    return GrBlurredEdgeFragmentProcessor::Make(GrBlurredEdgeFragmentProcessor::Mode::kGaussian);
 }
 #endif
 
@@ -466,7 +466,7 @@ static SkColor compute_render_color(SkColor color, float alpha, bool useTonalCol
         SkShadowUtils::ComputeTonalColorParams(color4f.fR,
                                                color4f.fG,
                                                color4f.fB,
-                                               alpha,
+                                               color4f.fA*alpha,
                                                &colorScale, &tonalAlpha);
         // After pre-multiplying, we want the alpha to be scaled by tonalAlpha, and
         // the color scaled by colorScale. This scale factor gives that.
@@ -519,7 +519,7 @@ void SkBaseDevice::drawShadow(const SkPath& path, const SkDrawShadowRec& rec) {
     bool tiltZPlane = tilted(rec.fZPlaneParams);
     bool transparent = SkToBool(rec.fFlags & SkShadowFlags::kTransparentOccluder_ShadowFlag);
     bool uncached = tiltZPlane || path.isVolatile();
-    bool useTonalColor = SkToBool(rec.fFlags & kTonalColor_ShadowFlag);
+    bool useTonalColor = !SkToBool(rec.fFlags & kDisableTonalColor_ShadowFlag);
 
     SkColor color = rec.fColor;
     SkPoint3 zPlaneParams = rec.fZPlaneParams;

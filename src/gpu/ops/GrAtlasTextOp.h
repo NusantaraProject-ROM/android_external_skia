@@ -12,6 +12,8 @@
 #include "text/GrAtlasTextContext.h"
 #include "text/GrDistanceFieldAdjustTable.h"
 
+class SkAtlasTextTarget;
+
 class GrAtlasTextOp final : public GrMeshDrawOp {
 public:
     DEFINE_OP_CLASS_ID
@@ -85,16 +87,8 @@ public:
     // init() so the op can initialize itself
     Geometry& geometry() { return fGeoData[0]; }
 
-    void init() {
-        const Geometry& geo = fGeoData[0];
-        fColor = geo.fColor;
-        SkRect bounds;
-        geo.fBlob->computeSubRunBounds(&bounds, geo.fRun, geo.fSubRun, geo.fViewMatrix, geo.fX,
-                                       geo.fY);
-        // We don't have tight bounds on the glyph paths in device space. For the purposes of bounds
-        // we treat this as a set of non-AA rects rendered with a texture.
-        this->setBounds(bounds, HasAABloat::kNo, IsZeroArea::kNo);
-    }
+    /** Called after this->geometry() has been configured. */
+    void init();
 
     const char* name() const override { return "AtlasTextOp"; }
 
@@ -115,6 +109,21 @@ public:
 
     RequiresDstTexture finalize(const GrCaps& caps, const GrAppliedClip* clip,
                                 GrPixelConfigIsClamped dstIsClamped) override;
+
+    enum MaskType {
+        kGrayscaleCoverageMask_MaskType,
+        kLCDCoverageMask_MaskType,
+        kColorBitmapMask_MaskType,
+        kAliasedDistanceField_MaskType,
+        kGrayscaleDistanceField_MaskType,
+        kLCDDistanceField_MaskType,
+        kLCDBGRDistanceField_MaskType,
+    };
+
+    MaskType maskType() const { return fMaskType; }
+
+    void finalizeForTextTarget(uint32_t color, const GrCaps&);
+    void executeForTextTarget(SkAtlasTextTarget*);
 
 private:
     // The minimum number of Geometry we will try to allocate.
@@ -170,7 +179,6 @@ private:
     inline void flush(GrMeshDrawOp::Target* target, FlushInfo* flushInfo) const;
 
     GrColor color() const { return fColor; }
-    const SkMatrix& viewMatrix() const { return fGeoData[0].fViewMatrix; }
     bool usesLocalCoords() const { return fUsesLocalCoords; }
     int numGlyphs() const { return fNumGlyphs; }
 
@@ -179,16 +187,6 @@ private:
     static constexpr auto kMaxTextures = 4;
 
     sk_sp<GrGeometryProcessor> setupDfProcessor() const;
-
-    enum MaskType {
-        kGrayscaleCoverageMask_MaskType,
-        kLCDCoverageMask_MaskType,
-        kColorBitmapMask_MaskType,
-        kAliasedDistanceField_MaskType,
-        kGrayscaleDistanceField_MaskType,
-        kLCDDistanceField_MaskType,
-        kLCDBGRDistanceField_MaskType,
-    };
 
     SkAutoSTMalloc<kMinGeometryAllocated, Geometry> fGeoData;
     int fGeoDataAllocSize;
@@ -205,6 +203,7 @@ private:
     sk_sp<const GrDistanceFieldAdjustTable> fDistanceAdjustTable;
     SkColor fLuminanceColor;
     bool fUseGammaCorrectDistanceTable;
+    uint32_t fDFGPFlags = 0;
 
     typedef GrMeshDrawOp INHERITED;
 };

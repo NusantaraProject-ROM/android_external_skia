@@ -10,6 +10,7 @@
 
 #include "SkJumper.h"
 #include "SkJumper_misc.h"
+#include <stdint.h>
 
 // This file contains vector types that SkJumper_stages.cpp uses to define stages.
 
@@ -17,12 +18,12 @@
 
 #if !defined(__clang__)
     #define JUMPER_IS_SCALAR
-#elif defined(__aarch64__) || defined(__ARM_VFPV4__)
+#elif defined(__ARM_NEON)
     #define JUMPER_IS_NEON
 #elif defined(__AVX512F__)
     #define JUMPER_IS_AVX512
-#elif defined(__AVX2__)
-    #define JUMPER_IS_AVX2
+#elif defined(__AVX2__) && defined(__F16C__) && defined(__FMA__)
+    #define JUMPER_IS_HSW
 #elif defined(__AVX__)
     #define JUMPER_IS_AVX
 #elif defined(__SSE4_1__)
@@ -31,6 +32,16 @@
     #define JUMPER_IS_SSE2
 #else
     #define JUMPER_IS_SCALAR
+#endif
+
+// Older Clangs seem to crash when generating non-optimized NEON code for ARMv7.
+#if defined(__clang__) && !defined(__OPTIMIZE__) && defined(__arm__)
+    // Apple Clang 9 and vanilla Clang 5 are fine, and may even be conservative.
+    #if defined(__apple_build_version__) && __clang_major__ < 9
+        #define JUMPER_IS_SCALAR
+    #elif __clang_major__ < 5
+        #define JUMPER_IS_SCALAR
+    #endif
 #endif
 
 #if defined(JUMPER_IS_SCALAR)
@@ -105,7 +116,6 @@
     using U8  = V<uint8_t >;
 
     // We polyfill a few routines that Clang doesn't build into ext_vector_types.
-    SI F   mad(F f, F m, F a)                    { return vfmaq_f32(a,f,m);        }
     SI F   min(F a, F b)                         { return vminq_f32(a,b);          }
     SI F   max(F a, F b)                         { return vmaxq_f32(a,b);          }
     SI F   abs_  (F v)                           { return vabsq_f32(v);            }
@@ -117,10 +127,12 @@
     SI F if_then_else(I32 c, F t, F e) { return vbslq_f32((U32)c,t,e); }
 
     #if defined(__aarch64__)
+        SI F     mad(F f, F m, F a) { return vfmaq_f32(a,f,m); }
         SI F  floor_(F v) { return vrndmq_f32(v); }
         SI F   sqrt_(F v) { return vsqrtq_f32(v); }
         SI U32 round(F v, F scale) { return vcvtnq_u32_f32(v*scale); }
     #else
+        SI F mad(F f, F m, F a) { return vmlaq_f32(a,f,m); }
         SI F floor_(F v) {
             F roundtrip = vcvtq_f32_s32(vcvtq_s32_f32(v));
             return roundtrip - if_then_else(roundtrip > v, 1, 0);
@@ -204,7 +216,7 @@
         }
     }
 
-#elif defined(JUMPER_IS_AVX) || defined(JUMPER_IS_AVX2) || defined(JUMPER_IS_AVX512)
+#elif defined(JUMPER_IS_AVX) || defined(JUMPER_IS_HSW) || defined(JUMPER_IS_AVX512)
     #include <immintrin.h>
 
     // These are __m256 and __m256i, but friendlier and strongly-typed.
@@ -217,7 +229,7 @@
     using U8  = V<uint8_t >;
 
     SI F mad(F f, F m, F a)  {
-    #if defined(JUMPER_IS_AVX2) || defined(JUMPER_IS_AVX512)
+    #if defined(JUMPER_IS_HSW) || defined(JUMPER_IS_AVX512)
         return _mm256_fmadd_ps(f,m,a);
     #else
         return f*m+a;
@@ -249,7 +261,7 @@
         return { p[ix[0]], p[ix[1]], p[ix[2]], p[ix[3]],
                  p[ix[4]], p[ix[5]], p[ix[6]], p[ix[7]], };
     }
-    #if defined(JUMPER_IS_AVX2) || defined(JUMPER_IS_AVX512)
+    #if defined(JUMPER_IS_HSW) || defined(JUMPER_IS_AVX512)
         SI F   gather(const float*    p, U32 ix) { return _mm256_i32gather_ps   (p, ix, 4); }
         SI U32 gather(const uint32_t* p, U32 ix) { return _mm256_i32gather_epi32(p, ix, 4); }
         SI U64 gather(const uint64_t* p, U32 ix) {
@@ -639,14 +651,15 @@ SI F approx_pow2(F x) {
 }
 
 SI F approx_powf(F x, F y) {
-    return approx_pow2(approx_log2(x) * y);
+    return if_then_else(x == 0, 0
+                              , approx_pow2(approx_log2(x) * y));
 }
 
 SI F from_half(U16 h) {
-#if defined(JUMPER_IS_NEON)
+#if defined(__aarch64__) && !defined(SK_BUILD_FOR_GOOGLE3)  // Temporary workaround for some Google3 builds.
     return vcvt_f32_f16(h);
 
-#elif defined(JUMPER_IS_AVX2) || defined(JUMPER_IS_AVX512)
+#elif defined(JUMPER_IS_HSW) || defined(JUMPER_IS_AVX512)
     return _mm256_cvtph_ps(h);
 
 #else
@@ -663,10 +676,10 @@ SI F from_half(U16 h) {
 }
 
 SI U16 to_half(F f) {
-#if defined(JUMPER_IS_NEON)
+#if defined(__aarch64__) && !defined(SK_BUILD_FOR_GOOGLE3)  // Temporary workaround for some Google3 builds.
     return vcvt_f16_f32(f);
 
-#elif defined(JUMPER_IS_AVX2) || defined(JUMPER_IS_AVX512)
+#elif defined(JUMPER_IS_HSW) || defined(JUMPER_IS_AVX512)
     return _mm256_cvtps_ph(f, _MM_FROUND_CUR_DIRECTION);
 
 #else

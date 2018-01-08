@@ -39,6 +39,7 @@ GrAtlasTextContext::GrAtlasTextContext(const Options& options)
     fMinDistanceFieldFontSize = options.fMinDistanceFieldFontSize < 0.f
                                         ? kDefaultMinDistanceFieldFontSize
                                         : options.fMinDistanceFieldFontSize;
+    fDistanceFieldVerticesAlwaysHaveW = options.fDistanceFieldVerticesAlwaysHaveW;
 }
 
 std::unique_ptr<GrAtlasTextContext> GrAtlasTextContext::Make(const Options& options) {
@@ -646,13 +647,15 @@ void GrAtlasTextContext::drawDFPosText(GrAtlasTextBlob* blob, int runIndex,
     SkTDArray<char> fallbackTxt;
     SkTDArray<SkScalar> fallbackPos;
 
+    bool hasWCoord = viewMatrix.hasPerspective() || fDistanceFieldVerticesAlwaysHaveW;
+
     // Setup distance field paint and text ratio
     SkScalar textRatio;
     SkPaint dfPaint(paint);
     this->initDistanceFieldPaint(blob, &dfPaint, &textRatio, viewMatrix);
     blob->setHasDistanceField();
     blob->setSubRunHasDistanceFields(runIndex, paint.skPaint().isLCDRenderText(),
-                                     paint.skPaint().isAntiAlias());
+                                     paint.skPaint().isAntiAlias(), hasWCoord);
 
     GrAtlasTextStrike* currStrike = nullptr;
 

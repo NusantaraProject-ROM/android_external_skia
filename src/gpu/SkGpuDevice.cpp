@@ -232,7 +232,7 @@ void SkGpuDevice::clearAll() {
     GR_CREATE_TRACE_MARKER_CONTEXT("SkGpuDevice", "clearAll", fContext.get());
 
     SkIRect rect = SkIRect::MakeWH(this->width(), this->height());
-    fRenderTargetContext->clear(&rect, 0x0, true);
+    fRenderTargetContext->clear(&rect, 0x0, GrRenderTargetContext::CanClearFullscreen::kYes);
 }
 
 void SkGpuDevice::replaceRenderTargetContext(bool shouldRetainContent) {
@@ -280,12 +280,18 @@ void SkGpuDevice::drawPaint(const SkPaint& paint) {
     fRenderTargetContext->drawPaint(this->clip(), std::move(grPaint), this->ctm());
 }
 
-// must be in SkCanvas::PointMode order
-static const GrPrimitiveType gPointMode2PrimitiveType[] = {
-    GrPrimitiveType::kPoints,
-    GrPrimitiveType::kLines,
-    GrPrimitiveType::kLineStrip
-};
+static inline GrPrimitiveType point_mode_to_primitive_type(SkCanvas::PointMode mode) {
+    switch (mode) {
+        case SkCanvas::kPoints_PointMode:
+            return GrPrimitiveType::kPoints;
+        case SkCanvas::kLines_PointMode:
+            return GrPrimitiveType::kLines;
+        case SkCanvas::kPolygon_PointMode:
+            return GrPrimitiveType::kLineStrip;
+    }
+    SK_ABORT("Unexpected mode");
+    return GrPrimitiveType::kPoints;
+}
 
 void SkGpuDevice::drawPoints(SkCanvas::PointMode mode,
                              size_t count, const SkPoint pts[], const SkPaint& paint) {
@@ -307,8 +313,8 @@ void SkGpuDevice::drawPoints(SkCanvas::PointMode mode,
         path.setIsVolatile(true);
         path.moveTo(pts[0]);
         path.lineTo(pts[1]);
-        fRenderTargetContext->drawPath(this->clip(), std::move(grPaint),
-                                       GrBoolToAA(paint.isAntiAlias()), this->ctm(), path, style);
+        fRenderTargetContext->drawPath(this->clip(), std::move(grPaint), GrAA(paint.isAntiAlias()),
+                                       this->ctm(), path, style);
         return;
     }
 
@@ -328,7 +334,7 @@ void SkGpuDevice::drawPoints(SkCanvas::PointMode mode,
         return;
     }
 
-    GrPrimitiveType primitiveType = gPointMode2PrimitiveType[mode];
+    GrPrimitiveType primitiveType = point_mode_to_primitive_type(mode);
 
     const SkMatrix* viewMatrix = &this->ctm();
 #ifdef SK_BUILD_FOR_ANDROID_FRAMEWORK
@@ -380,8 +386,8 @@ void SkGpuDevice::drawRect(const SkRect& rect, const SkPaint& paint) {
     }
 
     GrStyle style(paint);
-    fRenderTargetContext->drawRect(this->clip(), std::move(grPaint),
-                                   GrBoolToAA(paint.isAntiAlias()), this->ctm(), rect, &style);
+    fRenderTargetContext->drawRect(this->clip(), std::move(grPaint), GrAA(paint.isAntiAlias()),
+                                   this->ctm(), rect, &style);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -434,8 +440,8 @@ void SkGpuDevice::drawRRect(const SkRRect& rrect, const SkPaint& paint) {
 
     SkASSERT(!style.pathEffect());
 
-    fRenderTargetContext->drawRRect(this->clip(), std::move(grPaint),
-                                    GrBoolToAA(paint.isAntiAlias()), this->ctm(), rrect, style);
+    fRenderTargetContext->drawRRect(this->clip(), std::move(grPaint), GrAA(paint.isAntiAlias()),
+                                    this->ctm(), rrect, style);
 }
 
 
@@ -461,8 +467,7 @@ void SkGpuDevice::drawDRRect(const SkRRect& outer,
         }
 
         fRenderTargetContext->drawDRRect(this->clip(), std::move(grPaint),
-                                         GrBoolToAA(paint.isAntiAlias()), this->ctm(), outer,
-                                         inner);
+                                         GrAA(paint.isAntiAlias()), this->ctm(), outer, inner);
         return;
     }
 
@@ -493,9 +498,8 @@ void SkGpuDevice::drawRegion(const SkRegion& region, const SkPaint& paint) {
         return;
     }
 
-    fRenderTargetContext->drawRegion(this->clip(), std::move(grPaint),
-                                     GrBoolToAA(paint.isAntiAlias()), this->ctm(), region,
-                                     GrStyle(paint));
+    fRenderTargetContext->drawRegion(this->clip(), std::move(grPaint), GrAA(paint.isAntiAlias()),
+                                     this->ctm(), region, GrStyle(paint));
 }
 
 void SkGpuDevice::drawOval(const SkRect& oval, const SkPaint& paint) {
@@ -522,9 +526,8 @@ void SkGpuDevice::drawOval(const SkRect& oval, const SkPaint& paint) {
         return;
     }
 
-    fRenderTargetContext->drawOval(this->clip(), std::move(grPaint),
-                                   GrBoolToAA(paint.isAntiAlias()), this->ctm(), oval,
-                                   GrStyle(paint));
+    fRenderTargetContext->drawOval(this->clip(), std::move(grPaint), GrAA(paint.isAntiAlias()),
+                                   this->ctm(), oval, GrStyle(paint));
 }
 
 void SkGpuDevice::drawArc(const SkRect& oval, SkScalar startAngle,
@@ -541,7 +544,7 @@ void SkGpuDevice::drawArc(const SkRect& oval, SkScalar startAngle,
         return;
     }
 
-    fRenderTargetContext->drawArc(this->clip(), std::move(grPaint), GrBoolToAA(paint.isAntiAlias()),
+    fRenderTargetContext->drawArc(this->clip(), std::move(grPaint), GrAA(paint.isAntiAlias()),
                                   this->ctm(), oval, startAngle, sweepAngle, useCenter,
                                   GrStyle(paint));
 }
@@ -598,7 +601,7 @@ void SkGpuDevice::drawStrokedLine(const SkPoint points[2],
     }
 
     fRenderTargetContext->fillRectWithLocalMatrix(
-            this->clip(), std::move(grPaint), GrBoolToAA(newPaint.isAntiAlias()), m, rect, local);
+            this->clip(), std::move(grPaint), GrAA(newPaint.isAntiAlias()), m, rect, local);
 }
 
 void SkGpuDevice::drawPath(const SkPath& origSrcPath,
@@ -618,21 +621,6 @@ void SkGpuDevice::drawPath(const SkPath& origSrcPath,
                 this->drawStrokedLine(points, paint);
                 return;
             }
-        }
-        bool isClosed;
-        SkRect rect;
-        if (origSrcPath.isRect(&rect, &isClosed) && isClosed) {
-            this->drawRect(rect, paint);
-            return;
-        }
-        if (origSrcPath.isOval(&rect)) {
-            this->drawOval(rect, paint);
-            return;
-        }
-        SkRRect rrect;
-        if (origSrcPath.isRRect(&rrect)) {
-            this->drawRRect(rrect, paint);
-            return;
         }
     }
 
@@ -1033,8 +1021,8 @@ void SkGpuDevice::drawBitmapTile(const SkBitmap& bitmap,
     }
 
     // Coverage-based AA would cause seams between tiles.
-    GrAA aa = GrBoolToAA(paint.isAntiAlias() &&
-                         GrFSAAType::kNone != fRenderTargetContext->fsaaType());
+    GrAA aa = GrAA(paint.isAntiAlias() &&
+                   GrFSAAType::kNone != fRenderTargetContext->fsaaType());
     fRenderTargetContext->drawRect(this->clip(), std::move(grPaint), aa, viewMatrix, dstRect);
 }
 
@@ -1108,7 +1096,7 @@ void SkGpuDevice::drawSpecial(SkSpecialImage* special1, int left, int top, const
     fRenderTargetContext->fillRectToRect(
             this->clip(),
             std::move(grPaint),
-            GrBoolToAA(paint.isAntiAlias()),
+            GrAA(paint.isAntiAlias()),
             SkMatrix::I(),
             SkRect::Make(SkIRect::MakeXYWH(left + offset.fX, top + offset.fY, subset.width(),
                                            subset.height())),

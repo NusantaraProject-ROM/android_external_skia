@@ -11,9 +11,12 @@
 #include "../private/GrTypesPriv.h"
 #include "GrBlend.h"
 #include "GrShaderCaps.h"
+#include "SkImageInfo.h"
 #include "SkRefCnt.h"
 #include "SkString.h"
 
+class GrBackendRenderTarget;
+class GrBackendTexture;
 struct GrContextOptions;
 class GrRenderTargetProxy;
 class SkJSONWriter;
@@ -55,22 +58,11 @@ public:
     bool usesMixedSamples() const { return fUsesMixedSamples; }
     bool preferClientSideDynamicBuffers() const { return fPreferClientSideDynamicBuffers; }
 
+    // On tilers, an initial fullscreen clear is an OPTIMIZATION. It allows the hardware to
+    // initialize each tile with a constant value rather than loading each pixel from memory.
+    bool preferFullscreenClears() const { return fPreferFullscreenClears; }
+
     bool preferVRAMUseOverFlushes() const { return fPreferVRAMUseOverFlushes; }
-
-    /**
-     * Indicates the level of support for gr_instanced::* functionality. A higher level includes
-     * all functionality from the levels below it.
-     */
-    enum class InstancedSupport {
-        kNone,
-        kBasic,
-        kMultisampled,
-        kMixedSampled
-    };
-
-    InstancedSupport instancedSupport() const { return fInstancedSupport; }
-
-    bool avoidInstancedDrawsToFPTargets() const { return fAvoidInstancedDrawsToFPTargets; }
 
     bool blacklistCoverageCounting() const { return fBlacklistCoverageCounting; }
 
@@ -143,11 +135,14 @@ public:
 
     int maxWindowRectangles() const { return fMaxWindowRectangles; }
 
+    // A tuned, platform-specific value for the maximum number of analytic fragment processors we
+    // should use to implement a clip, before falling back on a mask.
+    int maxClipAnalyticFPs() const { return fMaxClipAnalyticFPs; }
+
     virtual bool isConfigTexturable(GrPixelConfig) const = 0;
     virtual bool isConfigRenderable(GrPixelConfig config, bool withMSAA) const = 0;
     // Returns whether a texture of the given config can be copied to a texture of the same config.
     virtual bool isConfigCopyable(GrPixelConfig config) const = 0;
-    virtual bool canConfigBeImageStorage(GrPixelConfig config) const = 0;
 
     bool suppressPrints() const { return fSuppressPrints; }
 
@@ -155,8 +150,6 @@ public:
         SkASSERT(fBufferMapThreshold >= 0);
         return fBufferMapThreshold;
     }
-
-    bool fullClearIsFree() const { return fFullClearIsFree; }
 
     /** True in environments that will issue errors if memory uploaded to buffers
         is not initialized (even if not read by draw calls). */
@@ -179,6 +172,16 @@ public:
      */
     virtual bool initDescForDstCopy(const GrRenderTargetProxy* src, GrSurfaceDesc* desc,
                                     bool* rectsMustMatch, bool* disallowSubrect) const = 0;
+
+    /**
+     * Returns true if the GrBackendTexutre can we used with the supplied SkColorType. If it is
+     * compatible, the passed in GrPixelConfig will be set to a config that matches the backend
+     * format and requested SkColorType.
+     */
+    virtual bool validateBackendTexture(const GrBackendTexture& tex, SkColorType ct,
+                                        GrPixelConfig*) const = 0;
+    virtual bool validateBackendRenderTarget(const GrBackendRenderTarget&, SkColorType,
+                                             GrPixelConfig*) const = 0;
 
 protected:
     /** Subclasses must call this at the end of their constructors in order to apply caps
@@ -204,11 +207,10 @@ protected:
     bool fInstanceAttribSupport                      : 1;
     bool fUsesMixedSamples                           : 1;
     bool fPreferClientSideDynamicBuffers             : 1;
-    bool fFullClearIsFree                            : 1;
+    bool fPreferFullscreenClears                     : 1;
     bool fMustClearUploadedBufferData                : 1;
 
     // Driver workaround
-    bool fAvoidInstancedDrawsToFPTargets             : 1;
     bool fBlacklistCoverageCounting                  : 1;
     bool fAvoidStencilBuffers                        : 1;
 
@@ -221,11 +223,6 @@ protected:
 
     // Vulkan doesn't support this (yet) and some drivers have issues, too
     bool fCrossContextTextureSupport                 : 1;
-
-    // Disables using multiple texture units to batch multiple SkImages at once.
-    bool fDisableImageMultitexturingSupport          : 1;
-
-    InstancedSupport fInstancedSupport;
 
     BlendEquationSupport fBlendEquationSupport;
     uint32_t fAdvBlendEqBlacklist;
@@ -242,6 +239,7 @@ protected:
     int fMaxStencilSampleCount;
     int fMaxRasterSamples;
     int fMaxWindowRectangles;
+    int fMaxClipAnalyticFPs;
 
 private:
     virtual void onApplyOptionsOverrides(const GrContextOptions&) {}

@@ -27,7 +27,7 @@ static void make_paint(SkPaint* paint, sk_sp<SkTypeface> typeface) {
 
 static sk_sp<SkTypeface> chinese_typeface() {
 #ifdef SK_BUILD_FOR_ANDROID
-    return MakeResourceAsTypeface("/fonts/NotoSansCJK-Regular.ttc");
+    return MakeResourceAsTypeface("fonts/NotoSansCJK-Regular.ttc");
 #elif defined(SK_BUILD_FOR_WIN32)
     return SkTypeface::MakeFromName("SimSun", SkFontStyle());
 #elif defined(SK_BUILD_FOR_MAC)
@@ -79,8 +79,6 @@ protected:
         // now "fling" a random amount
         fIndex += fRand.nextRangeU(5, 20);
         fIndex %= fBlobs.count();
-
-        this->inval(nullptr);
     }
 
 private:

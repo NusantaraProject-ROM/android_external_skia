@@ -174,13 +174,25 @@ static inline bool SkCubicIsDegenerate(SkCubicType type) {
         case SkCubicType::kLocalCusp:
         case SkCubicType::kCuspAtInfinity:
             return false;
-        default:
-            SK_ABORT("Invalid SkCubicType");
-            // fallthru
         case SkCubicType::kQuadratic:
         case SkCubicType::kLineOrPoint:
             return true;
     }
+    SK_ABORT("Invalid SkCubicType");
+    return true;
+}
+
+static inline const char* SkCubicTypeName(SkCubicType type) {
+    switch (type) {
+        case SkCubicType::kSerpentine: return "kSerpentine";
+        case SkCubicType::kLoop: return "kLoop";
+        case SkCubicType::kLocalCusp: return "kLocalCusp";
+        case SkCubicType::kCuspAtInfinity: return "kCuspAtInfinity";
+        case SkCubicType::kQuadratic: return "kQuadratic";
+        case SkCubicType::kLineOrPoint: return "kLineOrPoint";
+    }
+    SK_ABORT("Invalid SkCubicType");
+    return "";
 }
 
 /** Returns the cubic classification.
@@ -195,6 +207,8 @@ static inline bool SkCubicIsDegenerate(SkCubicType type) {
 
     d[] is filled with the cubic inflection function coefficients. See "Resolution Independent
     Curve Rendering using Programmable Graphics Hardware", 4.2 Curve Categorization:
+
+    If the input points contain infinities or NaN, the return values are undefined.
 
     https://www.microsoft.com/en-us/research/wp-content/uploads/2005/01/p1000-loop.pdf
 */

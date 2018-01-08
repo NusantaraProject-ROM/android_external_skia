@@ -35,7 +35,7 @@ public:
 protected:
     void onOnceBeforeDraw() override {
         fRRectPath.addRRect(SkRRect::MakeRectXY(SkRect::MakeXYWH(-130, -128.5, 130, 128.5), 4, 4));
-        fReferenceImage = GetResourceAsImage("shadowreference.png");
+        fReferenceImage = GetResourceAsImage("images/shadowreference.png");
     }
 
     // overrides from SkEventSink
@@ -69,7 +69,6 @@ protected:
                     break;
             }
             if (handled) {
-                this->inval(nullptr);
                 return true;
             }
         }

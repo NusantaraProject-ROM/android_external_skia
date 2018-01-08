@@ -134,9 +134,6 @@ public:
         return this->isConfigRenderable(config, false);
     }
 
-    bool canConfigBeImageStorage(GrPixelConfig config) const override {
-        return SkToBool(fConfigTable[config].fFlags & ConfigInfo::kCanUseAsImageStorage_Flag);
-    }
     bool canConfigBeFBOColorAttachment(GrPixelConfig config) const {
         return SkToBool(fConfigTable[config].fFlags & ConfigInfo::kFBOColorAttachment_Flag);
     }
@@ -418,6 +415,11 @@ public:
         return fProgramBinarySupport;
     }
 
+    bool validateBackendTexture(const GrBackendTexture&, SkColorType,
+                                GrPixelConfig*) const override;
+    bool validateBackendRenderTarget(const GrBackendRenderTarget&, SkColorType,
+                                     GrPixelConfig*) const override;
+
 private:
     enum ExternalFormatUsage {
         kTexImage_ExternalFormatUsage,
@@ -431,7 +433,7 @@ private:
                            GrGLenum* externalType) const;
 
     void init(const GrContextOptions&, const GrGLContextInfo&, const GrGLInterface*);
-    void initGLSL(const GrGLContextInfo&);
+    void initGLSL(const GrGLContextInfo&, const GrGLInterface*);
     bool hasPathRenderingSupport(const GrGLContextInfo&, const GrGLInterface*);
 
     void onApplyOptionsOverrides(const GrContextOptions& options) override;
@@ -443,8 +445,6 @@ private:
     // This must be called after initFSAASupport().
     void initConfigTable(const GrContextOptions&, const GrGLContextInfo&, const GrGLInterface*,
                          GrShaderCaps*);
-
-    void initShaderPrecisionTable(const GrGLContextInfo&, const GrGLInterface*, GrShaderCaps*);
 
     GrGLStandard fStandard;
 
@@ -568,7 +568,6 @@ private:
             kFBOColorAttachment_Flag      = 0x10,
             kCanUseTexStorage_Flag        = 0x20,
             kCanUseWithTexelBuffer_Flag   = 0x40,
-            kCanUseAsImageStorage_Flag    = 0x80,
         };
         uint32_t fFlags;
 

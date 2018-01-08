@@ -9,6 +9,7 @@
 
 #include "SkCanvas.h"
 #include "SkCommonFlags.h"
+#include "SkKey.h"
 #include "SkOSFile.h"
 #include "SkStream.h"
 
@@ -53,10 +54,10 @@ bool SampleSlide::onMouse(SkScalar x, SkScalar y, Window::InputState state,
                           uint32_t modifiers) {
     // map to SkView modifiers
     unsigned modifierKeys = 0;
-    modifierKeys |= (state & Window::kShift_ModifierKey) ? kShift_SkModifierKey : 0;
-    modifierKeys |= (state & Window::kControl_ModifierKey) ? kControl_SkModifierKey : 0;
-    modifierKeys |= (state & Window::kOption_ModifierKey) ? kOption_SkModifierKey : 0;
-    modifierKeys |= (state & Window::kCommand_ModifierKey) ? kCommand_SkModifierKey : 0;
+    modifierKeys |= (modifiers & Window::kShift_ModifierKey) ? kShift_SkModifierKey : 0;
+    modifierKeys |= (modifiers & Window::kControl_ModifierKey) ? kControl_SkModifierKey : 0;
+    modifierKeys |= (modifiers & Window::kOption_ModifierKey) ? kOption_SkModifierKey : 0;
+    modifierKeys |= (modifiers & Window::kCommand_ModifierKey) ? kCommand_SkModifierKey : 0;
 
     bool handled = false;
     switch (state) {
@@ -89,11 +90,3 @@ bool SampleSlide::onMouse(SkScalar x, SkScalar y, Window::InputState state,
 
     return handled;
 }
-
-#if defined(SK_BUILD_FOR_ANDROID)
-// these are normally defined in SkOSWindow_unix, but we don't
-// want to include that
-void SkEvent::SignalNonEmptyQueue() {}
-
-void SkEvent::SignalQueueTimer(SkMSec delay) {}
-#endif

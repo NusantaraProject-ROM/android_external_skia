@@ -19,13 +19,13 @@
 #include "SkColorSpacePriv.h"
 #include "SkCommonFlags.h"
 #include "SkCommonFlagsConfig.h"
-#include "SkCommonFlagsGpuThreads.h"
-#include "SkCommonFlagsPathRenderer.h"
+#include "SkCommonFlagsGpu.h"
 #include "SkData.h"
-#include "SkDocument.h"
 #include "SkDebugfTracer.h"
+#include "SkDocument.h"
 #include "SkEventTracingPriv.h"
 #include "SkFontMgr.h"
+#include "SkFontMgrPriv.h"
 #include "SkGraphics.h"
 #include "SkHalf.h"
 #include "SkLeanWindows.h"
@@ -39,6 +39,7 @@
 #include "SkSpinlock.h"
 #include "SkTHash.h"
 #include "SkTaskGroup.h"
+#include "SkTypeface_win.h"
 #include "Test.h"
 #include "Timer.h"
 #include "ios_utils.h"
@@ -94,16 +95,13 @@ DEFINE_bool(forceRasterPipeline, false, "sets gSkForceRasterPipelineBlitter");
 
 DEFINE_bool(ddl, false, "If true, use DeferredDisplayLists for GPU SKP rendering.");
 
-#if SK_SUPPORT_GPU
-DEFINE_pathrenderer_flag;
-#endif
-
 DEFINE_bool(ignoreSigInt, false, "ignore SIGINT signals during test execution");
 
 DEFINE_string(dont_write, "", "File extensions to skip writing to --writePath.");  // See skia:6821
 
 DEFINE_bool(nativeFonts, true, "If true, use native font manager and rendering. "
                                "If false, fonts will draw as portably as possible.");
+DEFINE_bool(gdi, false, "On Windows, use GDI instead of DirectWrite for font rendering.");
 
 using namespace DM;
 using sk_gpu_test::GrContextFactory;
@@ -729,7 +727,7 @@ static void push_codec_srcs(Path path) {
         };
         for (const char* brdExt : brdExts) {
             if (0 == strcmp(brdExt, ext)) {
-                bool gray = codec->getEncodedInfo().color() == SkEncodedInfo::kGray_Color;
+                bool gray = codec->getInfo().colorType() == kGray_8_SkColorType;
                 push_brd_srcs(path, gray);
                 break;
             }
@@ -917,19 +915,7 @@ static sk_sp<SkColorSpace> adobe_rgb() {
 }
 
 static sk_sp<SkColorSpace> rgb_to_gbr() {
-    float gbr[9];
-    gbr[0] = gSRGB_toXYZD50[1];
-    gbr[1] = gSRGB_toXYZD50[2];
-    gbr[2] = gSRGB_toXYZD50[0];
-    gbr[3] = gSRGB_toXYZD50[4];
-    gbr[4] = gSRGB_toXYZD50[5];
-    gbr[5] = gSRGB_toXYZD50[3];
-    gbr[6] = gSRGB_toXYZD50[7];
-    gbr[7] = gSRGB_toXYZD50[8];
-    gbr[8] = gSRGB_toXYZD50[6];
-    SkMatrix44 toXYZD50(SkMatrix44::kUninitialized_Constructor);
-    toXYZD50.set3x3RowMajorf(gbr);
-    return SkColorSpace::MakeRGB(SkColorSpace::kSRGB_RenderTargetGamma, toXYZD50);
+    return SkColorSpace::MakeSRGB()->makeColorSpin();
 }
 
 static Sink* create_via(const SkString& tag, Sink* wrapped) {
@@ -946,7 +932,6 @@ static Sink* create_via(const SkString& tag, Sink* wrapped) {
     VIA("pic",       ViaPicture,           wrapped);
     VIA("2ndpic",    ViaSecondPicture,     wrapped);
     VIA("sp",        ViaSingletonPictures, wrapped);
-    VIA("defer",     ViaDefer,             wrapped);
     VIA("tiles",     ViaTiles, 256, 256, nullptr,            wrapped);
     VIA("tiles_rt",  ViaTiles, 256, 256, new SkRTreeFactory, wrapped);
 
@@ -1289,8 +1274,7 @@ static void run_test(skiatest::Test test, const GrContextOptions& grCtxOptions) 
         test.modifyGrContextOptions(&options);
 
         start("unit", "test", "", test.name);
-        GrContextFactory factory(options);
-        test.run(&reporter, &factory);
+        test.run(&reporter, options);
     }
     done("unit", "test", "", test.name);
 }
@@ -1311,21 +1295,22 @@ static sk_sp<SkTypeface> create_from_name(const char familyName[], SkFontStyle s
 
 extern sk_sp<SkTypeface> (*gCreateTypefaceDelegate)(const char [], SkFontStyle );
 
-extern sk_sp<SkFontMgr> (*gSkFontMgr_DefaultFactory)();
-
-
 int main(int argc, char** argv) {
     SkCommandLineFlags::Parse(argc, argv);
 
     if (!FLAGS_nativeFonts) {
-        gSkFontMgr_DefaultFactory = []() -> sk_sp<SkFontMgr> {
-            return sk_make_sp<DM::FontMgr>();
-        };
+        gSkFontMgr_DefaultFactory = &DM::MakeFontMgr;
     }
+
+#if defined(SK_BUILD_FOR_WIN)
+    if (FLAGS_gdi) {
+        gSkFontMgr_DefaultFactory = &SkFontMgr_New_GDI;
+    }
+#endif
 
     initializeEventTracingForTools();
 
-#if !defined(GOOGLE3) && defined(SK_BUILD_FOR_IOS)
+#if !defined(SK_BUILD_FOR_GOOGLE3) && defined(SK_BUILD_FOR_IOS)
     cd_Documents();
 #endif
     setbuf(stdout, nullptr);
@@ -1355,9 +1340,7 @@ int main(int argc, char** argv) {
 
     GrContextOptions grCtxOptions;
 #if SK_SUPPORT_GPU
-    grCtxOptions.fGpuPathRenderers = CollectGpuPathRenderersFromFlags();
-    grCtxOptions.fAllowPathMaskCaching = FLAGS_cachePathMasks;
-    grCtxOptions.fExecutor = GpuExecutorForTools();
+    SetCtxOptionsFromCommonFlags(&grCtxOptions);
 #endif
 
     JsonWriter::DumpJson();  // It's handy for the bots to assume this is ~never missing.
@@ -1365,12 +1348,8 @@ int main(int argc, char** argv) {
     SkTaskGroup::Enabler enabled(FLAGS_threads);
     gCreateTypefaceDelegate = &create_from_name;
 
-    {
-        SkString testResourcePath = GetResourcePath("color_wheel.png");
-        SkFILEStream testResource(testResourcePath.c_str());
-        if (!testResource.isValid()) {
-            info("Some resources are missing.  Do you need to set --resourcePath?\n");
-        }
+    if (nullptr == GetResourceAsData("images/color_wheel.png")) {
+        info("Some resources are missing.  Do you need to set --resourcePath?\n");
     }
     gather_gold();
     gather_uninteresting_hashes();

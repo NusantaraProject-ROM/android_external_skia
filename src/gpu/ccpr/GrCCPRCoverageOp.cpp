@@ -14,77 +14,76 @@
 #include "SkPath.h"
 #include "SkPathPriv.h"
 #include "SkPoint.h"
-#include "SkNx.h"
 #include "ccpr/GrCCPRGeometry.h"
 
 using TriangleInstance = GrCCPRCoverageProcessor::TriangleInstance;
-using CurveInstance = GrCCPRCoverageProcessor::CurveInstance;
+using CubicInstance = GrCCPRCoverageProcessor::CubicInstance;
 
-/**
- * This is a view matrix that accumulates two bounding boxes as it maps points: device-space bounds
- * and "45 degree" device-space bounds (| 1 -1 | * devCoords).
- *                                      | 1  1 |
- */
-class AccumulatingViewMatrix {
-public:
-    AccumulatingViewMatrix(const SkMatrix& m, const SkPoint& initialPoint);
+void GrCCPRCoverageOpsBuilder::parsePath(const SkMatrix& m, const SkPath& path, SkRect* devBounds,
+                                         SkRect* devBounds45) {
+    const SkPoint* pts = SkPathPriv::PointData(path);
+    int numPts = path.countPoints();
+    SkASSERT(numPts + 1 <= fLocalDevPtsBuffer.count());
 
-    SkPoint transform(const SkPoint& pt);
-    void getAccumulatedBounds(SkRect* devBounds, SkRect* devBounds45) const;
+    if (!numPts) {
+        devBounds->setEmpty();
+        devBounds45->setEmpty();
+        this->parsePath(path, nullptr);
+        return;
+    }
 
-private:
-    Sk4f fX;
-    Sk4f fY;
-    Sk4f fT;
-
-    Sk4f fTopLeft;
-    Sk4f fBottomRight;
-};
-
-inline AccumulatingViewMatrix::AccumulatingViewMatrix(const SkMatrix& m,
-                                                      const SkPoint& initialPoint) {
-    // m45 transforms into 45 degree space in order to find the octagon's diagonals. We could
-    // use SK_ScalarRoot2Over2 if we wanted an orthonormal transform, but this is irrelevant as
-    // long as the shader uses the correct inverse when coming back to device space.
+    // m45 transforms path points into "45 degree" device space. A bounding box in this space gives
+    // the circumscribing octagon's diagonals. We could use SK_ScalarRoot2Over2, but an orthonormal
+    // transform is not necessary as long as the shader uses the correct inverse.
     SkMatrix m45;
     m45.setSinCos(1, 1);
     m45.preConcat(m);
 
-    fX = Sk4f(m.getScaleX(), m.getSkewY(), m45.getScaleX(), m45.getSkewY());
-    fY = Sk4f(m.getSkewX(), m.getScaleY(), m45.getSkewX(), m45.getScaleY());
-    fT = Sk4f(m.getTranslateX(), m.getTranslateY(), m45.getTranslateX(), m45.getTranslateY());
+    // X,Y,T are two parallel view matrices that accumulate two bounding boxes as they map points:
+    // device-space bounds and "45 degree" device-space bounds (| 1 -1 | * devCoords).
+    //                                                          | 1  1 |
+    Sk4f X = Sk4f(m.getScaleX(), m.getSkewY(), m45.getScaleX(), m45.getSkewY());
+    Sk4f Y = Sk4f(m.getSkewX(), m.getScaleY(), m45.getSkewX(), m45.getScaleY());
+    Sk4f T = Sk4f(m.getTranslateX(), m.getTranslateY(), m45.getTranslateX(), m45.getTranslateY());
 
-    Sk4f transformed = SkNx_fma(fY, Sk4f(initialPoint.y()), fT);
-    transformed = SkNx_fma(fX, Sk4f(initialPoint.x()), transformed);
-    fTopLeft = fBottomRight = transformed;
+    // Map the path's points to device space and accumulate bounding boxes.
+    Sk4f devPt = SkNx_fma(Y, Sk4f(pts[0].y()), T);
+    devPt = SkNx_fma(X, Sk4f(pts[0].x()), devPt);
+    Sk4f topLeft = devPt;
+    Sk4f bottomRight = devPt;
+
+    // Store all 4 values [dev.x, dev.y, dev45.x, dev45.y]. We are only interested in the first two,
+    // and will overwrite [dev45.x, dev45.y] with the next point. This is why the dst buffer must
+    // be at least one larger than the number of points.
+    devPt.store(&fLocalDevPtsBuffer[0]);
+
+    for (int i = 1; i < numPts; ++i) {
+        devPt = SkNx_fma(Y, Sk4f(pts[i].y()), T);
+        devPt = SkNx_fma(X, Sk4f(pts[i].x()), devPt);
+        topLeft = Sk4f::Min(topLeft, devPt);
+        bottomRight = Sk4f::Max(bottomRight, devPt);
+        devPt.store(&fLocalDevPtsBuffer[i]);
+    }
+
+    SkPoint topLeftPts[2], bottomRightPts[2];
+    topLeft.store(topLeftPts);
+    bottomRight.store(bottomRightPts);
+    devBounds->setLTRB(topLeftPts[0].x(), topLeftPts[0].y(),
+                       bottomRightPts[0].x(), bottomRightPts[0].y());
+    devBounds45->setLTRB(topLeftPts[1].x(), topLeftPts[1].y(),
+                         bottomRightPts[1].x(), bottomRightPts[1].y());
+
+    this->parsePath(path, fLocalDevPtsBuffer.get());
 }
 
-inline SkPoint AccumulatingViewMatrix::transform(const SkPoint& pt) {
-    Sk4f transformed = SkNx_fma(fY, Sk4f(pt.y()), fT);
-    transformed = SkNx_fma(fX, Sk4f(pt.x()), transformed);
-
-    fTopLeft = Sk4f::Min(fTopLeft, transformed);
-    fBottomRight = Sk4f::Max(fBottomRight, transformed);
-
-    // TODO: vst1_lane_f32? (Sk4f::storeLane?)
-    float data[4];
-    transformed.store(data);
-    return SkPoint::Make(data[0], data[1]);
+void GrCCPRCoverageOpsBuilder::parseDeviceSpacePath(const SkPath& deviceSpacePath) {
+    this->parsePath(deviceSpacePath, SkPathPriv::PointData(deviceSpacePath));
 }
 
-inline void AccumulatingViewMatrix::getAccumulatedBounds(SkRect* devBounds,
-                                                         SkRect* devBounds45) const {
-    float topLeft[4], bottomRight[4];
-    fTopLeft.store(topLeft);
-    fBottomRight.store(bottomRight);
-    devBounds->setLTRB(topLeft[0], topLeft[1], bottomRight[0], bottomRight[1]);
-    devBounds45->setLTRB(topLeft[2], topLeft[3], bottomRight[2], bottomRight[3]);
-}
-
-void GrCCPRCoverageOpsBuilder::parsePath(const SkMatrix& viewMatrix, const SkPath& path,
-                                         SkRect* devBounds, SkRect* devBounds45) {
+void GrCCPRCoverageOpsBuilder::parsePath(const SkPath& path, const SkPoint* deviceSpacePts) {
     SkASSERT(!fParsingPath);
     SkDEBUGCODE(fParsingPath = true);
+    SkASSERT(path.isEmpty() || deviceSpacePts);
 
     fCurrPathPointsIdx = fGeometry.points().count();
     fCurrPathVerbsIdx = fGeometry.verbs().count();
@@ -93,22 +92,18 @@ void GrCCPRCoverageOpsBuilder::parsePath(const SkMatrix& viewMatrix, const SkPat
     fGeometry.beginPath();
 
     if (path.isEmpty()) {
-        devBounds->setEmpty();
-        devBounds45->setEmpty();
         return;
     }
 
-    const SkPoint* const pts = SkPathPriv::PointData(path);
     int ptsIdx = 0;
     bool insideContour = false;
-
-    AccumulatingViewMatrix m(viewMatrix, pts[0]);
 
     for (SkPath::Verb verb : SkPathPriv::Verbs(path)) {
         switch (verb) {
             case SkPath::kMove_Verb:
                 this->endContourIfNeeded(insideContour);
-                fGeometry.beginContour(m.transform(pts[ptsIdx++]));
+                fGeometry.beginContour(deviceSpacePts[ptsIdx]);
+                ++ptsIdx;
                 insideContour = true;
                 continue;
             case SkPath::kClose_Verb:
@@ -116,17 +111,16 @@ void GrCCPRCoverageOpsBuilder::parsePath(const SkMatrix& viewMatrix, const SkPat
                 insideContour = false;
                 continue;
             case SkPath::kLine_Verb:
-                fGeometry.lineTo(m.transform(pts[ptsIdx++]));
+                fGeometry.lineTo(deviceSpacePts[ptsIdx]);
+                ++ptsIdx;
                 continue;
             case SkPath::kQuad_Verb:
-                SkASSERT(ptsIdx >= 1); // SkPath should have inserted an implicit moveTo if needed.
-                fGeometry.quadraticTo(m.transform(pts[ptsIdx]), m.transform(pts[ptsIdx + 1]));
+                fGeometry.quadraticTo(deviceSpacePts[ptsIdx], deviceSpacePts[ptsIdx + 1]);
                 ptsIdx += 2;
                 continue;
             case SkPath::kCubic_Verb:
-                SkASSERT(ptsIdx >= 1); // SkPath should have inserted an implicit moveTo if needed.
-                fGeometry.cubicTo(m.transform(pts[ptsIdx]), m.transform(pts[ptsIdx + 1]),
-                                  m.transform(pts[ptsIdx + 2]));
+                fGeometry.cubicTo(deviceSpacePts[ptsIdx], deviceSpacePts[ptsIdx + 1],
+                                  deviceSpacePts[ptsIdx + 2]);
                 ptsIdx += 3;
                 continue;
             case SkPath::kConic_Verb:
@@ -137,7 +131,6 @@ void GrCCPRCoverageOpsBuilder::parsePath(const SkMatrix& viewMatrix, const SkPat
     }
 
     this->endContourIfNeeded(insideContour);
-    m.getAccumulatedBounds(devBounds, devBounds45);
 }
 
 void GrCCPRCoverageOpsBuilder::endContourIfNeeded(bool insideContour) {
@@ -153,7 +146,7 @@ void GrCCPRCoverageOpsBuilder::saveParsedPath(ScissorMode scissorMode,
 
     fPathsInfo.push_back() = {
         scissorMode,
-        (int32_t) (((uint32_t) (int32_t) atlasOffsetY << 16) | (atlasOffsetX & 0xffff)),
+        atlasOffsetX, atlasOffsetY,
         std::move(fTerminatingOp)
     };
 
@@ -200,8 +193,9 @@ void GrCCPRCoverageOpsBuilder::emitOp(SkISize drawBounds) {
 // elements past the end for this method to use as scratch space.
 //
 // Returns the next triangle instance after the final one emitted.
-static TriangleInstance* emit_recursive_fan(SkTArray<int32_t, true>& indices, int firstIndex,
-                                            int indexCount, int32_t packedAtlasOffset,
+static TriangleInstance* emit_recursive_fan(const SkTArray<SkPoint, true>& pts,
+                                            SkTArray<int32_t, true>& indices, int firstIndex,
+                                            int indexCount, const Sk2f& atlasOffset,
                                             TriangleInstance out[]) {
     if (indexCount < 3) {
         return out;
@@ -209,22 +203,19 @@ static TriangleInstance* emit_recursive_fan(SkTArray<int32_t, true>& indices, in
 
     const int32_t oneThirdCount = indexCount / 3;
     const int32_t twoThirdsCount = (2 * indexCount) / 3;
-    *out++ = {
-        indices[firstIndex],
-        indices[firstIndex + oneThirdCount],
-        indices[firstIndex + twoThirdsCount],
-        packedAtlasOffset
-    };
+    out++->set(pts[indices[firstIndex]],
+               pts[indices[firstIndex + oneThirdCount]],
+               pts[indices[firstIndex + twoThirdsCount]], atlasOffset);
 
-    out = emit_recursive_fan(indices, firstIndex, oneThirdCount + 1, packedAtlasOffset, out);
-    out = emit_recursive_fan(indices, firstIndex + oneThirdCount,
-                             twoThirdsCount - oneThirdCount + 1, packedAtlasOffset, out);
+    out = emit_recursive_fan(pts, indices, firstIndex, oneThirdCount + 1, atlasOffset, out);
+    out = emit_recursive_fan(pts, indices, firstIndex + oneThirdCount,
+                             twoThirdsCount - oneThirdCount + 1, atlasOffset, out);
 
     int endIndex = firstIndex + indexCount;
     int32_t oldValue = indices[endIndex];
     indices[endIndex] = indices[firstIndex];
-    out = emit_recursive_fan(indices, firstIndex + twoThirdsCount, indexCount - twoThirdsCount + 1,
-                             packedAtlasOffset, out);
+    out = emit_recursive_fan(pts, indices, firstIndex + twoThirdsCount,
+                             indexCount - twoThirdsCount + 1, atlasOffset, out);
     indices[endIndex] = oldValue;
 
     return out;
@@ -234,40 +225,51 @@ bool GrCCPRCoverageOpsBuilder::finalize(GrOnFlushResourceProvider* onFlushRP,
                                         SkTArray<std::unique_ptr<GrCCPRCoverageOp>>* ops) {
     SkASSERT(!fParsingPath);
 
-    const SkTArray<SkPoint, true>& points = fGeometry.points();
-    sk_sp<GrBuffer> pointsBuffer = onFlushRP->makeBuffer(kTexel_GrBufferType,
-                                                         points.count() * 2 * sizeof(float),
-                                                         points.begin());
-    if (!pointsBuffer) {
-        return false;
-    }
-
-    // Configure the instance buffer layout.
+    // Here we build a single instance buffer to share with every draw call from every CoverageOP we
+    // plan to produce.
+    //
+    // CoverageOps process 4 different types of primitives (triangles, quadratics, serpentines,
+    // loops), and each primitive type is further divided into instances that require a scissor and
+    // those that don't. This leaves us with 8 independent instance arrays to build for the GPU.
+    //
+    // Rather than placing each instance array in its own GPU buffer, we allocate a single
+    // megabuffer and lay them all out side-by-side. We can offset the "baseInstance" parameter in
+    // our draw calls to direct the GPU to the applicable elements within a given array.
+    //
+    // We already know how big to make each of the 8 arrays from fTallies[kNumScissorModes], so
+    // layout is straightforward.
     PrimitiveTallies baseInstances[kNumScissorModes];
-    // int4 indices.
+
+    // Start with triangles and quadratics. They both view the instance buffer as an array of
+    // TriangleInstance[], so we can just start at zero and lay them out one after the other.
     baseInstances[0].fTriangles = 0;
     baseInstances[1].fTriangles = baseInstances[0].fTriangles + fTallies[0].fTriangles;
-    // int2 indices (curves index the buffer as int2 rather than int4).
-    baseInstances[0].fQuadratics = (baseInstances[1].fTriangles + fTallies[1].fTriangles) * 2;
+    baseInstances[0].fQuadratics = baseInstances[1].fTriangles + fTallies[1].fTriangles;
     baseInstances[1].fQuadratics = baseInstances[0].fQuadratics + fTallies[0].fQuadratics;
-    baseInstances[0].fSerpentines = baseInstances[1].fQuadratics + fTallies[1].fQuadratics;
-    baseInstances[1].fSerpentines = baseInstances[0].fSerpentines + fTallies[0].fSerpentines;
-    baseInstances[0].fLoops = baseInstances[1].fSerpentines + fTallies[1].fSerpentines;
-    baseInstances[1].fLoops = baseInstances[0].fLoops + fTallies[0].fLoops;
-    int instanceBufferSize = (baseInstances[1].fLoops + fTallies[1].fLoops) * sizeof(CurveInstance);
+    int triEndIdx = baseInstances[1].fQuadratics + fTallies[1].fQuadratics;
+
+    // Cubics (loops and serpentines) view the same instance buffer as an array of CubicInstance[].
+    // So, reinterpreting the instance data as CubicInstance[], we start them on the first index
+    // that will not overwrite previous TriangleInstance data.
+    int cubicBaseIdx = GR_CT_DIV_ROUND_UP(triEndIdx * sizeof(TriangleInstance),
+                                          sizeof(CubicInstance));
+    baseInstances[0].fCubics = cubicBaseIdx;
+    baseInstances[1].fCubics = baseInstances[0].fCubics + fTallies[0].fCubics;
+    int cubicEndIdx = baseInstances[1].fCubics + fTallies[1].fCubics;
 
     sk_sp<GrBuffer> instanceBuffer = onFlushRP->makeBuffer(kVertex_GrBufferType,
-                                                           instanceBufferSize);
+                                                           cubicEndIdx * sizeof(CubicInstance));
     if (!instanceBuffer) {
         return false;
     }
 
     TriangleInstance* triangleInstanceData = static_cast<TriangleInstance*>(instanceBuffer->map());
-    CurveInstance* curveInstanceData = reinterpret_cast<CurveInstance*>(triangleInstanceData);
-    SkASSERT(curveInstanceData);
+    CubicInstance* cubicInstanceData = reinterpret_cast<CubicInstance*>(triangleInstanceData);
+    SkASSERT(cubicInstanceData);
 
     PathInfo* currPathInfo = fPathsInfo.begin();
-    int32_t packedAtlasOffset;
+    float atlasOffsetX, atlasOffsetY;
+    Sk2f atlasOffset;
     int ptsIdx = -1;
     PrimitiveTallies instanceIndices[2] = {baseInstances[0], baseInstances[1]};
     PrimitiveTallies* currIndices;
@@ -279,20 +281,24 @@ bool GrCCPRCoverageOpsBuilder::finalize(GrOnFlushResourceProvider* onFlushRP,
     PrimitiveTallies initialBaseInstances[] = {baseInstances[0], baseInstances[1]};
 #endif
 
+    const SkTArray<SkPoint, true>& pts = fGeometry.points();
+
     // Expand the ccpr verbs into GPU instance buffers.
     for (GrCCPRGeometry::Verb verb : fGeometry.verbs()) {
         switch (verb) {
             case GrCCPRGeometry::Verb::kBeginPath:
                 SkASSERT(currFan.empty());
                 currIndices = &instanceIndices[(int)currPathInfo->fScissorMode];
-                packedAtlasOffset = currPathInfo->fPackedAtlasOffset;
+                atlasOffsetX = static_cast<float>(currPathInfo->fAtlasOffsetX);
+                atlasOffsetY = static_cast<float>(currPathInfo->fAtlasOffsetY);
+                atlasOffset = {atlasOffsetX, atlasOffsetY};
 #ifdef SK_DEBUG
                 if (ScissorMode::kScissored == currPathInfo->fScissorMode) {
                     ++numScissoredPaths;
                 }
 #endif
                 if (auto op = std::move(currPathInfo->fTerminatingOp)) {
-                    op->setBuffers(pointsBuffer, instanceBuffer, baseInstances, instanceIndices);
+                    op->setInstanceBuffer(instanceBuffer, baseInstances, instanceIndices);
                     baseInstances[0] = instanceIndices[0];
                     baseInstances[1] = instanceIndices[1];
                     SkDEBUGCODE(numScissorBatches += op->fScissorBatches.count());
@@ -313,19 +319,14 @@ bool GrCCPRCoverageOpsBuilder::finalize(GrOnFlushResourceProvider* onFlushRP,
 
             case GrCCPRGeometry::Verb::kMonotonicQuadraticTo:
                 SkASSERT(!currFan.empty());
-                curveInstanceData[currIndices->fQuadratics++] = {ptsIdx, packedAtlasOffset};
+                triangleInstanceData[currIndices->fQuadratics++].set(&pts[ptsIdx], atlasOffset);
                 currFan.push_back(ptsIdx += 2);
                 continue;
 
-            case GrCCPRGeometry::Verb::kMonotonicSerpentineTo:
+            case GrCCPRGeometry::Verb::kMonotonicCubicTo:
                 SkASSERT(!currFan.empty());
-                curveInstanceData[currIndices->fSerpentines++] = {ptsIdx, packedAtlasOffset};
-                currFan.push_back(ptsIdx += 3);
-                continue;
-
-            case GrCCPRGeometry::Verb::kMonotonicLoopTo:
-                SkASSERT(!currFan.empty());
-                curveInstanceData[currIndices->fLoops++] = {ptsIdx, packedAtlasOffset};
+                cubicInstanceData[currIndices->fCubics++].set(&pts[ptsIdx],
+                                                              atlasOffsetX, atlasOffsetY);
                 currFan.push_back(ptsIdx += 3);
                 continue;
 
@@ -340,7 +341,7 @@ bool GrCCPRCoverageOpsBuilder::finalize(GrOnFlushResourceProvider* onFlushRP,
                     // fanSize + log3(fanSize), but we approximate with log2.
                     currFan.push_back_n(SkNextLog2(fanSize));
                     SkDEBUGCODE(TriangleInstance* end =)
-                    emit_recursive_fan(currFan, 0, fanSize, packedAtlasOffset,
+                    emit_recursive_fan(pts, currFan, 0, fanSize, atlasOffset,
                                        triangleInstanceData + currIndices->fTriangles);
                     currIndices->fTriangles += fanSize - 2;
                     SkASSERT(triangleInstanceData + currIndices->fTriangles == end);
@@ -353,30 +354,26 @@ bool GrCCPRCoverageOpsBuilder::finalize(GrOnFlushResourceProvider* onFlushRP,
     instanceBuffer->unmap();
 
     if (auto op = std::move(fTerminatingOp)) {
-        op->setBuffers(std::move(pointsBuffer), std::move(instanceBuffer), baseInstances,
-                       instanceIndices);
+        op->setInstanceBuffer(std::move(instanceBuffer), baseInstances, instanceIndices);
         SkDEBUGCODE(numScissorBatches += op->fScissorBatches.count());
         ops->push_back(std::move(op));
     }
 
     SkASSERT(currPathInfo == fPathsInfo.end());
-    SkASSERT(ptsIdx == points.count() - 1);
+    SkASSERT(ptsIdx == pts.count() - 1);
     SkASSERT(numScissoredPaths == numScissorBatches);
     SkASSERT(instanceIndices[0].fTriangles == initialBaseInstances[1].fTriangles);
-    SkASSERT(instanceIndices[1].fTriangles * 2 == initialBaseInstances[0].fQuadratics);
+    SkASSERT(instanceIndices[1].fTriangles == initialBaseInstances[0].fQuadratics);
     SkASSERT(instanceIndices[0].fQuadratics == initialBaseInstances[1].fQuadratics);
-    SkASSERT(instanceIndices[1].fQuadratics == initialBaseInstances[0].fSerpentines);
-    SkASSERT(instanceIndices[0].fSerpentines == initialBaseInstances[1].fSerpentines);
-    SkASSERT(instanceIndices[1].fSerpentines == initialBaseInstances[0].fLoops);
-    SkASSERT(instanceIndices[0].fLoops == initialBaseInstances[1].fLoops);
-    SkASSERT(instanceIndices[1].fLoops * (int) sizeof(CurveInstance) == instanceBufferSize);
+    SkASSERT(instanceIndices[1].fQuadratics == triEndIdx);
+    SkASSERT(instanceIndices[0].fCubics == initialBaseInstances[1].fCubics);
+    SkASSERT(instanceIndices[1].fCubics == cubicEndIdx);
     return true;
 }
 
-void GrCCPRCoverageOp::setBuffers(sk_sp<GrBuffer> pointsBuffer, sk_sp<GrBuffer> instanceBuffer,
-                                  const PrimitiveTallies baseInstances[kNumScissorModes],
-                                  const PrimitiveTallies endInstances[kNumScissorModes]) {
-    fPointsBuffer = std::move(pointsBuffer);
+void GrCCPRCoverageOp::setInstanceBuffer(sk_sp<GrBuffer> instanceBuffer,
+                                         const PrimitiveTallies baseInstances[kNumScissorModes],
+                                         const PrimitiveTallies endInstances[kNumScissorModes]) {
     fInstanceBuffer = std::move(instanceBuffer);
     fBaseInstances[0] = baseInstances[0];
     fBaseInstances[1] = baseInstances[1];
@@ -387,7 +384,6 @@ void GrCCPRCoverageOp::setBuffers(sk_sp<GrBuffer> pointsBuffer, sk_sp<GrBuffer> 
 void GrCCPRCoverageOp::onExecute(GrOpFlushState* flushState) {
     using RenderPass = GrCCPRCoverageProcessor::RenderPass;
 
-    SkASSERT(fPointsBuffer);
     SkASSERT(fInstanceBuffer);
 
     GrPipeline pipeline(flushState->drawOpArgs().fProxy, GrPipeline::ScissorState::kEnabled,
@@ -397,36 +393,28 @@ void GrCCPRCoverageOp::onExecute(GrOpFlushState* flushState) {
     fDynamicStatesScratchBuffer.reserve(1 + fScissorBatches.count());
 
     // Triangles.
-    auto constexpr kTrianglesGrPrimitiveType = GrCCPRCoverageProcessor::kTrianglesGrPrimitiveType;
     this->drawMaskPrimitives(flushState, pipeline, RenderPass::kTriangleHulls,
-                             kTrianglesGrPrimitiveType, 3, &PrimitiveTallies::fTriangles);
+                             &PrimitiveTallies::fTriangles);
     this->drawMaskPrimitives(flushState, pipeline, RenderPass::kTriangleEdges,
-                             kTrianglesGrPrimitiveType, 3, &PrimitiveTallies::fTriangles);
+                             &PrimitiveTallies::fTriangles);
     this->drawMaskPrimitives(flushState, pipeline, RenderPass::kTriangleCorners,
-                             kTrianglesGrPrimitiveType, 3, &PrimitiveTallies::fTriangles);
+                             &PrimitiveTallies::fTriangles);
 
     // Quadratics.
-    auto constexpr kQuadraticsGrPrimitiveType = GrCCPRCoverageProcessor::kQuadraticsGrPrimitiveType;
     this->drawMaskPrimitives(flushState, pipeline, RenderPass::kQuadraticHulls,
-                             kQuadraticsGrPrimitiveType, 3, &PrimitiveTallies::fQuadratics);
+                             &PrimitiveTallies::fQuadratics);
     this->drawMaskPrimitives(flushState, pipeline, RenderPass::kQuadraticCorners,
-                             kQuadraticsGrPrimitiveType, 3, &PrimitiveTallies::fQuadratics);
+                             &PrimitiveTallies::fQuadratics);
 
     // Cubics.
-    auto constexpr kCubicsGrPrimitiveType = GrCCPRCoverageProcessor::kCubicsGrPrimitiveType;
-    this->drawMaskPrimitives(flushState, pipeline, RenderPass::kSerpentineHulls,
-                             kCubicsGrPrimitiveType, 4, &PrimitiveTallies::fSerpentines);
-    this->drawMaskPrimitives(flushState, pipeline, RenderPass::kLoopHulls,
-                             kCubicsGrPrimitiveType, 4, &PrimitiveTallies::fLoops);
-    this->drawMaskPrimitives(flushState, pipeline, RenderPass::kSerpentineCorners,
-                             kCubicsGrPrimitiveType, 4, &PrimitiveTallies::fSerpentines);
-    this->drawMaskPrimitives(flushState, pipeline, RenderPass::kLoopCorners,
-                             kCubicsGrPrimitiveType, 4, &PrimitiveTallies::fLoops);
+    this->drawMaskPrimitives(flushState, pipeline, RenderPass::kCubicHulls,
+                             &PrimitiveTallies::fCubics);
+    this->drawMaskPrimitives(flushState, pipeline, RenderPass::kCubicCorners,
+                             &PrimitiveTallies::fCubics);
 }
 
 void GrCCPRCoverageOp::drawMaskPrimitives(GrOpFlushState* flushState, const GrPipeline& pipeline,
                                           GrCCPRCoverageProcessor::RenderPass renderPass,
-                                          GrPrimitiveType primType, int vertexCount,
                                           int PrimitiveTallies::* instanceType) const {
     using ScissorMode = GrCCPRCoverageOpsBuilder::ScissorMode;
     SkASSERT(pipeline.getScissorState().enabled());
@@ -434,11 +422,12 @@ void GrCCPRCoverageOp::drawMaskPrimitives(GrOpFlushState* flushState, const GrPi
     fMeshesScratchBuffer.reset();
     fDynamicStatesScratchBuffer.reset();
 
+    GrCCPRCoverageProcessor proc(renderPass);
+
     if (const int instanceCount = fInstanceCounts[(int)ScissorMode::kNonScissored].*instanceType) {
         SkASSERT(instanceCount > 0);
         const int baseInstance = fBaseInstances[(int)ScissorMode::kNonScissored].*instanceType;
-        GrMesh& mesh = fMeshesScratchBuffer.emplace_back(primType);
-        mesh.setInstanced(fInstanceBuffer.get(), instanceCount, baseInstance, vertexCount);
+        proc.appendMesh(fInstanceBuffer.get(), instanceCount, baseInstance, &fMeshesScratchBuffer);
         fDynamicStatesScratchBuffer.push_back().fScissorRect.setXYWH(0, 0, fDrawBounds.width(),
                                                                      fDrawBounds.height());
     }
@@ -452,8 +441,8 @@ void GrCCPRCoverageOp::drawMaskPrimitives(GrOpFlushState* flushState, const GrPi
                 continue;
             }
             SkASSERT(instanceCount > 0);
-            GrMesh& mesh = fMeshesScratchBuffer.emplace_back(primType);
-            mesh.setInstanced(fInstanceBuffer.get(), instanceCount, baseInstance, vertexCount);
+            proc.appendMesh(fInstanceBuffer.get(), instanceCount, baseInstance,
+                            &fMeshesScratchBuffer);
             fDynamicStatesScratchBuffer.push_back().fScissorRect = batch.fScissor;
             baseInstance += instanceCount;
         }
@@ -462,7 +451,6 @@ void GrCCPRCoverageOp::drawMaskPrimitives(GrOpFlushState* flushState, const GrPi
     SkASSERT(fMeshesScratchBuffer.count() == fDynamicStatesScratchBuffer.count());
 
     if (!fMeshesScratchBuffer.empty()) {
-        GrCCPRCoverageProcessor proc(renderPass, fPointsBuffer.get());
         SkASSERT(flushState->rtCommandBuffer());
         flushState->rtCommandBuffer()->draw(pipeline, proc, fMeshesScratchBuffer.begin(),
                                             fDynamicStatesScratchBuffer.begin(),

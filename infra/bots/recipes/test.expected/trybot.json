@@ -192,6 +192,8 @@
       "abc123",
       "builder",
       "Test-Win2k8-MSVC-GCE-CPU-AVX2-x86_64-Release-All",
+      "buildbucket_build_id",
+      "123454321",
       "issue",
       "456789",
       "patchset",
@@ -441,6 +443,10 @@
       "serialize-8888",
       "gm",
       "_",
+      "analytic_antialias_convex",
+      "serialize-8888",
+      "gm",
+      "_",
       "bleed_alpha_image",
       "serialize-8888",
       "gm",
@@ -586,6 +592,7 @@
       "gm",
       "_",
       "complexclip4_aa",
+      "--nonativeFonts",
       "--verbose"
     ],
     "env": {

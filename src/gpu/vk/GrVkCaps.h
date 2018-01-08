@@ -43,8 +43,6 @@ public:
         return true;
     }
 
-    bool canConfigBeImageStorage(GrPixelConfig) const override { return false; }
-
     bool isConfigTexturableLinearly(GrPixelConfig config) const {
         return SkToBool(ConfigInfo::kTextureable_Flag & fConfigTable[config].fLinearFlags);
     }
@@ -112,6 +110,11 @@ public:
 
     bool initDescForDstCopy(const GrRenderTargetProxy* src, GrSurfaceDesc* desc,
                             bool* rectsMustMatch, bool* disallowSubrect) const override;
+
+    bool validateBackendTexture(const GrBackendTexture&, SkColorType,
+                                GrPixelConfig*) const override;
+    bool validateBackendRenderTarget(const GrBackendRenderTarget&, SkColorType,
+                                     GrPixelConfig*) const override;
 
 private:
     enum VkVendor {

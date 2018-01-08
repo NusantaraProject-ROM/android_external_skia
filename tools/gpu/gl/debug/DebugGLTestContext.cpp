@@ -1195,14 +1195,13 @@ const char* DebugInterface::kExtensions[] = {
 
 class DebugGLContext : public sk_gpu_test::GLTestContext {
 public:
-   DebugGLContext() {
-       this->init(new DebugInterface());
-   }
+    DebugGLContext() { this->init(sk_make_sp<DebugInterface>()); }
 
-   ~DebugGLContext() override { this->teardown(); }
+    ~DebugGLContext() override { this->teardown(); }
 
 private:
     void onPlatformMakeCurrent() const override {}
+    std::function<void()> onPlatformGetAutoContextRestore() const override { return nullptr; }
     void onPlatformSwapBuffers() const override {}
     GrGLFuncPtr onPlatformGetProcAddress(const char*) const override { return nullptr; }
 };

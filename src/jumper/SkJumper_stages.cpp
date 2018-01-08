@@ -20,10 +20,6 @@ static const size_t N = sizeof(F) / sizeof(float);
 // That lets us link together several options.
 #if !defined(JUMPER_IS_OFFLINE)
     #define WRAP(name) sk_##name
-#elif defined(__aarch64__)
-    #define WRAP(name) sk_##name##_aarch64
-#elif defined(__arm__)
-    #define WRAP(name) sk_##name##_vfp4
 #elif defined(__AVX512F__)
     #define WRAP(name) sk_##name##_skx
 #elif defined(__AVX2__)
@@ -50,17 +46,17 @@ static const size_t N = sizeof(F) / sizeof(float);
         size_t dx, dy, tail;
         F dr,dg,db,da;
     };
-    using Stage = void(Params*, void** program, F r, F g, F b, F a);
+    using Stage = void(ABI*)(Params*, void** program, F r, F g, F b, F a);
 
 #else
     // We keep program the second argument, so that it's passed in rsi for load_and_inc().
-    using Stage = void(size_t tail, void** program, size_t dx, size_t dy, F,F,F,F, F,F,F,F);
+    using Stage = void(ABI*)(size_t tail, void** program, size_t dx, size_t dy, F,F,F,F, F,F,F,F);
 #endif
 
-MAYBE_MSABI
-extern "C" void WRAP(start_pipeline)(size_t dx, size_t dy, size_t xlimit, size_t ylimit,
-                                     void** program) {
-    auto start = (Stage*)load_and_inc(program);
+
+extern "C" MAYBE_MSABI void WRAP(start_pipeline)(size_t dx, size_t dy, size_t xlimit, size_t ylimit,
+                                                 void** program) {
+    auto start = (Stage)load_and_inc(program);
     const size_t x0 = dx;
     for (; dy < ylimit; dy++) {
     #if defined(__i386__) || defined(_M_IX86) || defined(__arm__)
@@ -90,26 +86,26 @@ extern "C" void WRAP(start_pipeline)(size_t dx, size_t dy, size_t xlimit, size_t
     #define STAGE(name, ...)                                                          \
         SI void name##_k(__VA_ARGS__, size_t dx, size_t dy, size_t tail,              \
                          F& r, F& g, F& b, F& a, F& dr, F& dg, F& db, F& da);         \
-        extern "C" void WRAP(name)(Params* params, void** program,                    \
-                                   F r, F g, F b, F a) {                              \
+        extern "C" ABI void WRAP(name)(Params* params, void** program,                \
+                                       F r, F g, F b, F a) {                          \
             name##_k(Ctx{program},params->dx,params->dy,params->tail, r,g,b,a,        \
                      params->dr, params->dg, params->db, params->da);                 \
-            auto next = (Stage*)load_and_inc(program);                                \
+            auto next = (Stage)load_and_inc(program);                                 \
             next(params,program, r,g,b,a);                                            \
         }                                                                             \
         SI void name##_k(__VA_ARGS__, size_t dx, size_t dy, size_t tail,              \
                          F& r, F& g, F& b, F& a, F& dr, F& dg, F& db, F& da)
 #else
-    #define STAGE(name, ...)                                                          \
-        SI void name##_k(__VA_ARGS__, size_t dx, size_t dy, size_t tail,              \
-                         F& r, F& g, F& b, F& a, F& dr, F& dg, F& db, F& da);         \
-        extern "C" void WRAP(name)(size_t tail, void** program, size_t dx, size_t dy, \
-                                   F r, F g, F b, F a, F dr, F dg, F db, F da) {      \
-            name##_k(Ctx{program},dx,dy,tail, r,g,b,a, dr,dg,db,da);                  \
-            auto next = (Stage*)load_and_inc(program);                                \
-            next(tail,program,dx,dy, r,g,b,a, dr,dg,db,da);                           \
-        }                                                                             \
-        SI void name##_k(__VA_ARGS__, size_t dx, size_t dy, size_t tail,              \
+    #define STAGE(name, ...)                                                              \
+        SI void name##_k(__VA_ARGS__, size_t dx, size_t dy, size_t tail,                  \
+                         F& r, F& g, F& b, F& a, F& dr, F& dg, F& db, F& da);             \
+        extern "C" ABI void WRAP(name)(size_t tail, void** program, size_t dx, size_t dy, \
+                                       F r, F g, F b, F a, F dr, F dg, F db, F da) {      \
+            name##_k(Ctx{program},dx,dy,tail, r,g,b,a, dr,dg,db,da);                      \
+            auto next = (Stage)load_and_inc(program);                                     \
+            next(tail,program,dx,dy, r,g,b,a, dr,dg,db,da);                               \
+        }                                                                                 \
+        SI void name##_k(__VA_ARGS__, size_t dx, size_t dy, size_t tail,                  \
                          F& r, F& g, F& b, F& a, F& dr, F& dg, F& db, F& da)
 #endif
 
@@ -117,9 +113,9 @@ extern "C" void WRAP(start_pipeline)(size_t dx, size_t dy, size_t xlimit, size_t
 // just_return() is a simple no-op stage that only exists to end the chain,
 // returning back up to start_pipeline(), and from there to the caller.
 #if defined(__i386__) || defined(_M_IX86) || defined(__arm__)
-    extern "C" void WRAP(just_return)(Params*, void**, F,F,F,F) {}
+    extern "C" ABI void WRAP(just_return)(Params*, void**, F,F,F,F) {}
 #else
-    extern "C" void WRAP(just_return)(size_t, void**, size_t,size_t, F,F,F,F, F,F,F,F) {}
+    extern "C" ABI void WRAP(just_return)(size_t, void**, size_t,size_t, F,F,F,F, F,F,F,F) {}
 #endif
 
 
@@ -198,18 +194,33 @@ SI T* ptr_at_xy(const SkJumper_MemoryCtx* ctx, int dx, int dy) {
     return (T*)ctx->pixels + dy*ctx->stride + dx;
 }
 
+// clamp v to [0,limit).
+SI F clamp(F v, F limit) {
+    F inclusive = bit_cast<F>( bit_cast<U32>(limit) - 1 );  // Exclusive -> inclusive.
+    return min(max(0, v), inclusive);
+}
+
 // Used by gather_ stages to calculate the base pointer and a vector of indices to load.
 template <typename T>
 SI U32 ix_and_ptr(T** ptr, const SkJumper_GatherCtx* ctx, F x, F y) {
-    auto clamp = [](F v, F limit) {
-        limit = bit_cast<F>( bit_cast<U32>(limit) - 1 );  // Exclusive -> inclusive.
-        return min(max(0, v), limit);
-    };
     x = clamp(x, ctx->width);
     y = clamp(y, ctx->height);
 
     *ptr = (const T*)ctx->pixels;
     return trunc_(y)*ctx->stride + trunc_(x);
+}
+
+// We often have a nominally [0,1] float value we need to scale and convert to an integer,
+// whether for a table lookup or to pack back down into bytes for storage.
+//
+// In practice, especially when dealing with interesting color spaces, that notionally
+// [0,1] float may be out of [0,1] range.  Unorms cannot represent that, so we must clamp.
+//
+// You can adjust the expected input to [0,bias] by tweaking that parameter.
+SI U32 to_unorm(F v, F scale, F bias = 1.0f) {
+    // TODO: platform-specific implementations to to_unorm(), removing round() entirely?
+    // Any time we use round() we probably want to use to_unorm().
+    return round(min(max(0, v), bias), scale);
 }
 
 // Now finally, normal Stages!
@@ -304,6 +315,9 @@ STAGE(store_rgba, float* ptr) {
 
 SI F inv(F x) { return 1.0f - x; }
 SI F two(F x) { return x + x; }
+SI F first (F a, F b) { return a; }
+SI F second(F a, F b) { return b; }
+
 
 BLEND_MODE(clear)    { return 0; }
 BLEND_MODE(srcatop)  { return s*da + d*inv(sa); }
@@ -487,18 +501,19 @@ STAGE(srcover_rgba_8888, const SkJumper_MemoryCtx* ctx) {
     db = cast((dst >> 16) & 0xff);
     da = cast((dst >> 24)       );
     // {dr,dg,db,da} are in [0,255]
-    // { r, g, b, a} are in [0,  1]
+    // { r, g, b, a} are in [0,  1] (but may be out of gamut)
 
     r = mad(dr, inv(a), r*255.0f);
     g = mad(dg, inv(a), g*255.0f);
     b = mad(db, inv(a), b*255.0f);
     a = mad(da, inv(a), a*255.0f);
-    // { r, g, b, a} are now in [0,255]
+    // { r, g, b, a} are now in [0,255]  (but may be out of gamut)
 
-    dst = round(r, 1.0f)
-        | round(g, 1.0f) <<  8
-        | round(b, 1.0f) << 16
-        | round(a, 1.0f) << 24;
+    // to_unorm() clamps back to gamut.  Scaling by 1 since we're already 255-biased.
+    dst = to_unorm(r, 1, 255)
+        | to_unorm(g, 1, 255) <<  8
+        | to_unorm(b, 1, 255) << 16
+        | to_unorm(a, 1, 255) << 24;
     store(ptr, dst, tail);
 }
 
@@ -511,18 +526,19 @@ STAGE(srcover_bgra_8888, const SkJumper_MemoryCtx* ctx) {
     dr = cast((dst >> 16) & 0xff);
     da = cast((dst >> 24)       );
     // {dr,dg,db,da} are in [0,255]
-    // { r, g, b, a} are in [0,  1]
+    // { r, g, b, a} are in [0,  1] (but may be out of gamut)
 
     r = mad(dr, inv(a), r*255.0f);
     g = mad(dg, inv(a), g*255.0f);
     b = mad(db, inv(a), b*255.0f);
     a = mad(da, inv(a), a*255.0f);
-    // { r, g, b, a} are now in [0,255]
+    // { r, g, b, a} are now in [0,255]  (but may be out of gamut)
 
-    dst = round(b, 1.0f)
-        | round(g, 1.0f) <<  8
-        | round(r, 1.0f) << 16
-        | round(a, 1.0f) << 24;
+    // to_unorm() clamps back to gamut.  Scaling by 1 since we're already 255-biased.
+    dst = to_unorm(b, 1, 255)
+        | to_unorm(g, 1, 255) <<  8
+        | to_unorm(r, 1, 255) << 16
+        | to_unorm(a, 1, 255) << 24;
     store(ptr, dst, tail);
 }
 
@@ -625,7 +641,7 @@ STAGE(to_srgb, Ctx::None) {
         const float c = 1.130026340485f,
                     d = 0.141387879848f;
     #elif defined(JUMPER_IS_SSE2) || defined(JUMPER_IS_SSE41) || \
-          defined(JUMPER_IS_AVX ) || defined(JUMPER_IS_AVX2 )
+          defined(JUMPER_IS_AVX ) || defined(JUMPER_IS_HSW )
         const float c = 1.130048394203f,
                     d = 0.141357362270f;
     #elif defined(JUMPER_IS_NEON)
@@ -797,24 +813,24 @@ STAGE(byte_tables, const void* ctx) {  // TODO: rename Tables SkJumper_ByteTable
     struct Tables { const uint8_t *r, *g, *b, *a; };
     auto tables = (const Tables*)ctx;
 
-    r = from_byte(gather(tables->r, round(r, 255.0f)));
-    g = from_byte(gather(tables->g, round(g, 255.0f)));
-    b = from_byte(gather(tables->b, round(b, 255.0f)));
-    a = from_byte(gather(tables->a, round(a, 255.0f)));
+    r = from_byte(gather(tables->r, to_unorm(r, 255)));
+    g = from_byte(gather(tables->g, to_unorm(g, 255)));
+    b = from_byte(gather(tables->b, to_unorm(b, 255)));
+    a = from_byte(gather(tables->a, to_unorm(a, 255)));
 }
 
 STAGE(byte_tables_rgb, const void* ctx) {  // TODO: rename Tables SkJumper_ByteTablesRGBCtx
     struct Tables { const uint8_t *r, *g, *b; int n; };
     auto tables = (const Tables*)ctx;
 
-    F scale = tables->n - 1;
-    r = from_byte(gather(tables->r, round(r, scale)));
-    g = from_byte(gather(tables->g, round(g, scale)));
-    b = from_byte(gather(tables->b, round(b, scale)));
+    int scale = tables->n - 1;
+    r = from_byte(gather(tables->r, to_unorm(r, scale)));
+    g = from_byte(gather(tables->g, to_unorm(g, scale)));
+    b = from_byte(gather(tables->b, to_unorm(b, scale)));
 }
 
 SI F table(F v, const SkJumper_TableCtx* ctx) {
-    return gather(ctx->table, round(v, ctx->size - 1));
+    return gather(ctx->table, to_unorm(v, ctx->size - 1));
 }
 STAGE(table_r, const SkJumper_TableCtx* ctx) { r = table(r, ctx); }
 STAGE(table_g, const SkJumper_TableCtx* ctx) { g = table(g, ctx); }
@@ -835,6 +851,11 @@ STAGE(gamma, const float* G) {
     r = approx_powf(r, *G);
     g = approx_powf(g, *G);
     b = approx_powf(b, *G);
+}
+STAGE(gamma_dst, const float* G) {
+    dr = approx_powf(dr, *G);
+    dg = approx_powf(dg, *G);
+    db = approx_powf(db, *G);
 }
 
 STAGE(lab_to_xyz, Ctx::None) {
@@ -877,7 +898,7 @@ STAGE(gather_a8, const SkJumper_GatherCtx* ctx) {
 STAGE(store_a8, const SkJumper_MemoryCtx* ctx) {
     auto ptr = ptr_at_xy<uint8_t>(ctx, dx,dy);
 
-    U8 packed = pack(pack(round(a, 255.0f)));
+    U8 packed = pack(pack(to_unorm(a, 255)));
     store(ptr, packed, tail);
 }
 
@@ -921,9 +942,9 @@ STAGE(gather_565, const SkJumper_GatherCtx* ctx) {
 STAGE(store_565, const SkJumper_MemoryCtx* ctx) {
     auto ptr = ptr_at_xy<uint16_t>(ctx, dx,dy);
 
-    U16 px = pack( round(r, 31.0f) << 11
-                 | round(g, 63.0f) <<  5
-                 | round(b, 31.0f)      );
+    U16 px = pack( to_unorm(r, 31) << 11
+                 | to_unorm(g, 63) <<  5
+                 | to_unorm(b, 31)      );
     store(ptr, px, tail);
 }
 
@@ -942,10 +963,10 @@ STAGE(gather_4444, const SkJumper_GatherCtx* ctx) {
 }
 STAGE(store_4444, const SkJumper_MemoryCtx* ctx) {
     auto ptr = ptr_at_xy<uint16_t>(ctx, dx,dy);
-    U16 px = pack( round(r, 15.0f) << 12
-                 | round(g, 15.0f) <<  8
-                 | round(b, 15.0f) <<  4
-                 | round(a, 15.0f)      );
+    U16 px = pack( to_unorm(r, 15) << 12
+                 | to_unorm(g, 15) <<  8
+                 | to_unorm(b, 15) <<  4
+                 | to_unorm(a, 15)      );
     store(ptr, px, tail);
 }
 
@@ -965,10 +986,10 @@ STAGE(gather_8888, const SkJumper_GatherCtx* ctx) {
 STAGE(store_8888, const SkJumper_MemoryCtx* ctx) {
     auto ptr = ptr_at_xy<uint32_t>(ctx, dx,dy);
 
-    U32 px = round(r, 255.0f)
-           | round(g, 255.0f) <<  8
-           | round(b, 255.0f) << 16
-           | round(a, 255.0f) << 24;
+    U32 px = to_unorm(r, 255)
+           | to_unorm(g, 255) <<  8
+           | to_unorm(b, 255) << 16
+           | to_unorm(a, 255) << 24;
     store(ptr, px, tail);
 }
 
@@ -988,10 +1009,10 @@ STAGE(gather_bgra, const SkJumper_GatherCtx* ctx) {
 STAGE(store_bgra, const SkJumper_MemoryCtx* ctx) {
     auto ptr = ptr_at_xy<uint32_t>(ctx, dx,dy);
 
-    U32 px = round(b, 255.0f)
-           | round(g, 255.0f) <<  8
-           | round(r, 255.0f) << 16
-           | round(a, 255.0f) << 24;
+    U32 px = to_unorm(b, 255)
+           | to_unorm(g, 255) <<  8
+           | to_unorm(r, 255) << 16
+           | to_unorm(a, 255) << 24;
     store(ptr, px, tail);
 }
 
@@ -1060,10 +1081,10 @@ STAGE(load_rgb_u16_be, const SkJumper_MemoryCtx* ctx) {
 STAGE(store_u16_be, const SkJumper_MemoryCtx* ctx) {
     auto ptr = ptr_at_xy<uint16_t>(ctx, 4*dx,dy);
 
-    U16 R = bswap(pack(round(r, 65535.0f))),
-        G = bswap(pack(round(g, 65535.0f))),
-        B = bswap(pack(round(b, 65535.0f))),
-        A = bswap(pack(round(a, 65535.0f)));
+    U16 R = bswap(pack(to_unorm(r, 65535))),
+        G = bswap(pack(to_unorm(g, 65535))),
+        B = bswap(pack(to_unorm(b, 65535))),
+        A = bswap(pack(to_unorm(a, 65535)));
 
     store4(ptr,tail, R,G,B,A);
 }
@@ -1163,7 +1184,7 @@ STAGE(matrix_perspective, const float* m) {
 SI void gradient_lookup(const SkJumper_GradientCtx* c, U32 idx, F t,
                         F* r, F* g, F* b, F* a) {
     F fr, br, fg, bg, fb, bb, fa, ba;
-#if defined(JUMPER_IS_AVX2) || defined(JUMPER_IS_AVX512)
+#if defined(JUMPER_IS_HSW) || defined(JUMPER_IS_AVX512)
     if (c->stopCount <=8) {
         fr = _mm256_permutevar8x32_ps(_mm256_loadu_ps(c->fs[0]), idx);
         br = _mm256_permutevar8x32_ps(_mm256_loadu_ps(c->bs[0]), idx);
@@ -1287,12 +1308,12 @@ SI F solve_2pt_conical_quadratic(const SkJumper_2PtConicalCtx* c, F x, F y, F (*
                   (-coeffB - sqrt_disc) * (invCoeffA * 0.5f));
 }
 
-STAGE(xy_to_2pt_conical_quadratic_max, const SkJumper_2PtConicalCtx* ctx) {
-    r = solve_2pt_conical_quadratic(ctx, r, g, max);
+STAGE(xy_to_2pt_conical_quadratic_first, const SkJumper_2PtConicalCtx* ctx) {
+    r = solve_2pt_conical_quadratic(ctx, r, g, first);
 }
 
-STAGE(xy_to_2pt_conical_quadratic_min, const SkJumper_2PtConicalCtx* ctx) {
-    r = solve_2pt_conical_quadratic(ctx, r, g, min);
+STAGE(xy_to_2pt_conical_quadratic_second, const SkJumper_2PtConicalCtx* ctx) {
+    r = solve_2pt_conical_quadratic(ctx, r, g, second);
 }
 
 STAGE(xy_to_2pt_conical_linear, const SkJumper_2PtConicalCtx* c) {
@@ -1501,4 +1522,46 @@ STAGE(gauss_a_to_rgba, Ctx::None) {
     r = a;
     g = a;
     b = a;
+}
+
+// A specialized fused image shader for clamp-x, clamp-y, non-sRGB sampling.
+STAGE(bilerp_clamp_8888, SkJumper_GatherCtx* ctx) {
+    // (cx,cy) are the center of our sample.
+    F cx = r,
+      cy = g;
+
+    // All sample points are at the same fractional offset (fx,fy).
+    // They're the 4 corners of a logical 1x1 pixel surrounding (x,y) at (0.5,0.5) offsets.
+    F fx = fract(cx + 0.5f),
+      fy = fract(cy + 0.5f);
+
+    // We'll accumulate the color of all four samples into {r,g,b,a} directly.
+    r = g = b = a = 0;
+
+    for (float dy = -0.5f; dy <= +0.5f; dy += 1.0f)
+    for (float dx = -0.5f; dx <= +0.5f; dx += 1.0f) {
+        // (x,y) are the coordinates of this sample point.
+        F x = cx + dx,
+          y = cy + dy;
+
+        // ix_and_ptr() will clamp to the image's bounds for us.
+        const uint32_t* ptr;
+        U32 ix = ix_and_ptr(&ptr, ctx, x,y);
+
+        F sr,sg,sb,sa;
+        from_8888(gather(ptr, ix), &sr,&sg,&sb,&sa);
+
+        // In bilinear interpolation, the 4 pixels at +/- 0.5 offsets from the sample pixel center
+        // are combined in direct proportion to their area overlapping that logical query pixel.
+        // At positive offsets, the x-axis contribution to that rectangle is fx,
+        // or (1-fx) at negative x.  Same deal for y.
+        F sx = (dx > 0) ? fx : 1.0f - fx,
+          sy = (dy > 0) ? fy : 1.0f - fy,
+          area = sx * sy;
+
+        r += sr * area;
+        g += sg * area;
+        b += sb * area;
+        a += sa * area;
+    }
 }

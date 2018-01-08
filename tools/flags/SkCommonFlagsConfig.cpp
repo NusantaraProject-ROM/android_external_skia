@@ -86,9 +86,6 @@ static const struct {
     { "angle_gl_es3",          "gpu", "api=angle_gl_es3" },
     { "commandbuffer",         "gpu", "api=commandbuffer" },
     { "mock",                  "gpu", "api=mock" }
-#if SK_MESA
-    ,{ "mesa",                 "gpu", "api=mesa" }
-#endif
 #ifdef SK_VULKAN
     ,{ "vk",                   "gpu", "api=vulkan" }
     ,{ "vksrgb",               "gpu", "api=vulkan,color=srgb" }
@@ -141,9 +138,6 @@ static const char configExtendedHelp[] =
     "\t\tangle_gl_es3\t\t\tUse OpenGL ES3 on the ANGLE OpenGL backend.\n"
     "\t\tcommandbuffer\t\tUse command buffer.\n"
     "\t\tmock\t\tUse mock context.\n"
-#if SK_MESA
-    "\t\tmesa\t\t\tUse MESA.\n"
-#endif
 #ifdef SK_VULKAN
     "\t\tvulkan\t\t\tUse Vulkan.\n"
 #endif
@@ -202,7 +196,7 @@ SkCommandLineConfig::~SkCommandLineConfig() {
 #if SK_SUPPORT_GPU
 SkCommandLineConfigGpu::SkCommandLineConfigGpu(
     const SkString& tag, const SkTArray<SkString>& viaParts, ContextType contextType, bool useNVPR,
-    bool useInstanced, bool useDIText, int samples, SkColorType colorType, SkAlphaType alphaType,
+    bool useDIText, int samples, SkColorType colorType, SkAlphaType alphaType,
     sk_sp<SkColorSpace> colorSpace, bool useStencilBuffers, bool testThreading)
         : SkCommandLineConfig(tag, SkString("gpu"), viaParts)
         , fContextType(contextType)
@@ -215,13 +209,10 @@ SkCommandLineConfigGpu::SkCommandLineConfigGpu(
         , fTestThreading(testThreading) {
     if (useNVPR) {
         fContextOverrides |= ContextOverrides::kRequireNVPRSupport;
-    } else if (!useInstanced) {
+    } else {
         // We don't disable NVPR for instanced configs. Otherwise the caps wouldn't use mixed
         // samples and we couldn't test the mixed samples backend for simple shapes.
         fContextOverrides |= ContextOverrides::kDisableNVPR;
-    }
-    if (useInstanced) {
-        fContextOverrides |= ContextOverrides::kUseInstanced;
     }
     // Subtle logic: If the config has a color space attached, we're going to be rendering to sRGB,
     // so we need that capability. In addition, to get the widest test coverage, we DO NOT require
@@ -307,12 +298,6 @@ static bool parse_option_gpu_api(const SkString& value,
         *outContextType = GrContextFactory::kMock_ContextType;
         return true;
     }
-#if SK_MESA
-    if (value.equals("mesa")) {
-        *outContextType = GrContextFactory::kMESA_ContextType;
-        return true;
-    }
-#endif
 #ifdef SK_VULKAN
     if (value.equals("vulkan")) {
         *outContextType = GrContextFactory::kVulkan_ContextType;
@@ -411,8 +396,6 @@ SkCommandLineConfigGpu* parse_command_line_config_gpu(const SkString& tag,
     SkCommandLineConfigGpu::ContextType contextType = GrContextFactory::kGL_ContextType;
     bool seenUseNVPR = false;
     bool useNVPR = false;
-    bool seenUseInstanced = false;
-    bool useInstanced = false;
     bool seenUseDIText =false;
     bool useDIText = false;
     bool seenSamples = false;
@@ -443,9 +426,6 @@ SkCommandLineConfigGpu* parse_command_line_config_gpu(const SkString& tag,
         } else if (key.equals("nvpr") && !seenUseNVPR) {
             valueOk = parse_option_bool(value, &useNVPR);
             seenUseNVPR = true;
-        } else if (key.equals("inst") && !seenUseInstanced) {
-            valueOk = parse_option_bool(value, &useInstanced);
-            seenUseInstanced = true;
         } else if (key.equals("dit") && !seenUseDIText) {
             valueOk = parse_option_bool(value, &useDIText);
             seenUseDIText = true;
@@ -469,7 +449,7 @@ SkCommandLineConfigGpu* parse_command_line_config_gpu(const SkString& tag,
     if (!seenAPI) {
         return nullptr;
     }
-    return new SkCommandLineConfigGpu(tag, vias, contextType, useNVPR, useInstanced, useDIText,
+    return new SkCommandLineConfigGpu(tag, vias, contextType, useNVPR, useDIText,
                                       samples, colorType, alphaType, colorSpace, useStencils,
                                       testThreading);
 }

@@ -22,69 +22,38 @@
  * (Use GrCCPRGeometry.)
  */
 class GrCCPRCubicShader : public GrCCPRCoverageProcessor::Shader {
-public:
-    enum class CubicType {
-        kSerpentine,
-        kLoop
-    };
-
 protected:
-    GrCCPRCubicShader(CubicType cubicType) : fCubicType(cubicType) {}
-
-    int getNumInputPoints() const final { return 4; }
-
-    void appendInputPointFetch(const GrCCPRCoverageProcessor&, GrGLSLShaderBuilder*,
-                               const TexelBufferHandle& pointsBuffer,
-                               const char* pointId) const final;
-
-    void emitWind(GrGLSLShaderBuilder*, const char* pts, const char* outputWind) const final;
-
-    void emitSetupCode(GrGLSLShaderBuilder*, const char* pts, const char* segmentId,
+    void emitSetupCode(GrGLSLVertexGeoBuilder*, const char* pts, const char* repetitionID,
                        const char* wind, GeometryVars*) const final;
 
-    virtual void onEmitSetupCode(GrGLSLShaderBuilder*, const char* pts, const char* segmentId,
-                                 GeometryVars*) const = 0;
+    virtual void onEmitSetupCode(GrGLSLVertexGeoBuilder*, const char* pts, const char* repetitionID,
+                                 GeometryVars*) const {}
 
     WindHandling onEmitVaryings(GrGLSLVaryingHandler*, SkString* code, const char* position,
                                 const char* coverage, const char* wind) final;
 
     virtual void onEmitVaryings(GrGLSLVaryingHandler*, SkString* code) = 0;
 
-    const CubicType   fCubicType;
-    GrShaderVar       fKLMMatrix{"klm_matrix", kFloat3x3_GrSLType};
-    GrShaderVar       fEdgeDistanceEquation{"edge_distance_equation", kFloat3_GrSLType};
-    GrGLSLGeoToFrag   fKLMD{kFloat4_GrSLType};
+    GrShaderVar fKLMMatrix{"klm_matrix", kFloat3x3_GrSLType};
+    GrShaderVar fEdgeDistanceEquation{"edge_distance_equation", kFloat3_GrSLType};
+    GrGLSLVarying fKLMD{kFloat4_GrSLType, GrGLSLVarying::Scope::kGeoToFrag};
 };
 
 class GrCCPRCubicHullShader : public GrCCPRCubicShader {
-public:
-    GrCCPRCubicHullShader(CubicType cubicType) : GrCCPRCubicShader(cubicType) {}
-
-private:
-    GeometryType getGeometryType() const override { return GeometryType::kHull; }
-    int getNumSegments() const override { return 4; } // 4 wedges.
-    void onEmitSetupCode(GrGLSLShaderBuilder*, const char* pts, const char* wedgeId,
-                         GeometryVars*) const override;
     void onEmitVaryings(GrGLSLVaryingHandler*, SkString* code) override;
     void onEmitFragmentCode(GrGLSLPPFragmentBuilder*, const char* outputCoverage) const override;
 
-    GrGLSLGeoToFrag fGradMatrix{kFloat2x2_GrSLType};
+    GrGLSLVarying fGradMatrix{kFloat2x2_GrSLType, GrGLSLVarying::Scope::kGeoToFrag};
 };
 
 class GrCCPRCubicCornerShader : public GrCCPRCubicShader {
-public:
-    GrCCPRCubicCornerShader(CubicType cubicType) : GrCCPRCubicShader(cubicType) {}
-
-private:
-    GeometryType getGeometryType() const override { return GeometryType::kCorners; }
-    int getNumSegments() const override { return 2; } // 2 corners.
-    void onEmitSetupCode(GrGLSLShaderBuilder*, const char* pts, const char* cornerId,
+    void onEmitSetupCode(GrGLSLVertexGeoBuilder*, const char* pts, const char* repetitionID,
                          GeometryVars*) const override;
     void onEmitVaryings(GrGLSLVaryingHandler*, SkString* code) override;
     void onEmitFragmentCode(GrGLSLPPFragmentBuilder*, const char* outputCoverage) const override;
 
-    GrGLSLGeoToFrag    fdKLMDdx{kFloat4_GrSLType};
-    GrGLSLGeoToFrag    fdKLMDdy{kFloat4_GrSLType};
+    GrGLSLVarying fdKLMDdx{kFloat4_GrSLType, GrGLSLVarying::Scope::kGeoToFrag};
+    GrGLSLVarying fdKLMDdy{kFloat4_GrSLType, GrGLSLVarying::Scope::kGeoToFrag};
 };
 
 #endif

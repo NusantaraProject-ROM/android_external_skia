@@ -13,6 +13,7 @@
 #include "glsl/GrGLSLFragmentProcessor.h"
 #include "glsl/GrGLSLFragmentShaderBuilder.h"
 #include "glsl/GrGLSLProgramBuilder.h"
+#include "GrTexture.h"
 #include "SkSLCPP.h"
 #include "SkSLUtil.h"
 class GrGLSLDitherEffect : public GrGLSLFragmentProcessor {
@@ -53,7 +54,7 @@ GrGLSLFragmentProcessor* GrDitherEffect::onCreateGLSLInstance() const {
 }
 void GrDitherEffect::onGetGLSLProcessorKey(const GrShaderCaps& caps,
                                            GrProcessorKeyBuilder* b) const {
-    b->add32(fRangeType);
+    b->add32((int32_t)fRangeType);
 }
 bool GrDitherEffect::onIsEqual(const GrFragmentProcessor& other) const {
     const GrDitherEffect& that = other.cast<GrDitherEffect>();

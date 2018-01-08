@@ -89,6 +89,12 @@
 #  define SK_SUPPORT_GPU 1
 #endif
 
+#if !defined(SK_SUPPORT_ATLAS_TEXT)
+#  define SK_SUPPORT_ATLAS_TEXT 0
+#elif SK_SUPPORT_ATLAS_TEXT && !SK_SUPPORT_GPU
+#  error "SK_SUPPORT_ATLAS_TEXT requires SK_SUPPORT_GPU"
+#endif
+
 /**
  * The clang static analyzer likes to know that when the program is not
  * expected to continue (crash, assertion failure, etc). It will notice that
@@ -123,7 +129,7 @@
 #
 #endif
 
-#if defined(GOOGLE3)
+#if defined(SK_BUILD_FOR_GOOGLE3)
     void SkDebugfForDumpStackTrace(const char* data, void* unused);
     void DumpStackTrace(int skip_count, void w(const char*, void*), void* arg);
 #  define SK_DUMP_GOOGLE3_STACK() DumpStackTrace(0, SkDebugfForDumpStackTrace, nullptr)
@@ -309,7 +315,7 @@
 //////////////////////////////////////////////////////////////////////
 
 #ifndef SK_SIZE_T_SPECIFIER
-#  if defined(_MSC_VER)
+#  if defined(_MSC_VER) && !defined(__clang__)
 #    define SK_SIZE_T_SPECIFIER "%Iu"
 #  else
 #    define SK_SIZE_T_SPECIFIER "%zu"

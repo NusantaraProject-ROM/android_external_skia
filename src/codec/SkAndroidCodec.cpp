@@ -47,7 +47,7 @@ static constexpr float kSRGB_D50_GamutArea = 0.084f;
 static bool is_wide_gamut(const SkColorSpace* colorSpace) {
     // Determine if the source image has a gamut that is wider than sRGB.  If so, we
     // will use P3 as the output color space to avoid clipping the gamut.
-    const SkMatrix44* toXYZD50 = as_CSB(colorSpace)->toXYZD50();
+    const SkMatrix44* toXYZD50 = colorSpace->toXYZD50();
     if (toXYZD50) {
         SkPoint rgb[3];
         load_gamut(rgb, *toXYZD50);
@@ -63,10 +63,6 @@ SkAndroidCodec::SkAndroidCodec(SkCodec* codec)
 {}
 
 SkAndroidCodec::~SkAndroidCodec() {}
-
-const SkEncodedInfo& SkAndroidCodec::getEncodedInfo() const {
-    return fCodec->getEncodedInfo();
-}
 
 std::unique_ptr<SkAndroidCodec> SkAndroidCodec::MakeFromStream(std::unique_ptr<SkStream> stream, SkPngChunkReader* chunkReader) {
     auto codec = SkCodec::MakeFromStream(std::move(stream), nullptr, chunkReader);

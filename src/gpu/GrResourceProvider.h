@@ -10,6 +10,7 @@
 
 #include "GrBuffer.h"
 #include "GrPathRange.h"
+#include "GrResourceCache.h"
 #include "SkImageInfo.h"
 #include "SkScalerContext.h"
 
@@ -130,6 +131,19 @@ public:
     sk_sp<GrRenderTarget> wrapBackendRenderTarget(const GrBackendRenderTarget&);
 
     static const uint32_t kMinScratchTextureSize;
+
+    /**
+     * Either finds and refs, or creates a static buffer with the given parameters and contents.
+     *
+     * @param intendedType    hint to the graphics subsystem about what the buffer will be used for.
+     * @param size            minimum size of buffer to return.
+     * @param data            optional data with which to initialize the buffer.
+     * @param key             Key to be assigned to the buffer.
+     *
+     * @return The buffer if successful, otherwise nullptr.
+     */
+    sk_sp<const GrBuffer> findOrMakeStaticBuffer(GrBufferType intendedType, size_t size,
+                                                 const void* data, const GrUniqueKey& key);
 
     /**
      * Either finds and refs, or creates an index buffer with a repeating pattern for drawing
@@ -259,6 +273,7 @@ public:
     static bool IsFunctionallyExact(GrSurfaceProxy* proxy);
 
     const GrCaps* caps() const { return fCaps.get(); }
+    bool overBudget() const { return fCache->overBudget(); }
 
 private:
     sk_sp<GrGpuResource> findResourceByUniqueKey(const GrUniqueKey&);

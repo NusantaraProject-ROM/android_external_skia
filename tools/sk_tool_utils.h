@@ -11,7 +11,6 @@
 #include "SkColor.h"
 #include "SkImageEncoder.h"
 #include "SkImageInfo.h"
-#include "SkPixelSerializer.h"
 #include "SkRandom.h"
 #include "SkStream.h"
 #include "SkTDArray.h"
@@ -20,6 +19,7 @@
 class SkBitmap;
 class SkCanvas;
 class SkColorFilter;
+class SkImage;
 class SkPaint;
 class SkPath;
 class SkRRect;
@@ -47,29 +47,9 @@ namespace sk_tool_utils {
     const char* emoji_sample_text();
 
     /**
-     * If the platform supports color emoji, return the type (i.e. "CBDT", "SBIX", "").
+     * Returns a string describing the platform font manager, if we're using one, otherwise "".
      */
-    const char* platform_os_emoji();
-
-    /**
-     * Return the platform name with the version number ("Mac10.9", "Win8", etc.) if available.
-     */
-    const char* platform_os_name();
-
-    /**
-     * Return the platform name without the version number ("Mac", "Win", etc.) if available.
-     */
-    SkString major_platform_os_name();
-
-    /**
-     * Return the platform extra config (e.g. "GDI") if available.
-     */
-    const char* platform_extra_config(const char* config);
-
-    /**
-     * Map serif, san-serif, and monospace to the platform-specific font name.
-     */
-    const char* platform_font_name(const char* name);
+    const char* platform_font_manager();
 
     /**
      * Sets the paint to use a platform-independent text renderer
@@ -99,8 +79,12 @@ namespace sk_tool_utils {
      *
      *  If the colorType is half-float, then maxDiff is interpreted as 0..255 --> 0..1
      */
-    bool equal_pixels(const SkPixmap&, const SkPixmap&, unsigned maxDiff = 0);
-    bool equal_pixels(const SkBitmap&, const SkBitmap&, unsigned maxDiff = 0);
+    bool equal_pixels(const SkPixmap&, const SkPixmap&, unsigned maxDiff = 0,
+                      bool respectColorSpaces = false);
+    bool equal_pixels(const SkBitmap&, const SkBitmap&, unsigned maxDiff = 0,
+                      bool respectColorSpaces = false);
+    bool equal_pixels(const SkImage* a, const SkImage* b, unsigned maxDiff = 0,
+                      bool respectColorSpaces = false);
 
     // private to sk_tool_utils
     sk_sp<SkTypeface> create_font(const char* name, SkFontStyle);
@@ -257,20 +241,6 @@ namespace sk_tool_utils {
     inline sk_sp<SkData> EncodeImageToData(const T& src, SkEncodedImageFormat f, int q) {
         SkDynamicMemoryWStream buf;
         return SkEncodeImage(&buf, src , f, q) ? buf.detachAsData() : nullptr;
-    }
-
-    /**
-     * Uses SkEncodeImage to serialize images that are not already
-     * encoded as SkEncodedImageFormat::kPNG images.
-     */
-    inline sk_sp<SkPixelSerializer> MakePixelSerializer() {
-        struct EncodeImagePixelSerializer final : SkPixelSerializer {
-            bool onUseEncodedData(const void*, size_t) override { return true; }
-            SkData* onEncode(const SkPixmap& pmap) override {
-                return EncodeImageToData(pmap, SkEncodedImageFormat::kPNG, 100).release();
-            }
-        };
-        return sk_make_sp<EncodeImagePixelSerializer>();
     }
 
     bool copy_to(SkBitmap* dst, SkColorType dstCT, const SkBitmap& src);

@@ -602,7 +602,9 @@ void GLSLCodeGenerator::writeBoolLiteral(const BoolLiteral& b) {
 void GLSLCodeGenerator::writeIntLiteral(const IntLiteral& i) {
     if (i.fType == *fContext.fUInt_Type) {
         this->write(to_string(i.fValue & 0xffffffff) + "u");
-    } else {
+    } else if (i.fType == *fContext.fUShort_Type) {
+        this->write(to_string(i.fValue & 0xffff) + "u");
+     } else {
         this->write(to_string((int32_t) i.fValue));
     }
 }
@@ -1022,6 +1024,8 @@ void GLSLCodeGenerator::writeProgramElement(const ProgramElement& e) {
             this->writeLine(";");
             break;
         }
+        case ProgramElement::kEnum_Kind:
+            break;
         default:
             printf("%s\n", e.description().c_str());
             ABORT("unsupported program element");

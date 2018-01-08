@@ -10,6 +10,7 @@
 
 #include "SkCommandLineFlags.h"
 #include "SkData.h"
+#include "SkJSONCPP.h"
 
 #include <algorithm>
 #include <cmath>
@@ -175,6 +176,12 @@ enum class KeyProperty {
     kPreprocessor,
 };
 
+enum class StatusFilter {
+    kCompleted,
+    kInProgress,
+    kUnknown,
+};
+
 struct IncludeKey {
     const char* fName;
     KeyWord fKeyWord;
@@ -228,6 +235,7 @@ class TextParser : public NonAssignable {
     TextParser() {}  // only for ParserCommon to call
     friend class ParserCommon;
 public:
+    virtual ~TextParser() {}
     class Save {
     public:
         Save(TextParser* parser) {
@@ -301,6 +309,33 @@ public:
     bool contains(const char* match, const char* lineEnd, const char** loc) const {
         *loc = this->strnstr(match, lineEnd);
         return *loc;
+    }
+
+    const char* doubleLF() const {
+        int count = 0;
+        const char* ptr = fChar;
+        const char* doubleStart = nullptr;
+        while (ptr < fEnd) {
+            if ('\n' == ptr[0]) {
+                if (++count == 1) {
+                    doubleStart = ptr;
+                } else {
+                    return doubleStart;
+                }
+            } else if (' ' < ptr[0]) {
+                count = 0;
+            }
+            ++ptr;
+        }
+        return nullptr;
+    }
+
+    bool endsWith(const char* match) {
+        int matchLen = strlen(match);
+        if (matchLen > fChar - fLine) {
+            return false;
+        }
+        return !strncmp(fChar - matchLen, match, matchLen);
     }
 
     bool eof() const { return fChar >= fEnd; }
@@ -431,7 +466,7 @@ public:
     // since a.b can't be found as a named definition
     void skipFullName() {
         while (fChar < fEnd && (isalnum(fChar[0])
-                || '_' == fChar[0] || '-' == fChar[0]
+                || '_' == fChar[0]  /* || '-' == fChar[0] */
                 || (':' == fChar[0] && fChar +1 < fEnd && ':' == fChar[1]))) {
             if (':' == fChar[0] && fChar +1 < fEnd && ':' == fChar[1]) {
                 fChar++;
@@ -464,6 +499,12 @@ public:
 
     void skipToSpace() {
         while (fChar < fEnd && ' ' != fChar[0]) {
+            fChar++;
+        }
+    }
+
+    void skipToWhiteSpace() {
+        while (fChar < fEnd && ' ' < fChar[0]) {
             fChar++;
         }
     }
@@ -603,6 +644,10 @@ public:
         }
     }
 
+    // FIXME: nothing else in TextParser knows from C++ --
+    // there could be a class between TextParser and ParserCommon
+    virtual string typedefName();
+
     const char* wordEnd() const {
         const char* end = fChar;
         while (isalnum(end[0]) || '_' == end[0] || '-' == end[0]) {
@@ -637,10 +682,11 @@ public:
                     for (int i = 0; i < 4; ++i) {
                         unicode <<= 4;
                         SkASSERT((reader[0] >= '0' && reader[0] <= '9') ||
-                            (reader[0] >= 'A' && reader[0] <= 'F'));
+                            (reader[0] >= 'A' && reader[0] <= 'F') ||
+                            (reader[0] >= 'a' && reader[0] <= 'f'));
                         int nibble = *reader++ - '0';
                         if (nibble > 9) {
-                            nibble = 'A'- '9' + 1;
+                            nibble = (nibble & ~('a' - 'A')) - 'A' + '9' + 1;
                         }
                         unicode |= nibble;
                     }
@@ -656,7 +702,7 @@ public:
         fEnd = writer;
     }
 
-    virtual ~EscapeParser() {
+    ~EscapeParser() override {
         delete fStorage;
     }
 private:
@@ -693,6 +739,26 @@ public:
         kConstructor,
         kDestructor,
         kOperator,
+    };
+
+    enum class Operator {
+        kUnknown,
+        kAdd,
+        kAddTo,
+        kArray,
+        kCast,
+        kCopy,
+        kDelete,
+        kDereference,
+        kEqual,
+        kMinus,
+        kMove,
+        kMultiply,
+        kMultiplyBy,
+        kNew,
+        kNotEqual,
+        kSubtract,
+        kSubtractFrom,
     };
 
     Definition() {}
@@ -744,116 +810,19 @@ public:
 
     virtual RootDefinition* asRoot() { SkASSERT(0); return nullptr; }
     virtual const RootDefinition* asRoot() const { SkASSERT(0); return nullptr; }
-
-    bool boilerplateIfDef(Definition* parent) {
-        const Definition& label = fTokens.front();
-        if (Type::kWord != label.fType) {
-            return false;
-        }
-        fName = string(label.fContentStart, label.fContentEnd - label.fContentStart);
-        return true;
-   }
-
-    // todo: this is matching #ifndef SkXXX_DEFINED for no particular reason
-    // it doesn't do anything useful with arbitrary input, e.g. #ifdef SK_SUPPORT_LEGACY_CANVAS_HELPERS
-// also doesn't know what to do with SK_REQUIRE_LOCAL_VAR()
-    bool boilerplateDef(Definition* parent) {
-        if (!this->boilerplateIfDef(parent)) {
-            return false;
-        }
-        const char* s = fName.c_str();
-        const char* e = strchr(s, '_');
-        return true; // fixme: if this is trying to do something useful with define, do it here
-        if (!e) {
-            return false;
-        }
-        string prefix(s, e - s);
-        const char* inName = strstr(parent->fName.c_str(), prefix.c_str());
-        if (!inName) {
-            return false;
-        }
-        if ('/' != inName[-1] && '\\' != inName[-1]) {
-            return false;
-        }
-        if (strcmp(inName + prefix.size(), ".h")) {
-            return false;
-        }
-        return true;
-    }
+    bool boilerplateIfDef(Definition* parent);
+    bool boilerplateDef(Definition* parent);
 
     bool boilerplateEndIf() {
         return true;
     }
 
     bool checkMethod() const;
-
-    void setCanonicalFiddle();
     bool crossCheck2(const Definition& includeToken) const;
     bool crossCheck(const Definition& includeToken) const;
     bool crossCheckInside(const char* start, const char* end, const Definition& includeToken) const;
     bool exampleToScript(string* result, ExampleOptions ) const;
-
-    string extractText(TrimExtract trimExtract) const {
-        string result;
-        TextParser parser(fFileName, fContentStart, fContentEnd, fLineCount);
-        int childIndex = 0;
-        char mc = '#';
-        while (parser.fChar < parser.fEnd) {
-            if (TrimExtract::kYes == trimExtract && !parser.skipWhiteSpace()) {
-                break;
-            }
-            if (parser.next() == mc) {
-                if (parser.next() == mc) {
-                    if (parser.next() == mc) {
-                        mc = parser.next();
-                    }
-                } else {
-                    // fixme : more work to do if # style comment is in text
-                    // if in method definition, could be alternate method name
-                    --parser.fChar;
-                    if (' ' < parser.fChar[0]) {
-                        if (islower(parser.fChar[0])) {
-                            result += '\n';
-                            parser.skipLine();
-                        } else {
-                            SkASSERT(isupper(parser.fChar[0]));
-                            parser.skipTo(fChildren[childIndex]->fTerminator);
-                            if (mc == parser.fChar[0] && mc == parser.fChar[1]) {
-                                parser.next();
-                                parser.next();
-                            }
-                            childIndex++;
-                        }
-                    } else {
-                        parser.skipLine();
-                    }
-                    continue;
-                }
-            } else {
-                --parser.fChar;
-            }
-            const char* end = parser.fEnd;
-            const char* mark = parser.strnchr(mc, end);
-            if (mark) {
-                end = mark;
-            }
-            string fragment(parser.fChar, end - parser.fChar);
-            trim_end(fragment);
-            if (TrimExtract::kYes == trimExtract) {
-                trim_start(fragment);
-                if (result.length()) {
-                    result += '\n';
-                    result += '\n';
-                }
-            }
-            if (TrimExtract::kYes == trimExtract || has_nonwhitespace(fragment)) {
-                result += fragment;
-            }
-            parser.skipTo(end);
-        }
-        return result;
-    }
-
+    string extractText(TrimExtract trimExtract) const;
     string fiddleName() const;
     string formatFunction() const;
     const Definition* hasChild(MarkType markType) const;
@@ -881,7 +850,9 @@ public:
     string methodName() const;
     bool nextMethodParam(TextParser* methodParser, const char** nextEndPtr,
                          string* paramName) const;
+    static string NormalizedName(string name);
     bool paramsMatch(const string& fullRef, const string& name) const;
+    bool parseOperator(size_t doubleColons, string& result);
 
     string printableName() const {
         string result(fName);
@@ -896,10 +867,13 @@ public:
     }
 
     virtual RootDefinition* rootParent() { SkASSERT(0); return nullptr; }
+    void setCanonicalFiddle();
 
     void setParentIndex() {
         fParentIndex = fParent ? (int) fParent->fTokens.size() : -1;
     }
+
+    void setWrapper();
 
     string fText;  // if text is constructed instead of in a file, it's put here
     const char* fStart = nullptr;  // .. in original text file, or the start of fText
@@ -913,6 +887,7 @@ public:
     vector<Definition*> fChildren;
     string fHash;  // generated by fiddle
     string fFileName;
+    mutable string fWrapper; // used by Example to wrap into proper function
     size_t fLineCount = 0;
     int fParentIndex = 0;
     MarkType fMarkType = MarkType::kNone;
@@ -920,9 +895,11 @@ public:
     Bracket fBracket = Bracket::kNone;
     Punctuation fPunctuation = Punctuation::kNone;
     MethodType fMethodType = MethodType::kNone;
+    Operator fOperator = Operator::kUnknown;
     Type fType = Type::kNone;
     bool fClone = false;
     bool fCloned = false;
+    bool fOperatorConst = false;
     bool fPrivate = false;
     bool fShort = false;
     bool fMemberStart = false;
@@ -957,7 +934,7 @@ public:
     RootDefinition* asRoot() override { return this; }
     const RootDefinition* asRoot() const override { return this; }
     void clearVisited();
-    bool dumpUnVisited();
+    bool dumpUnVisited(bool skip);
     const Definition* find(const string& ref, AllowParens ) const;
     bool isRoot() const override { return true; }
     RootDefinition* rootParent() override { return fRootParent; }
@@ -974,6 +951,7 @@ struct IClassDefinition : public Definition {
     unordered_map<string, Definition*> fMembers;
     unordered_map<string, Definition*> fMethods;
     unordered_map<string, Definition*> fStructs;
+    unordered_map<string, Definition*> fTypedefs;
 };
 
 struct Reference {
@@ -1000,7 +978,7 @@ public:
     {
     }
 
-    virtual ~ParserCommon() {
+    ~ParserCommon() override {
     }
 
     void addDefinition(Definition* def) {
@@ -1053,6 +1031,7 @@ public:
     }
 
     bool parseFile(const char* file, const char* suffix);
+    bool parseStatus(const char* file, const char* suffix, StatusFilter filter);
     virtual bool parseFromFile(const char* path) = 0;
     bool parseSetup(const char* path);
 
@@ -1087,7 +1066,6 @@ public:
     void singleLF() {
         fMaxLF = 1;
     }
-
 
     void writeBlock(int size, const char* data) {
         SkAssertResult(writeBlockTrim(size, data));
@@ -1144,7 +1122,28 @@ private:
     typedef TextParser INHERITED;
 };
 
+struct JsonStatus {
+    const Json::Value& fObject;
+    Json::Value::iterator fIter;
+    string fName;
+};
 
+class StatusIter : public ParserCommon {
+public:
+    StatusIter(const char* statusFile, const char* suffix, StatusFilter);
+    ~StatusIter() override {}
+    string baseDir();
+    bool empty() { return fStack.empty(); }
+    bool next(string* file);
+protected:
+    bool parseFromFile(const char* path) override;
+    void reset() override;
+private:
+    vector<JsonStatus> fStack;
+    Json::Value fRoot;
+    const char* fSuffix;
+    StatusFilter fFilter;
+};
 
 class BmhParser : public ParserCommon {
 public:
@@ -1190,7 +1189,7 @@ public:
 #define E_N Exemplary::kNo
 #define E_O Exemplary::kOptional
 
-    BmhParser() : ParserCommon()
+    BmhParser(bool skip) : ParserCommon()
         , fMaps {
 // names without formal definitions (e.g. Column) aren't included
 // fill in other names once they're actually used
@@ -1235,7 +1234,8 @@ public:
 , { "Return",      nullptr,      MarkType::kReturn,       R_Y, E_N, M(Method) }
 , { "",            nullptr,      MarkType::kRoot,         R_Y, E_N, 0 }
 , { "",            nullptr,      MarkType::kRow,          R_Y, E_N, M(Table) | M(List) }
-, { "SeeAlso",     nullptr,      MarkType::kSeeAlso,      R_Y, E_N, M_CSST | M_E | M(Method) }
+, { "SeeAlso",     nullptr,      MarkType::kSeeAlso,      R_Y, E_N,
+                                                             M_CSST | M_E | M(Method) | M(Typedef) }
 , { "StdOut",      nullptr,      MarkType::kStdOut,       R_N, E_N, M(Example) }
 , { "Struct",      &fClassMap,   MarkType::kStruct,       R_Y, E_O, M(Class) | M(Root) | M_ST }
 , { "Substitute",  nullptr,      MarkType::kSubstitute,   R_N, E_N, M_ST }
@@ -1247,10 +1247,11 @@ public:
 , { "ToDo",        nullptr,      MarkType::kToDo,         R_N, E_N, 0 }
 , { "Topic",       nullptr,      MarkType::kTopic,        R_Y, E_Y, M_CS | M(Root) | M(Topic) }
 , { "Track",       nullptr,      MarkType::kTrack,        R_Y, E_N, M_E | M_ST }
-, { "Typedef",     &fTypedefMap, MarkType::kTypedef,      R_Y, E_N, M(Subtopic) | M(Topic) }
+, { "Typedef",     &fTypedefMap, MarkType::kTypedef,      R_Y, E_N, M(Class) | M_ST }
 , { "",            nullptr,      MarkType::kUnion,        R_Y, E_N, 0 }
 , { "Volatile",    nullptr,      MarkType::kVolatile,     R_N, E_N, M(StdOut) }
 , { "Width",       nullptr,      MarkType::kWidth,        R_N, E_N, M(Example) } }
+, fSkip(skip)
         {
             this->reset();
         }
@@ -1323,8 +1324,10 @@ public:
     bool skipNoName();
     bool skipToDefinitionEnd(MarkType markType);
     void spellCheck(const char* match, SkCommandLineFlags::StringArray report) const;
+    void spellStatus(const char* match, SkCommandLineFlags::StringArray report) const;
     vector<string> topicName();
     vector<string> typeName(MarkType markType, bool* expectEnd);
+    string typedefName() override;
     string uniqueName(const string& base, MarkType markType);
     string uniqueRootName(const string& base, MarkType markType);
     void validate() const;
@@ -1366,6 +1369,7 @@ public:
     bool fInComment;
     bool fInString;
     bool fCheckMethods;
+    bool fSkip = false;
     bool fWroteOut = false;
 private:
     typedef ParserCommon INHERITED;
@@ -1504,6 +1508,7 @@ public:
     bool parseEnum(Definition* child, Definition* markupDef);
 
     bool parseFromFile(const char* path) override {
+        this->reset();
         if (!INHERITED::parseSetup(path)) {
             return false;
         }
@@ -1517,7 +1522,7 @@ public:
     bool parseObject(Definition* child, Definition* markupDef);
     bool parseObjects(Definition* parent, Definition* markupDef);
     bool parseTemplate();
-    bool parseTypedef();
+    bool parseTypedef(Definition* child, Definition* markupDef);
     bool parseUnion();
 
     void popBracket() {
@@ -1547,6 +1552,7 @@ public:
         fInEnum = false;
         fInFunction = false;
         fInString = false;
+        fFailed = false;
     }
 
     void setBracketShortCuts(Bracket bracket) {
@@ -1707,6 +1713,7 @@ protected:
     unordered_map<string, IClassDefinition> fIClassMap;
     unordered_map<string, Definition> fIDefineMap;
     unordered_map<string, Definition> fIEnumMap;
+    unordered_map<string, Definition> fIFunctionMap;
     unordered_map<string, Definition> fIStructMap;
     unordered_map<string, Definition> fITemplateMap;
     unordered_map<string, Definition> fITypedefMap;
@@ -1722,6 +1729,7 @@ protected:
     bool fInEnum;
     bool fInFunction;
     bool fInString;
+    bool fFailed;
 
     typedef ParserCommon INHERITED;
 };
@@ -1813,7 +1821,6 @@ public:
         fMethodDef = nullptr;
         fBmhStructDef = nullptr;
         fAttrDeprecated = nullptr;
-        fAnonymousEnumCount = 1;
         fInStruct = false;
         fWroteMethod = false;
         fIndentNext = false;
@@ -1913,6 +1920,7 @@ public:
     bool appendFile(const string& path);
     bool closeCatalog();
     bool openCatalog(const char* inDir, const char* outDir);
+    bool openStatus(const char* inDir, const char* outDir);
 
     bool parseFromFile(const char* path) override ;
 private:
@@ -1956,6 +1964,7 @@ public:
     }
 
     bool buildReferences(const char* path, const char* outDir);
+    bool buildStatus(const char* path, const char* outDir);
 private:
     enum class TableState {
         kNone,
@@ -1988,6 +1997,7 @@ private:
         fHasFiddle = false;
         fInDescription = false;
         fInList = false;
+        fRespectLeadingSpace = false;
     }
 
     BmhParser::Resolvable resolvable(const Definition* definition) const {
@@ -2018,6 +2028,7 @@ private:
     bool fInDescription;   // FIXME: for now, ignore unfound camelCase in description since it may
                            // be defined in example which at present cannot be linked to
     bool fInList;
+    bool fRespectLeadingSpace;
     typedef ParserCommon INHERITED;
 };
 
@@ -2030,6 +2041,8 @@ public:
         : TextParser(fileName, start, end, lineCount)
         , fClassName(className) {
     }
+
+    ~MethodParser() override {}
 
     void skipToMethodStart() {
         if (!fClassName.length()) {
@@ -2054,10 +2067,11 @@ public:
                 }
             }
             if (this->startsWith(fClassName.c_str()) || this->startsWith("operator")) {
-                const char* ptr = this->anyOf(" (");
+                const char* ptr = this->anyOf("\n (");
                 if (ptr && '(' ==  *ptr) {
                     this->skipToEndBracket(')');
                     SkAssertResult(')' == this->next());
+                    this->skipExact("_const");
                     return;
                 }
             }
@@ -2066,6 +2080,14 @@ public:
             this->skipToNonAlphaNum();
         } else {
             this->skipFullName();
+            if (this->endsWith("operator")) {
+                const char* ptr = this->anyOf("\n (");
+                if (ptr && '(' ==  *ptr) {
+                    this->skipToEndBracket(')');
+                    SkAssertResult(')' == this->next());
+                    this->skipExact("_const");
+                }
+            }
         }
     }
 
