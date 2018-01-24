@@ -784,6 +784,9 @@ static bool gather_srcs() {
         gather_file_srcs<SKPSrc>(FLAGS_skps, "skp");
     }
     gather_file_srcs<MSKPSrc>(FLAGS_mskps, "mskp");
+#if !defined(SK_BUILD_FOR_GOOGLE3)
+    gather_file_srcs<SkottySrc>(FLAGS_jsons, "json");
+#endif
 #if defined(SK_XML)
     gather_file_srcs<SVGSrc>(FLAGS_svgs, "svg");
 #endif
@@ -891,6 +894,7 @@ static Sink* create_sink(const GrContextOptions& grCtxOptions, const SkCommandLi
         auto srgbColorSpace = SkColorSpace::MakeSRGB();
         auto srgbLinearColorSpace = SkColorSpace::MakeSRGBLinear();
 
+        SINK("g8",      RasterSink, kGray_8_SkColorType);
         SINK("565",     RasterSink, kRGB_565_SkColorType);
         SINK("8888",    RasterSink, kN32_SkColorType);
         SINK("srgb",    RasterSink, kN32_SkColorType, srgbColorSpace);

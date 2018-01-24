@@ -526,8 +526,13 @@ bool Definition::exampleToScript(string* result, ExampleOptions exampleOptions) 
     string normalizedName(fFiddle);
     string code;
     string imageStr = "0";
+    string srgbStr = "false";
+    string durationStr = "0";
     for (auto const& iter : fChildren) {
         switch (iter->fMarkType) {
+            case MarkType::kDuration:
+                durationStr = string(iter->fContentStart, iter->fContentEnd - iter->fContentStart);
+                break;
             case MarkType::kError:
                 result->clear();
                 return true;
@@ -562,6 +567,15 @@ bool Definition::exampleToScript(string* result, ExampleOptions exampleOptions) 
             case MarkType::kPlatform:
                 // ignore for now
                 break;
+            case MarkType::kSet:
+                if ("sRGB" == string(iter->fContentStart,
+                                     iter->fContentEnd - iter->fContentStart)) {
+                    srgbStr = "true";
+                } else {
+                    SkASSERT(0);   // more work to do
+                    return false;
+                }
+                break;
             case MarkType::kStdOut:
                 textOut = true;
                 break;
@@ -569,6 +583,7 @@ bool Definition::exampleToScript(string* result, ExampleOptions exampleOptions) 
                 SkASSERT(0);  // more coding to do
         }
     }
+    string animatedStr = "0" != durationStr ? "true" : "false";
     string textOutStr = textOut ? "true" : "false";
     size_t pos = 0;
     while (pos < text.length() && ' ' > text[pos]) {
@@ -609,11 +624,11 @@ bool Definition::exampleToScript(string* result, ExampleOptions exampleOptions) 
             example += "        \"width\": " + widthStr + ",\n";
             example += "        \"height\": " + heightStr + ",\n";
             example += "        \"source\": " + imageStr + ",\n";
-            example += "        \"srgb\": false,\n";
+            example += "        \"srgb\": " + srgbStr + ",\n";
             example += "        \"f16\": false,\n";
             example += "        \"textOnly\": " + textOutStr + ",\n";
-            example += "        \"animated\": false,\n";
-            example += "        \"duration\": 0\n";
+            example += "        \"animated\": " + animatedStr + ",\n";
+            example += "        \"duration\": " + durationStr + "\n";
             example += "    },\n";
             example += "    \"fast\": true";
         }
@@ -1025,6 +1040,18 @@ const Definition* Definition::hasParam(const string& ref) const {
     return nullptr;
 }
 
+bool Definition::hasMatch(const string& name) const {
+    for (auto child : fChildren) {
+        if (name == child->fName) {
+            return true;
+        }
+        if (child->hasMatch(name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool Definition::methodHasReturn(const string& name, TextParser* methodParser) const {
     if (methodParser->skipExact("static")) {
         methodParser->skipWhiteSpace();
@@ -1205,18 +1232,10 @@ void RootDefinition::clearVisited() {
     }
 }
 
-bool RootDefinition::dumpUnVisited(bool skip) {
-    bool allStructElementsFound = true;
+bool RootDefinition::dumpUnVisited() {
+    bool success = true;
     for (auto& leaf : fLeaves) {
         if (!leaf.second.fVisited) {
-            // TODO: parse embedded struct in includeParser phase, then remove this condition
-            if (skip) {
-                const Definition& def = leaf.second;
-                if (def.fChildren.size() > 0 &&
-                        MarkType::kDeprecated == def.fChildren[0]->fMarkType) {
-                    continue;
-                }
-            }
             // FIXME: bugs requiring long tail fixes, suppressed here:
             // SkBitmap::validate() is wrapped in SkDEBUGCODE in .h and not parsed
             if ("SkBitmap::validate()" == leaf.first) {
@@ -1228,12 +1247,13 @@ bool RootDefinition::dumpUnVisited(bool skip) {
             }
             // FIXME: end of long tail bugs
             SkDebugf("defined in bmh but missing in include: %s\n", leaf.first.c_str());
+            success = false;
         }
     }
     for (auto& branch : fBranches) {
-        allStructElementsFound &= branch.second->dumpUnVisited(skip);
+        success &= branch.second->dumpUnVisited();
     }
-    return allStructElementsFound;
+    return success;
 }
 
 const Definition* RootDefinition::find(const string& ref, AllowParens allowParens) const {

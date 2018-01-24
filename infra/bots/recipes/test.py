@@ -94,6 +94,7 @@ def dm_flags(api, bot):
       configs.remove('pdf')
 
     if '-GCE-' in bot:
+      configs.extend(['g8'])
       configs.extend(['565'])
       configs.extend(['f16'])
       configs.extend(['sp-8888', '2ndpic-8888']) # Test niche uses of SkPicture.
@@ -266,6 +267,10 @@ def dm_flags(api, bot):
   # Not any point to running these.
   blacklist('gbr-8888 image _ _')
   blacklist('gbr-8888 colorImage _ _')
+
+  # --src image --config g8 means "decode into Gray8", which isn't supported.
+  blacklist('g8 image _ _')
+  blacklist('g8 colorImage _ _')
 
   if 'Valgrind' in bot:
     # These take 18+ hours to run.
@@ -667,6 +672,7 @@ def dm_flags(api, bot):
     match.append('~XfermodeImageFilterCroppedInput_Gpu')
     match.append('~GrDefaultPathRendererTest') #skia:7244
     match.append('~GrMSAAPathRendererTest') #skia:7244
+    match.append('~SkImage_makeNonTextureImage')
 
   if (('RadeonR9M470X' in bot or 'RadeonHD7770' in bot) and 'ANGLE' in bot):
     # skia:7096
@@ -891,6 +897,8 @@ TEST_BUILDERS = [
   'Test-Android-Clang-NVIDIA_Shield-GPU-TegraX1-arm64-Debug-All-Android',
   'Test-Android-Clang-NVIDIA_Shield-GPU-TegraX1-arm64-Debug-All-Android_CCPR',
   'Test-Android-Clang-Nexus5-GPU-Adreno330-arm-Release-All-Android',
+  ('Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Debug-All'
+   '-Android_ASAN'),
   ('Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Debug-All'
    '-Android_NoGPUThreads'),
   'Test-Android-Clang-Nexus7-CPU-Tegra3-arm-Release-All-Android',

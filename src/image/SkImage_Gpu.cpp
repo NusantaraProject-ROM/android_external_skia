@@ -211,9 +211,13 @@ bool SkImage_Gpu::onReadPixels(const SkImageInfo& dstInfo, void* dstPixels, size
     // with arbitrary color spaces. Unfortunately, this is one spot where we go from image to
     // surface (rather than the opposite), and our lenient image rules break our (currently) more
     // strict surface rules.
+    // We treat null-dst color space as always equal to fColorSpace for this kind of read-back.
     sk_sp<SkColorSpace> surfaceColorSpace = fColorSpace;
-    if (!flags && SkColorSpace::Equals(fColorSpace.get(), dstInfo.colorSpace())) {
-        surfaceColorSpace = nullptr;
+    if (!flags) {
+        if (!dstInfo.colorSpace() ||
+                SkColorSpace::Equals(fColorSpace.get(), dstInfo.colorSpace())) {
+            surfaceColorSpace = nullptr;
+        }
     }
 
     sk_sp<GrSurfaceContext> sContext = fContext->contextPriv().makeWrappedSurfaceContext(
@@ -608,8 +612,8 @@ sk_sp<SkImage> SkImage::MakeCrossContextFromPixmap(GrContext* context, const SkP
         bmp.installPixels(pixmap);
         proxy = GrGenerateMipMapsAndUploadToTextureProxy(context, bmp, dstColorSpace);
     } else {
-        proxy = GrUploadPixmapToTextureProxy(context->resourceProvider(), pixmap, SkBudgeted::kYes,
-                                             dstColorSpace);
+        proxy = GrUploadPixmapToTextureProxy(context->contextPriv().proxyProvider(),
+                                             pixmap, SkBudgeted::kYes, dstColorSpace);
     }
 
     if (!proxy) {
@@ -636,24 +640,6 @@ sk_sp<SkImage> SkImage::MakeFromAHardwareBuffer(AHardwareBuffer* graphicBuffer, 
     return SkImage::MakeFromGenerator(std::move(gen));
 }
 #endif
-
-sk_sp<SkImage> SkImage::makeNonTextureImage() const {
-    if (!this->isTextureBacked()) {
-        return sk_ref_sp(const_cast<SkImage*>(this));
-    }
-    SkImageInfo info = as_IB(this)->onImageInfo();
-    size_t rowBytes = info.minRowBytes();
-    size_t size = info.computeByteSize(rowBytes);
-    auto data = SkData::MakeUninitialized(size);
-    if (!data) {
-        return nullptr;
-    }
-    SkPixmap pm(info, data->writable_data(), rowBytes);
-    if (!this->readPixels(pm, 0, 0, kDisallow_CachingHint)) {
-        return nullptr;
-    }
-    return MakeRasterData(info, data, rowBytes);
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1015,7 +1001,7 @@ sk_sp<SkImage> SkImage::MakeFromDeferredTextureImageData(GrContext* context, con
         // verification.  This is ok because we've already verified the color space in
         // getDeferredTextureImageData().
         sk_sp<GrTextureProxy> proxy(GrUploadPixmapToTextureProxy(
-                context->resourceProvider(), pixmap, budgeted, nullptr));
+                context->contextPriv().proxyProvider(), pixmap, budgeted, nullptr));
         if (!proxy) {
             return nullptr;
         }

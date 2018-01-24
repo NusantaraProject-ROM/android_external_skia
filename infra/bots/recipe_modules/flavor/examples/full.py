@@ -59,6 +59,7 @@ def RunSteps(api):
 TEST_BUILDERS = [
   'Build-Debian9-Clang-arm-Release-Android_API26',
   'Build-Debian9-Clang-arm-Release-Chromebook_GLES',
+  'Build-Debian9-Clang-arm64-Release-Android_ASAN',
   'Build-Debian9-Clang-x86_64-Debug-Chromebook_GLES',
   'Build-Debian9-Clang-x86_64-Debug-SK_USE_DISCARDABLE_SCALEDIMAGECACHE',
   'Build-Debian9-Clang-x86_64-Release-Fast',
@@ -73,6 +74,7 @@ TEST_BUILDERS = [
   'Build-Debian9-GCC-x86_64-Release-PDFium_SkiaPaths',
   'Build-Debian9-GCC-x86_64-Release-Shared',
   'Build-Mac-Clang-arm64-Debug-Android_Vulkan',
+  'Build-Mac-Clang-arm64-Debug-iOS',
   'Build-Mac-Clang-x86_64-Debug-CommandBuffer',
   'Build-Mac-Clang-x86_64-Debug-Metal',
   'Build-Win-Clang-arm64-Release-Android',
@@ -84,8 +86,9 @@ TEST_BUILDERS = [
   'Build-Win-Clang-x86_64-Release-Vulkan',
   'Build-Win-MSVC-x86-Debug-Exceptions',
   'Housekeeper-PerCommit-CheckGeneratedFiles',
-  'Perf-Android-Clang-NexusPlayer-GPU-PowerVR-x86-Debug-All-Android',
   'Perf-Android-Clang-GalaxyS7_G930FD-GPU-MaliT880-arm64-Debug-All-Android',
+  'Perf-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Debug-All-Android',
+  'Perf-Android-Clang-NexusPlayer-GPU-PowerVR-x86-Debug-All-Android',
   'Perf-Android-Clang-Pixel-GPU-Adreno530-arm64-Debug-All-Android',
   'Perf-ChromeOS-Clang-SamsungChromebookPlus-GPU-MaliT860-arm-Release-All',
   'Perf-Chromecast-GCC-Chorizo-CPU-Cortex_A7-arm-Release-All',
@@ -95,6 +98,7 @@ TEST_BUILDERS = [
   'Test-Android-Clang-AndroidOne-GPU-Mali400MP2-arm-Release-All-Android',
   'Test-Android-Clang-GalaxyS7_G930FD-GPU-MaliT880-arm64-Debug-All-Android',
   'Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Debug-All-Android',
+  'Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_ASAN',
   'Test-Android-Clang-Nexus7-CPU-Tegra3-arm-Release-All-Android',
   'Test-Android-Clang-Pixel-GPU-Adreno530-arm64-Debug-All-Android',
   'Test-ChromeOS-Clang-SamsungChromebookPlus-GPU-MaliT860-arm-Release-All',
@@ -198,4 +202,27 @@ def GenTests(api):
                      path_config='kitchen',
                      swarm_out_dir='[SWARM_OUT_DIR]') +
       api.step_data('Scale CPU 0 to 0.600000', retcode=1)
+  )
+
+  builder = 'Test-iOS-Clang-iPhone7-GPU-GT7600-arm64-Release-All'
+  fail_step_name = 'install_dm'
+  yield (
+      api.test('retry_ios_install') +
+      api.properties(buildername=builder,
+                     repository='https://skia.googlesource.com/skia.git',
+                     revision='abc123',
+                     path_config='kitchen',
+                     swarm_out_dir='[SWARM_OUT_DIR]') +
+      api.step_data(fail_step_name, retcode=1)
+  )
+
+  yield (
+      api.test('retry_ios_install_retries_exhausted') +
+      api.properties(buildername=builder,
+                     repository='https://skia.googlesource.com/skia.git',
+                     revision='abc123',
+                     path_config='kitchen',
+                     swarm_out_dir='[SWARM_OUT_DIR]') +
+      api.step_data(fail_step_name, retcode=1) +
+      api.step_data(fail_step_name + ' (attempt 2)', retcode=1)
   )

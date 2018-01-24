@@ -766,7 +766,7 @@ static bool must_filter(const SkRect& src, const SkRect& dst, const SkMatrix& ct
 
 void GrRenderTargetContext::drawTextureAffine(const GrClip& clip, sk_sp<GrTextureProxy> proxy,
                                               GrSamplerState::Filter filter, GrColor color,
-                                              const SkRect& srcRect, const SkRect& dstRect,
+                                              const SkRect& srcRect, const SkRect& dstRect, GrAA aa,
                                               const SkMatrix& viewMatrix,
                                               sk_sp<GrColorSpaceXform> colorSpaceXform) {
     ASSERT_SINGLE_OWNER
@@ -785,9 +785,9 @@ void GrRenderTargetContext::drawTextureAffine(const GrClip& clip, sk_sp<GrTextur
     }
 
     bool allowSRGB = SkToBool(this->colorSpaceInfo().colorSpace());
-    this->addDrawOp(clip, GrTextureOp::Make(std::move(proxy), filter, color, clippedSrcRect,
-                                            clippedDstRect, viewMatrix, std::move(colorSpaceXform),
-                                            allowSRGB));
+    this->addDrawOp(
+            clip, GrTextureOp::Make(std::move(proxy), filter, color, clippedSrcRect, clippedDstRect,
+                                    aa, viewMatrix, std::move(colorSpaceXform), allowSRGB));
 }
 
 void GrRenderTargetContext::fillRectWithLocalMatrix(const GrClip& clip,
@@ -1428,7 +1428,8 @@ bool GrRenderTargetContext::waitOnSemaphores(int numSemaphores,
     SkTArray<sk_sp<GrSemaphore>> semaphores(numSemaphores);
     for (int i = 0; i < numSemaphores; ++i) {
         sk_sp<GrSemaphore> sema = fContext->resourceProvider()->wrapBackendSemaphore(
-                waitSemaphores[i], kAdopt_GrWrapOwnership);
+                waitSemaphores[i], GrResourceProvider::SemaphoreWrapType::kWillWait,
+                kAdopt_GrWrapOwnership);
         std::unique_ptr<GrOp> waitOp(GrSemaphoreOp::MakeWait(sema, fRenderTargetProxy.get()));
         this->getRTOpList()->addOp(std::move(waitOp), *this->caps());
     }

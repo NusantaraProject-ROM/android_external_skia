@@ -313,6 +313,13 @@ sk_sp<SkImage> SkImage::makeColorSpace(sk_sp<SkColorSpace> target,
     return as_IB(this)->onMakeColorSpace(std::move(target), targetColorType, premulBehavior);
 }
 
+sk_sp<SkImage> SkImage::makeNonTextureImage() const {
+    if (!this->isTextureBacked()) {
+        return sk_ref_sp(const_cast<SkImage*>(this));
+    }
+    return this->makeRasterImage();
+}
+
 sk_sp<SkImage> SkImage::makeRasterImage() const {
     SkPixmap pm;
     if (this->peekPixels(&pm)) {
@@ -327,7 +334,7 @@ sk_sp<SkImage> SkImage::makeRasterImage() const {
     }
 
     sk_sp<SkData> data = SkData::MakeUninitialized(size);
-    pm = { info, data->writable_data(), info.minRowBytes() };
+    pm = { info.makeColorSpace(nullptr), data->writable_data(), info.minRowBytes() };
     if (!this->readPixels(pm, 0, 0)) {
         return nullptr;
     }
@@ -409,10 +416,6 @@ sk_sp<SkImage> SkImage::MakeFromYUVTexturesCopy(GrContext* ctx, SkYUVColorSpace 
 
 sk_sp<SkImage> SkImage::makeTextureImage(GrContext*, SkColorSpace* dstColorSpace) const {
     return nullptr;
-}
-
-sk_sp<SkImage> SkImage::makeNonTextureImage() const {
-    return sk_ref_sp(const_cast<SkImage*>(this));
 }
 
 #endif

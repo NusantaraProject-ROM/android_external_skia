@@ -16,6 +16,7 @@
 #include "SkPointPriv.h"
 #include "SkTDPQueue.h"
 
+#include <algorithm>
 #include <stdio.h>
 
 /*
@@ -282,6 +283,10 @@ inline void round(SkPoint* p) {
     p->fY = SkScalarRoundToScalar(p->fY * SkFloatToScalar(4.0f)) * SkFloatToScalar(0.25f);
 }
 
+inline SkScalar double_to_clamped_scalar(double d) {
+    return SkDoubleToScalar(std::min((double) SK_ScalarMax, std::max(d, (double) -SK_ScalarMax)));
+}
+
 // A line equation in implicit form. fA * x + fB * y + fC = 0, for all points (x, y) on the line.
 struct Line {
     Line(double a, double b, double c) : fA(a), fB(b), fC(c) {}
@@ -320,9 +325,9 @@ struct Line {
         if (denom == 0.0) {
             return false;
         }
-        double scale = 1.0f / denom;
-        point->fX = SkDoubleToScalar((fB * other.fC - other.fB * fC) * scale);
-        point->fY = SkDoubleToScalar((other.fA * fC - fA * other.fC) * scale);
+        double scale = 1.0 / denom;
+        point->fX = double_to_clamped_scalar((fB * other.fC - other.fB * fC) * scale);
+        point->fY = double_to_clamped_scalar((other.fA * fC - fA * other.fC) * scale);
         round(point);
         return true;
     }
@@ -706,10 +711,10 @@ void append_quadratic_to_contour(const SkPoint pts[3], SkScalar toleranceSqd, Ve
     Sk2s ab = quad.fA * quad.fB;
     SkScalar t = denom ? (-ab[0] - ab[1]) / denom : 0.0f;
     int nPoints = 1;
-    SkScalar u;
+    SkScalar u = 1.0f;
     // Test possible subdivision values only at the point of maximum curvature.
     // If it passes the flatness metric there, it'll pass everywhere.
-    for (;;) {
+    while (nPoints < GrPathUtils::kMaxPointsPerCurve) {
         u = 1.0f / nPoints;
         if (quad_error_at(pts, t, u) < toleranceSqd) {
             break;
@@ -1985,36 +1990,34 @@ void stroke_boundary(EdgeList* boundary, VertexList* innerMesh, VertexList* oute
                     if (!innerTangent.intersect(prevInner, &innerPoint1) ||
                         !innerTangent.intersect(inner, &innerPoint2) ||
                         !outerTangent.intersect(bisector, &outerPoint)) {
-                        SkASSERT(false);
+                        continue;
                     }
                     Line prevTangent(prevV->fPoint,
                                      prevV->fPoint + SkVector::Make(prevOuter.fA, prevOuter.fB));
                     Line nextTangent(nextV->fPoint,
                                      nextV->fPoint + SkVector::Make(outer.fA, outer.fB));
-                    Line b(innerPoint, outerPoint);
                     if (prevTangent.dist(outerPoint) > 0) {
-                        b.intersect(prevTangent, &outerPoint);
+                        bisector.intersect(prevTangent, &outerPoint);
                     }
                     if (nextTangent.dist(outerPoint) < 0) {
-                        b.intersect(nextTangent, &outerPoint);
+                        bisector.intersect(nextTangent, &outerPoint);
                     }
                     outerPoint1 = outerPoint2 = outerPoint;
                 } else {
                     // Miter outer points
                     if (!outerTangent.intersect(prevOuter, &outerPoint1) ||
                         !outerTangent.intersect(outer, &outerPoint2)) {
-                        SkASSERT(false);
+                        continue;
                     }
                     Line prevTangent(prevV->fPoint,
                                      prevV->fPoint + SkVector::Make(prevInner.fA, prevInner.fB));
                     Line nextTangent(nextV->fPoint,
                                      nextV->fPoint + SkVector::Make(inner.fA, inner.fB));
-                    Line b(innerPoint, outerPoint);
                     if (prevTangent.dist(innerPoint) > 0) {
-                        b.intersect(prevTangent, &innerPoint);
+                        bisector.intersect(prevTangent, &innerPoint);
                     }
                     if (nextTangent.dist(innerPoint) < 0) {
-                        b.intersect(nextTangent, &innerPoint);
+                        bisector.intersect(nextTangent, &innerPoint);
                     }
                     innerPoint1 = innerPoint2 = innerPoint;
                 }

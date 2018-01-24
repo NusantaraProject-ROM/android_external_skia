@@ -1066,6 +1066,13 @@ CAN WE DEPRECATE THIS?
         kFlushWrite_BackendHandleAccess,
         kDiscardWrite_BackendHandleAccess,
     };
+
+    static const BackendHandleAccess kFlushRead_TextureHandleAccess =
+            kFlushRead_BackendHandleAccess;
+    static const BackendHandleAccess kFlushWrite_TextureHandleAccess =
+            kFlushWrite_BackendHandleAccess;
+    static const BackendHandleAccess kDiscardWrite_TextureHandleAccess =
+            kDiscardWrite_BackendHandleAccess;
 ##
 
 #Const kFlushRead_BackendHandleAccess 0
@@ -1076,6 +1083,22 @@ Caller may write to the back-end object.
 ##
 #Const kDiscardWrite_BackendHandleAccess 2
 Caller must overwrite the entire back-end object.
+##
+
+#Const kFlushRead_TextureHandleAccess 0
+Deprecated.
+#Deprecated 
+##
+##
+#Const kFlushWrite_TextureHandleAccess 1
+Deprecated.
+#Deprecated 
+##
+##
+#Const kDiscardWrite_TextureHandleAccess 2
+Deprecated.
+#Deprecated 
+##
 ##
 
 #Example
@@ -1369,7 +1392,7 @@ pixmap contents become invalid on any future change to Surface.
 
 Copies Rect of pixels to dst.
 
-Source Rect corners are (srcX, srcY) and (this->width(), this->height()).
+Source Rect corners are (srcX, srcY) and Surface (width(), height()).
 Destination Rect corners are (0, 0) and (dst.width(), dst.height()).
 Copies each readable pixel intersecting both rectangles, without scaling,
 converting to dst.colorType() and dst.alphaType() if required.
@@ -1428,7 +1451,7 @@ Does not copy, and returns false if:
 
 Copies Rect of pixels from Canvas into dstPixels.
 
-Source Rect corners are (srcX, srcY) and (this->width(), this->height()).
+Source Rect corners are (srcX, srcY) and Surface (width(), height()).
 Destination Rect corners are (0, 0) and (dstInfo.width(), dstInfo.height()).
 Copies each readable pixel intersecting both rectangles, without scaling,
 converting to dstInfo.colorType() and dstInfo.alphaType() if required.
@@ -1493,7 +1516,7 @@ Does not copy, and returns false if:
 
 Copies Rect of pixels from Surface into bitmap.
 
-Source Rect corners are (srcX, srcY) and (this->width(), this->height()).
+Source Rect corners are (srcX, srcY) and Surface (width(), height()).
 Destination Rect corners are (0, 0) and (bitmap.width(), bitmap.height()).
 Copies each readable pixel intersecting both rectangles, without scaling,
 converting to bitmap.colorType() and bitmap.alphaType() if required.

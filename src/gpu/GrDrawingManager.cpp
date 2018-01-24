@@ -9,6 +9,7 @@
 
 #include "GrBackendSemaphore.h"
 #include "GrContext.h"
+#include "GrContextPriv.h"
 #include "GrGpu.h"
 #include "GrOnFlushResourceProvider.h"
 #include "GrOpList.h"
@@ -145,7 +146,7 @@ GrSemaphoresSubmitted GrDrawingManager::internalFlush(GrSurfaceProxy*,
                 // handle resource allocation & usage on their own. (No deferred or lazy proxies!)
                 onFlushOpList->visitProxies_debugOnly([](GrSurfaceProxy* p) {
                     SkASSERT(!p->asTextureProxy() || !p->asTextureProxy()->texPriv().isDeferred());
-                    SkASSERT(!p->isPendingLazyInstantiation());
+                    SkASSERT(GrSurfaceProxy::LazyState::kNot == p->lazyInstantiationState());
                 });
 #endif
                 onFlushOpList->makeClosed(*fContext->caps());
@@ -285,7 +286,7 @@ GrSemaphoresSubmitted GrDrawingManager::prepareSurfaceForExternalIO(
     }
     SkASSERT(proxy);
 
-    GrSemaphoresSubmitted result;
+    GrSemaphoresSubmitted result = GrSemaphoresSubmitted::kNo;
     if (proxy->priv().hasPendingIO() || numSemaphores) {
         result = this->flush(proxy, numSemaphores, backendSemaphores);
     }
@@ -377,7 +378,7 @@ GrPathRenderer* GrDrawingManager::getPathRenderer(const GrPathRenderer::CanDrawP
     if (!pr && allowSW) {
         if (!fSoftwarePathRenderer) {
             fSoftwarePathRenderer =
-                    new GrSoftwarePathRenderer(fContext->resourceProvider(),
+                    new GrSoftwarePathRenderer(fContext->contextPriv().proxyProvider(),
                                                fOptionsForPathRendererChain.fAllowPathMaskCaching);
         }
         if (GrPathRenderer::CanDrawPath::kNo != fSoftwarePathRenderer->canDrawPath(args)) {

@@ -8,13 +8,25 @@
 #include "SkSGInvalidationController.h"
 
 #include "SkRect.h"
+#include "SkTLazy.h"
 
 namespace sksg {
 
-InvalidationController::InvalidationController() {}
+InvalidationController::InvalidationController() : fBounds(SkRect::MakeEmpty()) {}
 
-void InvalidationController::inval(const SkRect& r) {
-    fRects.push(r);
+void InvalidationController::inval(const SkRect& r, const SkMatrix& ctm) {
+    if (r.isEmpty()) {
+        return;
+    }
+
+    SkTCopyOnFirstWrite<SkRect> rect(r);
+
+    if (!ctm.isIdentity()) {
+        ctm.mapRect(rect.writable());
+    }
+
+    fRects.push(*rect);
+    fBounds.join(*rect);
 }
 
 } // namespace sksg

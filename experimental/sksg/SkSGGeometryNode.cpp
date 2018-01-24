@@ -7,42 +7,21 @@
 
 #include "SkSGGeometryNode.h"
 
-#include "SkMatrix.h"
-#include "SkSGInvalidationController.h"
+#include "SkPath.h"
 
 namespace sksg {
 
-GeometryNode::GeometryNode()
-    : fBounds(SkRect::MakeLTRB(SK_ScalarMin, SK_ScalarMin, SK_ScalarMax, SK_ScalarMax)) {}
+// Geometry nodes don't generate damage on their own, but via their aggregation ancestor Draw nodes.
+GeometryNode::GeometryNode() : INHERITED(kBubbleDamage_Trait) {}
 
 void GeometryNode::draw(SkCanvas* canvas, const SkPaint& paint) const {
-    SkASSERT(!this->isInvalidated());
+    SkASSERT(!this->hasInval());
     this->onDraw(canvas, paint);
 }
 
-static void inval_rect(const SkRect& r, const SkMatrix& ctm, InvalidationController* ic) {
-    if (ctm.isIdentity()) {
-        ic->inval(r);
-        return;
-    }
-
-    SkRect mappedRect;
-    if (!ctm.mapRect(&mappedRect, r)) {
-        mappedRect = SkRect::MakeLTRB(SK_ScalarMin, SK_ScalarMin, SK_ScalarMax, SK_ScalarMax);
-    }
-    ic->inval(mappedRect);
-}
-
-void GeometryNode::onRevalidate(InvalidationController* ic, const SkMatrix& ctm) {
-    SkASSERT(this->isInvalidated());
-
-    const auto oldBounds = fBounds;
-    fBounds = this->onComputeBounds();
-
-    inval_rect(oldBounds, ctm, ic);
-    if (fBounds != oldBounds) {
-        inval_rect(fBounds, ctm, ic);
-    }
+SkPath GeometryNode::asPath() const {
+    SkASSERT(!this->hasInval());
+    return this->onAsPath();
 }
 
 } // namespace sksg

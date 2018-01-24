@@ -8,6 +8,7 @@
 #include "SkSGDraw.h"
 
 #include "SkSGGeometryNode.h"
+#include "SkSGInvalidationController.h"
 #include "SkSGPaintNode.h"
 
 namespace sksg {
@@ -28,11 +29,16 @@ void Draw::onRender(SkCanvas* canvas) const {
     fGeometry->draw(canvas, fPaint->makePaint());
 }
 
-void Draw::onRevalidate(InvalidationController* ic, const SkMatrix& ctm) {
-    SkASSERT(this->isInvalidated());
+SkRect Draw::onRevalidate(InvalidationController* ic, const SkMatrix& ctm) {
+    SkASSERT(this->hasInval());
 
-    fGeometry->revalidate(ic, ctm);
+    auto bounds = fGeometry->revalidate(ic, ctm);
     fPaint->revalidate(ic, ctm);
+
+    const auto& paint = fPaint->makePaint();
+    SkASSERT(paint.canComputeFastBounds());
+
+    return paint.computeFastBounds(bounds, &bounds);
 }
 
 } // namespace sksg
