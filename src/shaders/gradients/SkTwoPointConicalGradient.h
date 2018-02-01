@@ -37,13 +37,19 @@ public:
         bool isNativelyFocal() const { return SkScalarNearlyZero(fFocalX); }
     };
 
+    enum class Type {
+        kRadial,
+        kStrip,
+        kFocal
+    };
+
     static sk_sp<SkShader> Create(const SkPoint& start, SkScalar startRadius,
                                   const SkPoint& end, SkScalar endRadius,
                                   const Descriptor&);
 
     SkShader::GradientType asAGradient(GradientInfo* info) const  override;
 #if SK_SUPPORT_GPU
-    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(const AsFPArgs&) const override;
+    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(const GrFPArgs&) const override;
 #endif
     bool isOpaque() const override;
 
@@ -53,6 +59,10 @@ public:
     const SkPoint& getStartCenter() const { return fCenter1; }
     const SkPoint& getEndCenter() const { return fCenter2; }
     SkScalar getEndRadius() const { return fRadius2; }
+
+    Type getType() const { return fType; }
+    const SkMatrix& getGradientMatrix() const { return fPtsToUnit; }
+    const FocalData& getFocalData() const { return fFocalData; }
 
     SK_TO_STRING_OVERRIDE()
     SK_DECLARE_PUBLIC_FLATTENABLE_DESERIALIZATION_PROCS(SkTwoPointConicalGradient)
@@ -67,12 +77,6 @@ protected:
     bool onIsRasterPipelineOnly(const SkMatrix&) const override { return true; }
 
 private:
-    enum class Type {
-        kRadial,
-        kStrip,
-        kFocal
-    };
-
     SkTwoPointConicalGradient(const SkPoint& c0, SkScalar r0,
                               const SkPoint& c1, SkScalar r1,
                               const Descriptor&, Type, const SkMatrix&, const FocalData&);

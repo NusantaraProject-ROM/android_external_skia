@@ -170,6 +170,17 @@ public:
     GrProxyProvider* proxyProvider() { return fContext->fProxyProvider; }
     const GrProxyProvider* proxyProvider() const { return fContext->fProxyProvider; }
 
+    GrResourceProvider* resourceProvider() { return fContext->fResourceProvider; }
+    const GrResourceProvider* resourceProvider() const { return fContext->fResourceProvider; }
+
+    GrResourceCache* getResourceCache() { return fContext->fResourceCache; }
+
+    GrGpu* getGpu() { return fContext->fGpu.get(); }
+    const GrGpu* getGpu() const { return fContext->fGpu.get(); }
+
+    GrAtlasGlyphCache* getAtlasGlyphCache() { return fContext->fAtlasGlyphCache; }
+    GrTextBlobCache* getTextBlobCache() { return fContext->fTextBlobCache.get(); }
+
 private:
     explicit GrContextPriv(GrContext* context) : fContext(context) {}
     GrContextPriv(const GrContextPriv&); // unimpl

@@ -24,7 +24,7 @@
 #include "SkConvertPixels.h"
 #include "SkData.h"
 #include "SkImageInfoPriv.h"
-#include "SkMaskFilter.h"
+#include "SkMaskFilterBase.h"
 #include "SkMessageBus.h"
 #include "SkMipMap.h"
 #include "SkPM4fPriv.h"
@@ -92,8 +92,8 @@ sk_sp<GrTextureProxy> GrUploadPixmapToTextureProxy(GrProxyProvider* proxyProvide
 
     ATRACE_ANDROID_FRAMEWORK("Upload Texture [%ux%u]", pixmap.width(), pixmap.height());
     GrSurfaceDesc desc = GrImageInfoToSurfaceDesc(pixmap.info(), *proxyProvider->caps());
-    return GrSurfaceProxy::MakeDeferred(proxyProvider, desc, budgeted, pixmap.addr(),
-                                        pixmap.rowBytes());
+
+    return proxyProvider->createTextureProxy(desc, budgeted, pixmap.addr(), pixmap.rowBytes());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -111,7 +111,7 @@ void GrInstallBitmapUniqueKeyInvalidator(const GrUniqueKey& key, SkPixelRef* pix
     pixelRef->addGenIDChangeListener(new Invalidator(key));
 }
 
-sk_sp<GrTextureProxy> GrGenerateMipMapsAndUploadToTextureProxy(GrContext* ctx,
+sk_sp<GrTextureProxy> GrGenerateMipMapsAndUploadToTextureProxy(GrProxyProvider* proxyProvider,
                                                                const SkBitmap& bitmap,
                                                                SkColorSpace* dstColorSpace) {
     SkDestinationSurfaceColorMode colorMode = dstColorSpace
@@ -128,7 +128,7 @@ sk_sp<GrTextureProxy> GrGenerateMipMapsAndUploadToTextureProxy(GrContext* ctx,
     }
 
     ATRACE_ANDROID_FRAMEWORK("Upload MipMap Texture [%ux%u]", pixmap.width(), pixmap.height());
-    GrSurfaceDesc desc = GrImageInfoToSurfaceDesc(pixmap.info(), *ctx->resourceProvider()->caps());
+    GrSurfaceDesc desc = GrImageInfoToSurfaceDesc(pixmap.info(), *proxyProvider->caps());
     std::unique_ptr<SkMipMap> mipmaps(SkMipMap::Build(pixmap, colorMode, nullptr));
     if (!mipmaps) {
         return nullptr;
@@ -151,22 +151,18 @@ sk_sp<GrTextureProxy> GrGenerateMipMapsAndUploadToTextureProxy(GrContext* ctx,
         texels[i].fRowBytes = generatedMipLevel.fPixmap.rowBytes();
     }
 
-    return GrSurfaceProxy::MakeDeferredMipMap(ctx->contextPriv().proxyProvider(),
-                                              desc,
-                                              SkBudgeted::kYes,
-                                              texels.get(),
-                                              mipLevelCount,
-                                              colorMode);
+    return proxyProvider->createMipMapProxy(desc, SkBudgeted::kYes, texels.get(), mipLevelCount,
+                                            colorMode);
 }
 
-sk_sp<GrTextureProxy> GrCopyBaseMipMapToTextureProxy(GrContext* ctx,
-                                                     GrTextureProxy* baseProxy) {
+sk_sp<GrTextureProxy> GrCopyBaseMipMapToTextureProxy(GrContext* ctx, GrTextureProxy* baseProxy) {
     SkASSERT(baseProxy);
 
     if (!ctx->caps()->isConfigCopyable(baseProxy->config())) {
         return nullptr;
     }
 
+    GrProxyProvider* proxyProvider = ctx->contextPriv().proxyProvider();
     GrSurfaceDesc desc;
     desc.fFlags = kNone_GrSurfaceFlags;
     desc.fOrigin = baseProxy->origin();
@@ -175,9 +171,7 @@ sk_sp<GrTextureProxy> GrCopyBaseMipMapToTextureProxy(GrContext* ctx,
     desc.fConfig = baseProxy->config();
     desc.fSampleCnt = 0;
 
-    sk_sp<GrTextureProxy> proxy = GrSurfaceProxy::MakeDeferredMipMap(ctx->contextPriv().proxyProvider(),
-                                                                     desc,
-                                                                     SkBudgeted::kYes);
+    sk_sp<GrTextureProxy> proxy = proxyProvider->createMipMapProxy(desc, SkBudgeted::kYes);
     if (!proxy) {
         return nullptr;
     }
@@ -191,7 +185,8 @@ sk_sp<GrTextureProxy> GrCopyBaseMipMapToTextureProxy(GrContext* ctx,
 }
 
 
-sk_sp<GrTextureProxy> GrUploadMipMapToTextureProxy(GrContext* ctx, const SkImageInfo& info,
+sk_sp<GrTextureProxy> GrUploadMipMapToTextureProxy(GrProxyProvider* proxyProvider,
+                                                   const SkImageInfo& info,
                                                    const GrMipLevel texels[],
                                                    int mipLevelCount,
                                                    SkDestinationSurfaceColorMode colorMode) {
@@ -199,10 +194,10 @@ sk_sp<GrTextureProxy> GrUploadMipMapToTextureProxy(GrContext* ctx, const SkImage
         return nullptr;
     }
 
-    return GrSurfaceProxy::MakeDeferredMipMap(ctx->contextPriv().proxyProvider(),
-                                              GrImageInfoToSurfaceDesc(info, *ctx->caps()),
-                                              SkBudgeted::kYes, texels,
-                                              mipLevelCount, colorMode);
+    GrSurfaceDesc desc(GrImageInfoToSurfaceDesc(info, *proxyProvider->caps()));
+
+    return proxyProvider->createMipMapProxy(desc, SkBudgeted::kYes,
+                                            texels, mipLevelCount, colorMode);
 }
 
 sk_sp<GrTextureProxy> GrRefCachedBitmapTextureProxy(GrContext* ctx,
@@ -380,6 +375,8 @@ static inline bool skpaint_to_grpaint_impl(GrContext* context,
     // Convert SkPaint color to 4f format, including optional linearizing and gamut conversion.
     GrColor4f origColor = SkColorToUnpremulGrColor4f(skPaint.getColor(), colorSpaceInfo);
 
+    const GrFPArgs fpArgs(context, &viewM, skPaint.getFilterQuality(), &colorSpaceInfo);
+
     // Setup the initial color considering the shader, the SkPaint color, and the presence or not
     // of per-vertex colors.
     std::unique_ptr<GrFragmentProcessor> shaderFP;
@@ -387,8 +384,7 @@ static inline bool skpaint_to_grpaint_impl(GrContext* context,
         if (shaderProcessor) {
             shaderFP = std::move(*shaderProcessor);
         } else if (const auto* shader = as_SB(skPaint.getShader())) {
-            shaderFP = shader->asFragmentProcessor(SkShaderBase::AsFPArgs(
-                    context, &viewM, nullptr, skPaint.getFilterQuality(), &colorSpaceInfo));
+            shaderFP = shader->asFragmentProcessor(fpArgs);
         }
     }
 
@@ -481,11 +477,10 @@ static inline bool skpaint_to_grpaint_impl(GrContext* context,
         }
     }
 
-    SkMaskFilter* maskFilter = skPaint.getMaskFilter();
+    SkMaskFilterBase* maskFilter = as_MFB(skPaint.getMaskFilter());
     if (maskFilter) {
-        GrFragmentProcessor* mfFP;
-        if (maskFilter->asFragmentProcessor(&mfFP)) {
-            grPaint->addCoverageFragmentProcessor(std::unique_ptr<GrFragmentProcessor>(mfFP));
+        if (auto mfFP = maskFilter->asFragmentProcessor(fpArgs)) {
+            grPaint->addCoverageFragmentProcessor(std::move(mfFP));
         }
     }
 
@@ -564,7 +559,7 @@ bool SkPaintToGrPaintWithTexture(GrContext* context,
     std::unique_ptr<GrFragmentProcessor> shaderFP;
     if (textureIsAlphaOnly) {
         if (const auto* shader = as_SB(paint.getShader())) {
-            shaderFP = shader->asFragmentProcessor(SkShaderBase::AsFPArgs(
+            shaderFP = shader->asFragmentProcessor(GrFPArgs(
                     context, &viewM, nullptr, paint.getFilterQuality(), &colorSpaceInfo));
             if (!shaderFP) {
                 return false;

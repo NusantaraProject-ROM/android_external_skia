@@ -142,11 +142,15 @@ public:
     }
 
     void blitRect(int x, int y, int width, int height) override {
-        int bpp = fSource.info().bytesPerPixel();
-
         fSrcPtr.stride = fSource.rowBytesAsPixels();
-        fSrcPtr.pixels = (char*)fSource.addr(x-fLeft, y-fTop) - bpp * x
-                                                              - bpp * y * fSrcPtr.stride;
+
+        // We really want fSrcPtr.pixels = fSource.addr(-fLeft, -fTop) here, but that asserts.
+        // Instead we ask for addr(-fLeft+x, -fTop+y), then back up (x,y) manually.
+        // Representing bpp as a size_t keeps all this math in size_t instead of int,
+        // which could wrap around with large enough fSrcPtr.stride and y.
+        size_t bpp = fSource.info().bytesPerPixel();
+        fSrcPtr.pixels = (char*)fSource.addr(-fLeft+x, -fTop+y) - bpp * x
+                                                                - bpp * y * fSrcPtr.stride;
 
         fBlitter->blitRect(x,y,width,height);
     }
@@ -199,7 +203,7 @@ SkBlitter* SkBlitter::ChooseSprite(const SkPixmap& dst, const SkPaint& paint,
                 break;
         }
     }
-    if (!blitter) {
+    if (!blitter && !paint.getMaskFilter()) {
         blitter = allocator->make<SkRasterPipelineSpriteBlitter>(source, allocator);
     }
 

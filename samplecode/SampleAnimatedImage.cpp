@@ -5,10 +5,10 @@
  * found in the LICENSE file.
  */
 
+#include "SkAndroidCodec.h"
 #include "SkAnimatedImage.h"
 #include "SkAnimTimer.h"
 #include "SkCanvas.h"
-#include "SkCodec.h"
 #include "SkPaint.h"
 #include "SkPictureRecorder.h"
 #include "SkRect.h"
@@ -25,7 +25,6 @@ class SampleAnimatedImage : public SampleView {
 public:
     SampleAnimatedImage()
         : INHERITED()
-        , fRunning(false)
         , fYOffset(0)
     {}
 
@@ -74,7 +73,7 @@ protected:
             return;
         }
 
-        fImage = SkAnimatedImage::MakeFromCodec(std::move(codec));
+        fImage = SkAnimatedImage::Make(SkAndroidCodec::MakeFromCodec(std::move(codec)));
         if (!fImage) {
             return;
         }
@@ -95,12 +94,10 @@ protected:
         if (fImage && SampleCode::CharQ(*evt, &uni)) {
             switch (uni) {
                 case kPauseKey:
-                    if (fRunning) {
+                    if (fImage->isRunning()) {
                         fImage->stop();
-                        fRunning = false;
                     } else {
                         fImage->start();
-                        fRunning = true;
                     }
                     return true;
                 case kResetKey:
@@ -116,7 +113,6 @@ protected:
 private:
     sk_sp<SkAnimatedImage>  fImage;
     sk_sp<SkDrawable>       fDrawable;
-    bool                    fRunning;
     SkScalar                fYOffset;
     typedef SampleView INHERITED;
 };

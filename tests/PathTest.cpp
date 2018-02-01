@@ -987,13 +987,13 @@ static void test_poly(skiatest::Reporter* reporter, const SkPath& path,
                 srcPts++;
                 break;
             case SkPath::kQuad_Verb:
-                REPORTER_ASSERT_MESSAGE(reporter, false, "unexpected quad verb");
+                REPORTER_ASSERT(reporter, false, "unexpected quad verb");
                 break;
             case SkPath::kConic_Verb:
-                REPORTER_ASSERT_MESSAGE(reporter, false, "unexpected conic verb");
+                REPORTER_ASSERT(reporter, false, "unexpected conic verb");
                 break;
             case SkPath::kCubic_Verb:
-                REPORTER_ASSERT_MESSAGE(reporter, false, "unexpected cubic verb");
+                REPORTER_ASSERT(reporter, false, "unexpected cubic verb");
                 break;
             case SkPath::kClose_Verb:
                 REPORTER_ASSERT(reporter, !firstTime);
@@ -4949,3 +4949,38 @@ DEF_TEST(AndroidArc, reporter) {
     }
 }
 #endif
+
+/*
+ *  Try a range of crazy values, just to ensure that we don't assert/crash.
+ */
+DEF_TEST(HugeGeometry, reporter) {
+    auto surf = SkSurface::MakeRasterN32Premul(100, 100);
+    auto canvas = surf->getCanvas();
+
+    const bool aas[] = { false, true };
+    const SkPaint::Style styles[] = {
+        SkPaint::kFill_Style, SkPaint::kStroke_Style, SkPaint::kStrokeAndFill_Style
+    };
+    const SkScalar values[] = {
+        0, 1, 1000, 1000 * 1000, 1000.f * 1000 * 10000, SK_ScalarMax / 2, SK_ScalarMax,
+        SK_ScalarInfinity
+    };
+
+    SkPaint paint;
+    for (auto x : values) {
+        SkRect r = { -x, -x, x, x };
+        for (auto width : values) {
+            paint.setStrokeWidth(width);
+            for (auto aa : aas) {
+                paint.setAntiAlias(aa);
+                for (auto style : styles) {
+                    paint.setStyle(style);
+                    canvas->drawRect(r, paint);
+                    canvas->drawOval(r, paint);
+                }
+            }
+        }
+    }
+
+}
+

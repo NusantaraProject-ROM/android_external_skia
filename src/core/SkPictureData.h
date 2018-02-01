@@ -11,7 +11,6 @@
 #include "SkBitmap.h"
 #include "SkDrawable.h"
 #include "SkPicture.h"
-#include "SkPictureContentInfo.h"
 #include "SkPictureFlat.h"
 
 class SkData;
@@ -81,10 +80,6 @@ public:
     void serialize(SkWStream*, const SkSerialProcs&, SkRefCntSet*) const;
     void flatten(SkWriteBuffer&) const;
 
-    bool hasText() const { return fContentInfo.hasText(); }
-
-    int opCount() const { return fContentInfo.numOperations(); }
-
     const sk_sp<SkData>& opData() const { return fOpData; }
 
 protected:
@@ -116,9 +111,8 @@ public:
     }
 
     SkDrawable* getDrawable(SkReadBuffer* reader) const {
-        int index = reader->readInt();
-        SkASSERT(index > 0 && index <= fDrawableCount);
-        return fDrawableRefs[index - 1];
+        int index = reader->readInt() - 1;
+        return reader->validateIndex(index, fDrawableCount) ? fDrawableRefs[index] : nullptr;
     }
 
     const SkPaint* getPaint(SkReadBuffer* reader) const {
@@ -138,24 +132,6 @@ public:
         const int index = reader->readInt() - 1;
         return reader->validateIndex(index, fVerticesCount) ? fVerticesRefs[index] : nullptr;
     }
-
-#if SK_SUPPORT_GPU
-    /**
-     * sampleCount is the number of samples-per-pixel or zero if non-MSAA.
-     * It is defaulted to be zero.
-     */
-    bool suitableForGpuRasterization(GrContext* context, const char **reason,
-                                     int sampleCount = 0) const;
-
-    /**
-     * Calls getRecommendedSampleCount with GrPixelConfig and dpi to calculate sampleCount
-     * and then calls the above version of suitableForGpuRasterization
-     */
-    bool suitableForGpuRasterization(GrContext* context, const char **reason,
-                                     GrPixelConfig config, SkScalar dpi) const;
-
-    bool suitableForLayerOptimization() const;
-#endif
 
 private:
     void init();
@@ -187,8 +163,6 @@ private:
     int fImageCount;
     const SkImage** fBitmapImageRefs;
     int fBitmapImageCount;
-
-    SkPictureContentInfo fContentInfo;
 
     SkTypefacePlayback fTFPlayback;
     SkFactoryPlayback* fFactoryPlayback;

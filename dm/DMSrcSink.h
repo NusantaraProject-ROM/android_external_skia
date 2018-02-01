@@ -21,7 +21,7 @@
 
 //#define TEST_VIA_SVG
 
-namespace skotty { class Animation; }
+namespace skottie { class Animation; }
 
 namespace DM {
 
@@ -263,9 +263,9 @@ private:
 };
 
 #if !defined(SK_BUILD_FOR_GOOGLE3)
-class SkottySrc final : public Src {
+class SkottieSrc final : public Src {
 public:
-    explicit SkottySrc(Path path);
+    explicit SkottieSrc(Path path);
 
     Error draw(SkCanvas*) const override;
     SkISize size() const override;
@@ -278,7 +278,7 @@ private:
 
     Name                               fName;
     SkISize                            fTileSize = SkISize::MakeEmpty();
-    std::unique_ptr<skotty::Animation> fAnimation;
+    std::unique_ptr<skottie::Animation> fAnimation;
 };
 #endif
 
@@ -514,33 +514,9 @@ private:
     std::unique_ptr<SkBBHFactory> fFactory;
 };
 
-class ViaSecondPicture : public Via {
-public:
-    explicit ViaSecondPicture(Sink* sink) : Via(sink) {}
-    Error draw(const Src&, SkBitmap*, SkWStream*, SkString*) const override;
-};
-
-class ViaSingletonPictures : public Via {
-public:
-    explicit ViaSingletonPictures(Sink* sink) : Via(sink) {}
-    Error draw(const Src&, SkBitmap*, SkWStream*, SkString*) const override;
-};
-
-class ViaTwice : public Via {
-public:
-    explicit ViaTwice(Sink* sink) : Via(sink) {}
-    Error draw(const Src&, SkBitmap*, SkWStream*, SkString*) const override;
-};
-
 class ViaSVG : public Via {
 public:
     explicit ViaSVG(Sink* sink) : Via(sink) {}
-    Error draw(const Src&, SkBitmap*, SkWStream*, SkString*) const override;
-};
-
-class ViaMojo : public Via {
-public:
-    explicit ViaMojo(Sink* sink) : Via(sink) {}
     Error draw(const Src&, SkBitmap*, SkWStream*, SkString*) const override;
 };
 

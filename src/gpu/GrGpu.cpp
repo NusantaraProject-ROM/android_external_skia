@@ -13,6 +13,7 @@
 #include "GrBuffer.h"
 #include "GrCaps.h"
 #include "GrContext.h"
+#include "GrContextPriv.h"
 #include "GrGpuResourcePriv.h"
 #include "GrMesh.h"
 #include "GrPathRendering.h"
@@ -35,7 +36,6 @@ GrGpu::GrGpu(GrContext* context)
     : fResetTimestamp(kExpiredTimestamp+1)
     , fResetBits(kAll_GrBackendState)
     , fContext(context) {
-    fMultisampleSpecs.emplace_back(0, 0, nullptr); // Index 0 is an invalid unique id.
 }
 
 GrGpu::~GrGpu() {}
@@ -422,48 +422,6 @@ void GrGpu::didWriteToSurface(GrSurface* surface, const SkIRect* bounds, uint32_
     }
 }
 
-const GrGpu::MultisampleSpecs& GrGpu::queryMultisampleSpecs(const GrPipeline& pipeline) {
-    GrRenderTarget* rt = pipeline.renderTarget();
-    SkASSERT(rt->numStencilSamples() > 1);
-
-    GrStencilSettings stencil;
-    if (pipeline.isStencilEnabled()) {
-        // TODO: attach stencil and create settings during render target flush.
-        SkASSERT(rt->renderTargetPriv().getStencilAttachment());
-        stencil.reset(*pipeline.getUserStencil(), pipeline.hasStencilClip(),
-                      rt->renderTargetPriv().numStencilBits());
-    }
-
-    int effectiveSampleCnt;
-    SkSTArray<16, SkPoint, true> pattern;
-    this->onQueryMultisampleSpecs(rt, pipeline.proxy()->origin(), stencil,
-                                  &effectiveSampleCnt, &pattern);
-    SkASSERT(effectiveSampleCnt >= rt->numStencilSamples());
-
-    uint8_t id;
-    if (this->caps()->sampleLocationsSupport()) {
-        SkASSERT(pattern.count() == effectiveSampleCnt);
-        const auto& insertResult = fMultisampleSpecsIdMap.insert(
-            MultisampleSpecsIdMap::value_type(pattern, SkTMin(fMultisampleSpecs.count(), 255)));
-        id = insertResult.first->second;
-        if (insertResult.second) {
-            // This means the insert did not find the pattern in the map already, and therefore an
-            // actual insertion took place. (We don't expect to see many unique sample patterns.)
-            const SkPoint* sampleLocations = insertResult.first->first.begin();
-            SkASSERT(id == fMultisampleSpecs.count());
-            fMultisampleSpecs.emplace_back(id, effectiveSampleCnt, sampleLocations);
-        }
-    } else {
-        id = effectiveSampleCnt;
-        for (int i = fMultisampleSpecs.count(); i <= id; ++i) {
-            fMultisampleSpecs.emplace_back(i, i, nullptr);
-        }
-    }
-    SkASSERT(id > 0);
-
-    return fMultisampleSpecs[id];
-}
-
 bool GrGpu::SamplePatternComparator::operator()(const SamplePattern& a,
                                                 const SamplePattern& b) const {
     if (a.count() != b.count()) {
@@ -483,15 +441,17 @@ bool GrGpu::SamplePatternComparator::operator()(const SamplePattern& a,
 
 GrSemaphoresSubmitted GrGpu::finishFlush(int numSemaphores,
                                          GrBackendSemaphore backendSemaphores[]) {
+    GrResourceProvider* resourceProvider = fContext->contextPriv().resourceProvider();
+
     if (this->caps()->fenceSyncSupport()) {
         for (int i = 0; i < numSemaphores; ++i) {
             sk_sp<GrSemaphore> semaphore;
             if (backendSemaphores[i].isInitialized()) {
-                semaphore = fContext->resourceProvider()->wrapBackendSemaphore(
+                semaphore = resourceProvider->wrapBackendSemaphore(
                         backendSemaphores[i], GrResourceProvider::SemaphoreWrapType::kWillSignal,
                         kBorrow_GrWrapOwnership);
             } else {
-                semaphore = fContext->resourceProvider()->makeSemaphore(false);
+                semaphore = resourceProvider->makeSemaphore(false);
             }
             this->insertSemaphore(semaphore, false);
 
@@ -514,49 +474,3 @@ void GrGpu::dumpJSON(SkJSONWriter* writer) const {
 
     writer->endObject();
 }
-
-void GrGpu::insertSemaphore(sk_sp<GrSemaphore> semaphore, bool flush) {
-    if (!semaphore) {
-        return;
-    }
-
-    SkASSERT(!semaphore->fSignaled);
-    if (semaphore->fSignaled) {
-        this->onInsertSemaphore(nullptr, flush);
-        return;
-    }
-    this->onInsertSemaphore(semaphore, flush);
-    semaphore->fSignaled = true;
-}
-
-void GrGpu::waitSemaphore(sk_sp<GrSemaphore> semaphore) {
-    if (!semaphore) {
-        return;
-    }
-
-    SkASSERT(!semaphore->fWaitedOn);
-    if (!semaphore->fWaitedOn) {
-        this->onWaitSemaphore(semaphore);
-        semaphore->fWaitedOn = true;
-    }
-}
-
-sk_sp<GrSemaphore> GrGpu::wrapBackendSemaphore(const GrBackendSemaphore& semaphore,
-                                               GrResourceProvider::SemaphoreWrapType wrapType,
-                                               GrWrapOwnership ownership) {
-    sk_sp<GrSemaphore> grSema = this->onWrapBackendSemaphore(semaphore, ownership);
-    if (GrResourceProvider::SemaphoreWrapType::kWillSignal == wrapType) {
-        // This is a safety check to make sure we never try to wait on this semaphore since we
-        // assume the client will wait on it themselves if they've asked us to signal it.
-        grSema->fWaitedOn = true;
-    } else {
-        SkASSERT(GrResourceProvider::SemaphoreWrapType::kWillWait == wrapType);
-        // This is a safety check to make sure we never try to signal this semaphore since we assume
-        // the client will signal it themselves if they've asked us wait on it.
-        grSema->fSignaled = true;
-    }
-
-    SkASSERT(this->caps()->fenceSyncSupport());
-    return grSema;
-}
-

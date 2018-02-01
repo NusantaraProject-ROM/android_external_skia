@@ -1865,6 +1865,8 @@ void GrGLGpu::setupGeometry(const GrPrimitiveProcessor& primProc,
                             int baseVertex,
                             const GrBuffer* instanceBuffer,
                             int baseInstance) {
+    using EnablePrimitiveRestart = GrGLAttribArrayState::EnablePrimitiveRestart;
+
     GrGLAttribArrayState* attribState;
     if (indexBuffer) {
         SkASSERT(indexBuffer && !indexBuffer->isMapped());
@@ -1893,7 +1895,8 @@ void GrGLGpu::setupGeometry(const GrPrimitiveProcessor& primProc,
     }
 
     int numAttribs = primProc.numAttribs();
-    attribState->enableVertexArrays(this, numAttribs);
+    auto enableRestart = EnablePrimitiveRestart(primProc.willUsePrimitiveRestart() && indexBuffer);
+    attribState->enableVertexArrays(this, numAttribs, enableRestart);
 
     for (int i = 0; i < numAttribs; ++i) {
         using InputRate = GrPrimitiveProcessor::Attribute::InputRate;
@@ -2549,7 +2552,7 @@ void GrGLGpu::flushViewport(const GrGLIRect& viewport) {
 #if SWAP_PER_DRAW
     #if defined(SK_BUILD_FOR_MAC)
         #include <AGL/agl.h>
-    #elif defined(SK_BUILD_FOR_WIN32)
+    #elif defined(SK_BUILD_FOR_WIN)
         #include <gl/GL.h>
         void SwapBuf() {
             DWORD procID = GetCurrentProcessId();
@@ -2612,7 +2615,7 @@ void GrGLGpu::draw(const GrPipeline& pipeline,
         aglSwapBuffers(aglGetCurrentContext());
         int set_a_break_pt_here = 9;
         aglSwapBuffers(aglGetCurrentContext());
-    #elif defined(SK_BUILD_FOR_WIN32)
+    #elif defined(SK_BUILD_FOR_WIN)
         SwapBuf();
         int set_a_break_pt_here = 9;
         SwapBuf();
@@ -2711,6 +2714,7 @@ void GrGLGpu::onResolveRenderTarget(GrRenderTarget* target, GrSurfaceOrigin orig
         // Some extensions automatically resolves the texture when it is read.
         if (this->glCaps().usesMSAARenderBuffers()) {
             SkASSERT(rt->textureFBOID() != rt->renderFBOID());
+            SkASSERT(rt->textureFBOID() != 0 && rt->renderFBOID() != 0);
             fStats.incRenderTargetBinds();
             fStats.incRenderTargetBinds();
             GL_CALL(BindFramebuffer(GR_GL_READ_FRAMEBUFFER, rt->renderFBOID()));
@@ -3310,7 +3314,7 @@ static inline bool can_blit_framebuffer_for_copy_surface(
     // have filtered such cases out.
     SkASSERT(GrPixelConfigIsSint(dst->config()) == GrPixelConfigIsSint(src->config()));
     const GrGLTexture* dstTex = static_cast<const GrGLTexture*>(dst->asTexture());
-    const GrGLTexture* srcTex = static_cast<const GrGLTexture*>(dst->asTexture());
+    const GrGLTexture* srcTex = static_cast<const GrGLTexture*>(src->asTexture());
     const GrRenderTarget* dstRT = dst->asRenderTarget();
     const GrRenderTarget* srcRT = src->asRenderTarget();
     if (dstTex && dstTex->target() != GR_GL_TEXTURE_2D) {
@@ -3367,6 +3371,14 @@ static inline bool can_blit_framebuffer_for_copy_surface(
     return true;
 }
 
+static bool rt_has_msaa_render_buffer(const GrGLRenderTarget* rt, const GrGLCaps& glCaps) {
+    // A RT has a separate MSAA renderbuffer if:
+    // 1) It's multisampled
+    // 2) We're using an extension with separate MSAA renderbuffers
+    // 3) It's not FBO 0, which is special and always auto-resolves
+    return rt->numColorSamples() > 0 && glCaps.usesMSAARenderBuffers() && rt->renderFBOID() != 0;
+}
+
 static inline bool can_copy_texsubimage(const GrSurface* dst, GrSurfaceOrigin dstOrigin,
                                         const GrSurface* src, GrSurfaceOrigin srcOrigin,
                                         const GrGLGpu* gpu) {
@@ -3380,13 +3392,13 @@ static inline bool can_copy_texsubimage(const GrSurface* dst, GrSurfaceOrigin ds
     const GrGLRenderTarget* dstRT = static_cast<const GrGLRenderTarget*>(dst->asRenderTarget());
     // If dst is multisampled (and uses an extension where there is a separate MSAA renderbuffer)
     // then we don't want to copy to the texture but to the MSAA buffer.
-    if (dstRT && dstRT->renderFBOID() != dstRT->textureFBOID()) {
+    if (dstRT && rt_has_msaa_render_buffer(dstRT, gpu->glCaps())) {
         return false;
     }
     const GrGLRenderTarget* srcRT = static_cast<const GrGLRenderTarget*>(src->asRenderTarget());
     // If the src is multisampled (and uses an extension where there is a separate MSAA
     // renderbuffer) then it is an invalid operation to call CopyTexSubImage
-    if (srcRT && srcRT->renderFBOID() != srcRT->textureFBOID()) {
+    if (srcRT && rt_has_msaa_render_buffer(srcRT, gpu->glCaps())) {
         return false;
     }
 
@@ -4331,43 +4343,12 @@ bool GrGLGpu::generateMipmap(GrGLTexture* texture, GrSurfaceOrigin textureOrigin
     return true;
 }
 
-void GrGLGpu::onQueryMultisampleSpecs(GrRenderTarget* rt, GrSurfaceOrigin rtOrigin,
-                                      const GrStencilSettings& stencil,
-                                      int* effectiveSampleCnt, SamplePattern* samplePattern) {
-    SkASSERT(GrFSAAType::kMixedSamples != rt->fsaaType() ||
-             rt->renderTargetPriv().getStencilAttachment() || stencil.isDisabled());
-
-    this->flushStencil(stencil);
-    this->flushHWAAState(rt, true, !stencil.isDisabled());
-    this->flushRenderTarget(static_cast<GrGLRenderTarget*>(rt), &SkIRect::EmptyIRect());
-
-    if (0 != this->caps()->maxRasterSamples()) {
-        GR_GL_GetIntegerv(this->glInterface(), GR_GL_EFFECTIVE_RASTER_SAMPLES, effectiveSampleCnt);
-    } else {
-        GR_GL_GetIntegerv(this->glInterface(), GR_GL_SAMPLES, effectiveSampleCnt);
-    }
-
-    SkASSERT(*effectiveSampleCnt >= rt->numStencilSamples());
-
-    if (this->caps()->sampleLocationsSupport()) {
-        samplePattern->reset(*effectiveSampleCnt);
-        for (int i = 0; i < *effectiveSampleCnt; ++i) {
-            GrGLfloat pos[2];
-            GL_CALL(GetMultisamplefv(GR_GL_SAMPLE_POSITION, i, pos));
-            if (kTopLeft_GrSurfaceOrigin == rtOrigin) {
-                (*samplePattern)[i].set(pos[0], pos[1]);
-            } else {
-                (*samplePattern)[i].set(pos[0], 1 - pos[1]);
-            }
-        }
-    }
-}
-
 void GrGLGpu::xferBarrier(GrRenderTarget* rt, GrXferBarrierType type) {
     SkASSERT(type);
     switch (type) {
         case kTexture_GrXferBarrierType: {
             GrGLRenderTarget* glrt = static_cast<GrGLRenderTarget*>(rt);
+            SkASSERT(glrt->textureFBOID() != 0 && glrt->renderFBOID() != 0);
             if (glrt->textureFBOID() != glrt->renderFBOID()) {
                 // The render target uses separate storage so no need for glTextureBarrier.
                 // FIXME: The render target will resolve automatically when its texture is bound,
@@ -4569,29 +4550,27 @@ sk_sp<GrSemaphore> SK_WARN_UNUSED_RESULT GrGLGpu::makeSemaphore(bool isOwned) {
     return GrGLSemaphore::Make(this, isOwned);
 }
 
-sk_sp<GrSemaphore> GrGLGpu::onWrapBackendSemaphore(const GrBackendSemaphore& semaphore,
-                                                   GrWrapOwnership ownership) {
+sk_sp<GrSemaphore> GrGLGpu::wrapBackendSemaphore(const GrBackendSemaphore& semaphore,
+                                                 GrResourceProvider::SemaphoreWrapType wrapType,
+                                                 GrWrapOwnership ownership) {
     SkASSERT(this->caps()->fenceSyncSupport());
     return GrGLSemaphore::MakeWrapped(this, semaphore.glSync(), ownership);
 }
 
-void GrGLGpu::onInsertSemaphore(sk_sp<GrSemaphore> semaphore, bool flush) {
+void GrGLGpu::insertSemaphore(sk_sp<GrSemaphore> semaphore, bool flush) {
     GrGLSemaphore* glSem = static_cast<GrGLSemaphore*>(semaphore.get());
 
-    if (glSem) {
-        GrGLsync sync;
-        GL_CALL_RET(sync, FenceSync(GR_GL_SYNC_GPU_COMMANDS_COMPLETE, 0));
-        glSem->setSync(sync);
-    }
+    GrGLsync sync;
+    GL_CALL_RET(sync, FenceSync(GR_GL_SYNC_GPU_COMMANDS_COMPLETE, 0));
+    glSem->setSync(sync);
 
     if (flush) {
         GL_CALL(Flush());
     }
 }
 
-void GrGLGpu::onWaitSemaphore(sk_sp<GrSemaphore> semaphore) {
+void GrGLGpu::waitSemaphore(sk_sp<GrSemaphore> semaphore) {
     GrGLSemaphore* glSem = static_cast<GrGLSemaphore*>(semaphore.get());
-    SkASSERT(glSem);
 
     GL_CALL(WaitSync(glSem->sync(), 0, GR_GL_TIMEOUT_IGNORED));
 }

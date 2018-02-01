@@ -14,7 +14,7 @@ import java.io.File;
 import java.io.IOException;
 
 public class SkQP {
-    protected native void nInit(AssetManager assetManager, String dataDir);
+    protected native void nInit(AssetManager assetManager, String dataDir, boolean experimentalMode);
     protected native float nExecuteGM(int gm, int backend) throws SkQPException;
     protected native String[] nExecuteUnitTest(int test);
     protected native void nMakeReport();
@@ -25,26 +25,24 @@ public class SkQP {
 
     protected static final String kSkiaGM = "SkiaGM_";
     protected static final String kSkiaUnitTests = "Skia_UnitTests";
-    protected static final String LOG_PREFIX = "org.skis.skqp";
+    protected static final String LOG_PREFIX = "org.skia.skqp";
 
     static {
       System.loadLibrary("skqp_app");
     }
 
     protected void runTests(Context context, String outputDirPath) {
-        Log.w(LOG_PREFIX, "Output Dir: " + outputDirPath);
+        Log.i(LOG_PREFIX, "Output Dir: " + outputDirPath);
         File outputDir = new File(outputDirPath);
-        if (outputDir.exists()) {
-          try {
-              deleteDirectoryContents(outputDir);
-          } catch (IOException e) {
-              Log.w(LOG_PREFIX, "DeleteDirectoryContents: " + e.getMessage());
-          }
+        try {
+            ensureEmtpyDirectory(outputDir);
+        } catch (IOException e) {
+            Log.e(LOG_PREFIX, "ensureEmtpyDirectory:" + e.getMessage());
         }
 
         // Note: nInit will initialize the mGMs, mBackends and mUnitTests fields.
         AssetManager assetManager = context.getResources().getAssets();
-        this.nInit(assetManager, outputDirPath);
+        this.nInit(assetManager, outputDirPath, true);
 
         for (int backend = 0; backend < mBackends.length; backend++) {
           String classname = kSkiaGM + mBackends[backend];
@@ -68,28 +66,40 @@ public class SkQP {
                 // Record success for this test.
               }
           }
-      }
-      for (int unitTest = 0; unitTest < mUnitTests.length; unitTest++) {
-          String testName = kSkiaUnitTests + "_" + mUnitTests[unitTest];
-          Log.w(LOG_PREFIX, "Running: " + testName);
-          String[] errors = this.nExecuteUnitTest(unitTest);
-          if (errors != null && errors.length > 0) {
-              for (String error : errors) {
-                // Record unit test failures.
-              }
-          } else {
-            // Record success.
-          }
-      }
-      nMakeReport();
+        }
+        for (int unitTest = 0; unitTest < mUnitTests.length; unitTest++) {
+            String testName = kSkiaUnitTests + "_" + mUnitTests[unitTest];
+            Log.w(LOG_PREFIX, "Running: " + testName);
+            String[] errors = this.nExecuteUnitTest(unitTest);
+            if (errors != null && errors.length > 0) {
+                for (String error : errors) {
+                  Log.w(LOG_PREFIX, "Error running " + testName + ":" + error);
+                }
+            } else {
+              Log.i(LOG_PREFIX, "Test: " + testName + " finished successfully.");
+            }
+        }
+        Log.i(LOG_PREFIX, "Finished running all tests.");
+        nMakeReport();
     }
 
-    protected static void deleteDirectoryContents(File f) throws IOException {
-      for (File s : f.listFiles()) {
-          if (s.isDirectory()) {
-              deleteDirectoryContents(s);
-          }
-          s.delete();
+    protected static void ensureEmtpyDirectory(File f) throws IOException {
+      if (f.exists()) {
+        delete(f);
+      }
+      if (!f.mkdirs()) {
+        throw new IOException("Unable to create directory:" + f.getAbsolutePath());
+      }
+    }
+
+    protected static void delete(File f) throws IOException {
+      if (f.isDirectory()) {
+        for (File s : f.listFiles()) {
+          delete(s);
+        }
+      }
+      if (!f.delete()) {
+        throw new IOException("Unable to delete:" + f.getAbsolutePath());
       }
     }
 }

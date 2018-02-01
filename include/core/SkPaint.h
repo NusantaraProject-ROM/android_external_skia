@@ -30,8 +30,6 @@ class SkMaskFilter;
 class SkPath;
 class SkPathEffect;
 struct SkPoint;
-class SkRasterizer;
-struct SkScalerContextEffects;
 class SkShader;
 class SkSurfaceProps;
 class SkTextBlob;
@@ -74,11 +72,11 @@ public:
     SkPaint();
 
     /** Makes a shallow copy of SkPaint. SkTypeface, SkPathEffect, SkShader,
-        SkMaskFilter, SkColorFilter, SkRasterizer, SkDrawLooper, and SkImageFilter are shared
+        SkMaskFilter, SkColorFilter, SkDrawLooper, and SkImageFilter are shared
         between the original paint and the copy. Objects containing SkRefCnt increment
         their references by one.
 
-        The referenced objects SkPathEffect, SkShader, SkMaskFilter, SkColorFilter, SkRasterizer,
+        The referenced objects SkPathEffect, SkShader, SkMaskFilter, SkColorFilter,
         SkDrawLooper, and SkImageFilter cannot be modified after they are created.
         This prevents objects with SkRefCnt from being modified once SkPaint refers to them.
 
@@ -98,13 +96,13 @@ public:
     SkPaint(SkPaint&& paint);
 
     /** Decreases SkPaint SkRefCnt of owned objects: SkTypeface, SkPathEffect, SkShader,
-        SkMaskFilter, SkColorFilter, SkRasterizer, SkDrawLooper, and SkImageFilter. If the
+        SkMaskFilter, SkColorFilter, SkDrawLooper, and SkImageFilter. If the
         objects containing SkRefCnt go to zero, they are deleted.
     */
     ~SkPaint();
 
     /** Makes a shallow copy of SkPaint. SkTypeface, SkPathEffect, SkShader,
-        SkMaskFilter, SkColorFilter, SkRasterizer, SkDrawLooper, and SkImageFilter are shared
+        SkMaskFilter, SkColorFilter, SkDrawLooper, and SkImageFilter are shared
         between the original paint and the copy. Objects containing SkRefCnt in the
         prior destination are decreased by one, and the referenced objects are deleted if the
         resulting count is zero. Objects containing SkRefCnt in the parameter paint
@@ -128,7 +126,7 @@ public:
     SkPaint& operator=(SkPaint&& paint);
 
     /** Compares a and b, and returns true if a and b are equivalent. May return false
-        if SkTypeface, SkPathEffect, SkShader, SkMaskFilter, SkColorFilter, SkRasterizer,
+        if SkTypeface, SkPathEffect, SkShader, SkMaskFilter, SkColorFilter,
         SkDrawLooper, or SkImageFilter have identical contents but different pointers.
 
         @param a  SkPaint to compare
@@ -138,7 +136,7 @@ public:
     SK_API friend bool operator==(const SkPaint& a, const SkPaint& b);
 
     /** Compares a and b, and returns true if a and b are not equivalent. May return true
-        if SkTypeface, SkPathEffect, SkShader, SkMaskFilter, SkColorFilter, SkRasterizer,
+        if SkTypeface, SkPathEffect, SkShader, SkMaskFilter, SkColorFilter,
         SkDrawLooper, or SkImageFilter have identical contents but different pointers.
 
         @param a  SkPaint to compare
@@ -177,8 +175,10 @@ public:
         by the client.
 
         @param buffer  serialized data describing SkPaint content
+        @return false if the buffer contained invalid data to initialize the paint, in which case
+                      the paint will be reset().
     */
-    void unflatten(SkReadBuffer& buffer);
+    bool unflatten(SkReadBuffer& buffer);
 
     /** Sets all SkPaint contents to their initial values. This is equivalent to replacing
         SkPaint with the result of SkPaint().
@@ -852,9 +852,6 @@ public:
         SkMaskFilter. Pass nullptr to clear SkMaskFilter and leave SkMaskFilter effect on
         mask alpha unaltered.
 
-        Does not affect SkRasterizer.
-        Increments maskFilter SkRefCnt by one.
-
         @param maskFilter  modifies clipping mask generated from drawn geometry
     */
     void setMaskFilter(sk_sp<SkMaskFilter> maskFilter);
@@ -880,31 +877,6 @@ public:
     */
     void setTypeface(sk_sp<SkTypeface> typeface);
 
-    /** Returns SkRasterizer if set, or nullptr.
-        Does not alter SkRasterizer SkRefCnt.
-
-        @return  SkRasterizer if previously set, nullptr otherwise
-    */
-    SkRasterizer* getRasterizer() const { return fRasterizer.get(); }
-
-    /** Returns SkRasterizer if set, or nullptr.
-        Increases SkRasterizer SkRefCnt by one.
-
-        @return  SkRasterizer if previously set, nullptr otherwise
-    */
-    sk_sp<SkRasterizer> refRasterizer() const;
-
-    /** Sets SkRasterizer to rasterizer, decreasing SkRefCnt of the previous
-        SkRasterizer. Pass nullptr to clear SkRasterizer and leave SkRasterizer effect on
-        mask alpha unaltered.
-
-        Does not affect SkMaskFilter.
-        Increments rasterizer SkRefCnt by one.
-
-        @param rasterizer  how geometry is converted to mask alpha
-    */
-    void setRasterizer(sk_sp<SkRasterizer> rasterizer);
-
     /** Returns SkImageFilter if set, or nullptr.
         Does not alter SkImageFilter SkRefCnt.
 
@@ -922,9 +894,6 @@ public:
     /** Sets SkImageFilter to imageFilter, decreasing SkRefCnt of the previous
         SkImageFilter. Pass nullptr to clear SkImageFilter, and remove SkImageFilter effect
         on drawing.
-
-        Does not affect SkRasterizer or SkMaskFilter.
-        Increments imageFilter SkRefCnt by one.
 
         @param imageFilter  how SkImage is sampled when transformed
     */
@@ -1676,7 +1645,6 @@ private:
     sk_sp<SkShader>       fShader;
     sk_sp<SkMaskFilter>   fMaskFilter;
     sk_sp<SkColorFilter>  fColorFilter;
-    sk_sp<SkRasterizer>   fRasterizer;
     sk_sp<SkDrawLooper>   fDrawLooper;
     sk_sp<SkImageFilter>  fImageFilter;
 
@@ -1710,33 +1678,6 @@ private:
     SkScalar measure_text(SkGlyphCache*, const char* text, size_t length,
                           int* count, SkRect* bounds) const;
 
-    enum ScalerContextFlags : uint32_t {
-        kNone_ScalerContextFlags = 0,
-
-        kFakeGamma_ScalerContextFlag = 1 << 0,
-        kBoostContrast_ScalerContextFlag = 1 << 1,
-
-        kFakeGammaAndBoostContrast_ScalerContextFlags =
-            kFakeGamma_ScalerContextFlag | kBoostContrast_ScalerContextFlag,
-    };
-
-    /*
-     * Allocs an SkDescriptor on the heap and return it to the caller as a refcnted
-     * SkData.  Caller is responsible for managing the lifetime of this object.
-     */
-    void getScalerContextDescriptor(SkScalerContextEffects*, SkAutoDescriptor*,
-                                    const SkSurfaceProps& surfaceProps,
-                                    uint32_t scalerContextFlags, const SkMatrix*) const;
-
-    SkGlyphCache* detachCache(const SkSurfaceProps* surfaceProps, uint32_t scalerContextFlags,
-                              const SkMatrix*) const;
-
-    void descriptorProc(const SkSurfaceProps* surfaceProps, uint32_t scalerContextFlags,
-                        const SkMatrix* deviceMatrix,
-                        void (*proc)(SkTypeface*, const SkScalerContextEffects&,
-                                     const SkDescriptor*, void*),
-                        void* context) const;
-
     /*
      * The luminance color is used to determine which Gamma Canonical color to map to.  This is
      * really only used by backends which want to cache glyph masks, and need some way to know if
@@ -1762,29 +1703,29 @@ private:
         kCanonicalTextSizeForPaths  = 64,
     };
 
-    static bool TooBigToUseCache(const SkMatrix& ctm, const SkMatrix& textM);
+    static bool TooBigToUseCache(const SkMatrix& ctm, const SkMatrix& textM, SkScalar maxLimit);
 
     // Set flags/hinting/textSize up to use for drawing text as paths.
     // Returns scale factor to restore the original textSize, since will will
     // have change it to kCanonicalTextSizeForPaths.
     SkScalar setupForAsPaths();
 
-    static SkScalar MaxCacheSize2();
+    static SkScalar MaxCacheSize2(SkScalar maxLimit);
 
+    friend class GrAtlasTextBlob;
+    friend class GrAtlasTextContext;
+    friend class GrGLPathRendering;
+    friend class GrPathRendering;
+    friend class GrStencilAndCoverTextContext;
+    friend class GrTextUtils;
     friend class SkAutoGlyphCache;
     friend class SkAutoGlyphCacheNoGamma;
+    friend class SkCanonicalizePaint;
     friend class SkCanvas;
     friend class SkDraw;
     friend class SkPDFDevice;
-    friend class GrAtlasTextBlob;
-    friend class GrAtlasTextContext;
-    friend class GrStencilAndCoverTextContext;
-    friend class GrPathRendering;
-    friend class GrTextUtils;
-    friend class GrGLPathRendering;
-    friend class SkScalerContext;
+    friend class SkScalerContext;  // for computeLuminanceColor()
     friend class SkTextBaseIter;
-    friend class SkCanonicalizePaint;
 };
 
 #endif

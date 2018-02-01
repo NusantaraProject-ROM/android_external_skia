@@ -43,12 +43,6 @@ public:
         return true;
     }
 
-    void onQueryMultisampleSpecs(GrRenderTarget* rt, GrSurfaceOrigin, const GrStencilSettings&,
-                                 int* effectiveSampleCnt, SamplePattern*) override {
-        SkASSERT(0);
-        *effectiveSampleCnt = 0; // ??
-    }
-
     GrGpuRTCommandBuffer* createCommandBuffer(
                                     GrRenderTarget*, GrSurfaceOrigin,
                                     const GrGpuRTCommandBuffer::LoadAndStoreInfo&,
@@ -71,6 +65,18 @@ public:
     sk_sp<GrSemaphore> SK_WARN_UNUSED_RESULT makeSemaphore(bool isOwned) override {
         SkASSERT(0);
         return nullptr;
+    }
+    sk_sp<GrSemaphore> wrapBackendSemaphore(const GrBackendSemaphore& semaphore,
+                                            GrResourceProvider::SemaphoreWrapType wrapType,
+                                            GrWrapOwnership ownership) override {
+        SkASSERT(0);
+        return nullptr;
+    }
+    void insertSemaphore(sk_sp<GrSemaphore> semaphore, bool flush) override {
+        SkASSERT(0);
+    }
+    void waitSemaphore(sk_sp<GrSemaphore> semaphore) override {
+        SkASSERT(0);
     }
     sk_sp<GrSemaphore> prepareTextureForCrossContextUsage(GrTexture*) override {
         SkASSERT(0);
@@ -146,18 +152,6 @@ private:
     }
 
     void onFinishFlush(bool insertedSemaphores) override { SkASSERT(0); }
-
-    sk_sp<GrSemaphore> onWrapBackendSemaphore(const GrBackendSemaphore& semaphore,
-                                            GrWrapOwnership ownership) override {
-        SkASSERT(0);
-        return nullptr;
-    }
-    void onInsertSemaphore(sk_sp<GrSemaphore> semaphore, bool flush) override {
-        SkASSERT(0);
-    }
-    void onWaitSemaphore(sk_sp<GrSemaphore> semaphore) override {
-        SkASSERT(0);
-    }
 
     GrStencilAttachment* createStencilAttachmentForRenderTarget(const GrRenderTarget*,
                                                                 int width,

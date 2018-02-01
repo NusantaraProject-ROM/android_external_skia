@@ -93,7 +93,7 @@ class GLSLPipelineDynamicStateTestProcessor : public GrGLSLGeometryProcessor {
         v->codeAppendf("float2 vertex = %s;", mp.fVertex.fName);
         gpArgs->fPositionVar.set(kFloat2_GrSLType, "vertex");
 
-        GrGLSLPPFragmentBuilder* f = args.fFragBuilder;
+        GrGLSLFragmentBuilder* f = args.fFragBuilder;
         f->codeAppendf("%s = half4(1);", args.fOutputCoverage);
     }
 };
@@ -146,7 +146,7 @@ private:
 
 DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrPipelineDynamicStateTest, reporter, ctxInfo) {
     GrContext* const context = ctxInfo.grContext();
-    GrResourceProvider* rp = context->resourceProvider();
+    GrResourceProvider* rp = context->contextPriv().resourceProvider();
 
     sk_sp<GrRenderTargetContext> rtc(
         context->makeDeferredRenderTargetContext(SkBackingFit::kExact, kScreenSize, kScreenSize,

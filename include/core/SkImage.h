@@ -21,6 +21,7 @@
 
 class SkData;
 class SkCanvas;
+class SkImageFilter;
 class SkImageGenerator;
 class SkPaint;
 class SkPicture;
@@ -171,7 +172,7 @@ public:
      *  Decodes and uploads the encoded data to a GPU backed image using the supplied GrContext.
      *  That image can be safely used by other GrContexts, across thread boundaries. The GrContext
      *  used here, and the ones used to draw this image later must be in the same GL share group,
-     *  or otherwise be able to share resources.
+     *  or use the same Vulkan VkDevice and VkQueue, or otherwise be able to share resources.
      *
      *  When the image's ref count reaches zero, the original GrContext will destroy the texture,
      *  asynchronously.
@@ -187,7 +188,7 @@ public:
      *  Uploads the pixmap to a GPU backed image using the supplied GrContext.
      *  That image can be safely used by other GrContexts, across thread boundaries. The GrContext
      *  used here, and the ones used to draw this image later must be in the same GL share group,
-     *  or otherwise be able to share resources.
+     *  or use the same Vulkan VkDevice and VkQueue, or otherwise be able to share resources.
      *
      *  When the image's ref count reaches zero, the original GrContext will destroy the texture,
      *  asynchronously.
@@ -204,6 +205,10 @@ public:
      *  texture when the image is released.
      *
      *  Will return NULL if the specified backend texture is unsupported.
+     *
+     *  This is not supported if the GrContext was obtained from a deferred display list canvas
+     *  since if the SkImage never gets used and flushed to a real GrContext, we have no way to be
+     *  able to delete the underlying backend texture.
      *
      *  DEPRECATED: This factory is deprecated and clients should use the factory below which takes
      *  an SkColorType.
@@ -223,6 +228,10 @@ public:
      *  interpret the backend format supplied by the GrBackendTexture. If the format in the
      *  GrBackendTexture is not compitable with the SkColorType, SkAlphaType, and SkColorSpace we
      *  will return nullptr.
+     *
+     *  This is not supported if the GrContext was obtained from a deferred display list canvas
+     *  since if the SkImage never gets used and flushed to a real GrContext, we have no way to be
+     *  able to delete the underlying backend texture.
      */
     static sk_sp<SkImage> MakeFromAdoptedTexture(GrContext* context,
                                                  const GrBackendTexture& backendTexture,

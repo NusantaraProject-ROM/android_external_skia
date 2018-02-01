@@ -5,32 +5,18 @@
  * found in the LICENSE file.
  */
 
+#include "SkAndroidCodec.h"
 #include "SkBitmap.h"
 #include "SkCodec.h"
-#include "SkCommonFlags.h"
-#include "SkImageEncoder.h"
-#include "SkOSPath.h"
 #include "SkStream.h"
 
+#include "CodecPriv.h"
 #include "Resources.h"
 #include "Test.h"
 #include "sk_tool_utils.h"
 
 #include <initializer_list>
 #include <vector>
-
-static void write_bm(const char* name, const SkBitmap& bm) {
-    if (FLAGS_writePath.isEmpty()) {
-        return;
-    }
-
-    SkString filename = SkOSPath::Join(FLAGS_writePath[0], name);
-    filename.appendf(".png");
-    SkFILEWStream file(filename.c_str());
-    if (!SkEncodeImage(&file, bm, SkEncodedImageFormat::kPNG, 100)) {
-        SkDebugf("failed to write '%s'\n", filename.c_str());
-    }
-}
 
 DEF_TEST(Codec_trunc, r) {
     sk_sp<SkData> data(GetResourceAsData("images/box.gif"));
@@ -383,6 +369,55 @@ DEF_TEST(Codec_frames, r) {
                     }
                 }
             }
+        }
+    }
+}
+
+// Verify that a webp image can be animated scaled down. This image has a
+// kRestoreBG frame, so it is an interesting image to test. After decoding that
+// frame, we have to erase its rectangle. The rectangle has to be adjusted
+// based on the scaled size.
+DEF_TEST(AndroidCodec_animated, r) {
+    if (GetResourcePath().isEmpty()) {
+        return;
+    }
+
+    const char* file = "images/required.webp";
+    sk_sp<SkData> data(GetResourceAsData(file));
+    if (!data) {
+        ERRORF(r, "Missing %s", file);
+        return;
+    }
+
+    auto codec = SkAndroidCodec::MakeFromCodec(SkCodec::MakeFromData(std::move(data)));
+    if (!codec) {
+        ERRORF(r, "Failed to decode %s", file);
+        return;
+    }
+
+    auto info = codec->getInfo().makeAlphaType(kPremul_SkAlphaType);
+
+    for (int sampleSize : { 8, 32, 100 }) {
+        auto dimensions = codec->codec()->getScaledDimensions(1.0f / sampleSize);
+        info = info.makeWH(dimensions.width(), dimensions.height());
+        SkBitmap bm;
+        bm.allocPixels(info);
+
+        SkCodec::Options options;
+        for (int i = 0; i < codec->codec()->getFrameCount(); ++i) {
+            SkCodec::FrameInfo frameInfo;
+            REPORTER_ASSERT(r, codec->codec()->getFrameInfo(i, &frameInfo));
+            if (5 == i) {
+                REPORTER_ASSERT(r, frameInfo.fDisposalMethod
+                        == SkCodecAnimation::DisposalMethod::kRestoreBGColor);
+            }
+            options.fFrameIndex = i;
+            options.fPriorFrame = i - 1;
+            info = info.makeAlphaType(frameInfo.fAlphaType);
+
+            const auto result = codec->codec()->getPixels(info, bm.getPixels(), bm.rowBytes(),
+                                                          &options);
+            REPORTER_ASSERT(r, result == SkCodec::kSuccess);
         }
     }
 }
