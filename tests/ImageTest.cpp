@@ -29,6 +29,7 @@
 #include "Test.h"
 
 #include "Resources.h"
+#include "sk_pixel_iter.h"
 #include "sk_tool_utils.h"
 
 #if SK_SUPPORT_GPU
@@ -37,6 +38,7 @@
 #include "GrResourceCache.h"
 #include "GrTest.h"
 #include "GrTexture.h"
+#include "SkGr.h"
 #endif
 
 using namespace sk_gpu_test;
@@ -485,6 +487,99 @@ DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(SkImage_drawAbandonedGpuImage, reporter, c
     surface->getCanvas()->drawImage(image, 0, 0);
 }
 
+DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrContext_colorTypeSupportedAsImage, reporter, ctxInfo) {
+    for (int ct = 0; ct < kLastEnum_SkColorType; ++ct) {
+        static constexpr int kSize = 10;
+        SkColorType colorType = static_cast<SkColorType>(ct);
+        bool can = ctxInfo.grContext()->colorTypeSupportedAsImage(colorType);
+        auto* gpu = ctxInfo.grContext()->contextPriv().getGpu();
+        GrBackendTexture backendTex = gpu->createTestingOnlyBackendTexture(
+                nullptr, kSize, kSize, colorType, false, GrMipMapped::kNo);
+        auto img =
+                SkImage::MakeFromTexture(ctxInfo.grContext(), backendTex, kTopLeft_GrSurfaceOrigin,
+                                         colorType, kOpaque_SkAlphaType, nullptr);
+        REPORTER_ASSERT(reporter, can == SkToBool(img),
+                        "%d, colorTypeSupportedAsImage:%d, actual:%d, ct:%d", can, SkToBool(img),
+                        colorType);
+
+        img.reset();
+        ctxInfo.grContext()->flush();
+        if (backendTex.isValid()) {
+            gpu->deleteTestingOnlyBackendTexture(&backendTex);
+        }
+    }
+}
+
+DEF_GPUTEST_FOR_RENDERING_CONTEXTS(UnpremulTextureImage, reporter, ctxInfo) {
+    SkBitmap bmp;
+    bmp.allocPixels(
+            SkImageInfo::Make(256, 256, kRGBA_8888_SkColorType, kUnpremul_SkAlphaType, nullptr));
+    for (int y = 0; y < 256; ++y) {
+        for (int x = 0; x < 256; ++x) {
+            *bmp.getAddr32(x, y) =
+                    SkColorSetARGB((U8CPU)y, 255 - (U8CPU)y, (U8CPU)x, 255 - (U8CPU)x);
+        }
+    }
+    auto texImage = SkImage::MakeFromBitmap(bmp)->makeTextureImage(ctxInfo.grContext(), nullptr);
+    if (!texImage || texImage->alphaType() != kUnpremul_SkAlphaType) {
+        ERRORF(reporter, "Failed to make unpremul texture image.");
+        return;
+    }
+    // The GPU backend always unpremuls the values stored in the texture because it assumes they
+    // are premul values. (skbug.com/7580).
+    if (false) {
+        SkBitmap unpremul;
+        unpremul.allocPixels(SkImageInfo::Make(256, 256, kRGBA_8888_SkColorType,
+                                               kUnpremul_SkAlphaType, nullptr));
+        if (!texImage->readPixels(unpremul.info(), unpremul.getPixels(), unpremul.rowBytes(), 0,
+                                  0)) {
+            ERRORF(reporter, "Unpremul readback failed.");
+            return;
+        }
+        for (int y = 0; y < 256; ++y) {
+            for (int x = 0; x < 256; ++x) {
+                if (*bmp.getAddr32(x, y) != *unpremul.getAddr32(x, y)) {
+                    ERRORF(reporter, "unpremul(0x%08x)->unpremul(0x%08x) at %d, %d.",
+                           *bmp.getAddr32(x, y), *unpremul.getAddr32(x, y), x, y);
+                    return;
+                }
+            }
+        }
+    }
+    SkBitmap premul;
+    premul.allocPixels(
+            SkImageInfo::Make(256, 256, kRGBA_8888_SkColorType, kPremul_SkAlphaType, nullptr));
+    if (!texImage->readPixels(premul.info(), premul.getPixels(), premul.rowBytes(), 0, 0)) {
+        ERRORF(reporter, "Unpremul readback failed.");
+        return;
+    }
+    for (int y = 0; y < 256; ++y) {
+        for (int x = 0; x < 256; ++x) {
+            // Treat bmp's color as a pm color even though it may be the r/b swap of a PM color.
+            // SkPremultiplyColor acts the same on both channels.
+            uint32_t origColor = SkPreMultiplyColor(*bmp.getAddr32(x, y));
+            int32_t origA = (origColor >> 24) & 0xff;
+            int32_t origB = (origColor >> 16) & 0xff;
+            int32_t origG = (origColor >>  8) & 0xff;
+            int32_t origR = (origColor >>  0) & 0xff;
+            uint32_t read = *premul.getAddr32(x, y);
+            int32_t readA = (read >> 24) & 0xff;
+            int32_t readB = (read >> 16) & 0xff;
+            int32_t readG = (read >>  8) & 0xff;
+            int32_t readR = (read >>  0) & 0xff;
+            // We expect that alpha=1 and alpha=0 should come out exact. Otherwise allow a little
+            // bit of tolerance for GPU vs CPU premul math.
+            int32_t tol = (origA == 0 || origA == 255) ? 0 : 1;
+            if (origA != readA || SkTAbs(readB - origB) > tol || SkTAbs(readG - origG) > tol ||
+                SkTAbs(readR - origR) > tol) {
+                ERRORF(reporter, "unpremul(0x%08x)->premul(0x%08x) at %d, %d.",
+                       *bmp.getAddr32(x, y), *premul.getAddr32(x, y), x, y);
+                return;
+            }
+        }
+    }
+}
+
 #endif
 
 class EmptyGenerator : public SkImageGenerator {
@@ -890,8 +985,18 @@ static void test_cross_context_image(skiatest::Reporter* reporter, const GrConte
                     ctx, GrSamplerState::ClampNearest(), nullptr, &texColorSpace, nullptr);
             REPORTER_ASSERT(reporter, proxySecondRef);
 
-            // Releae all refs from the original context
+            // Release first ref from the original context
             proxy.reset(nullptr);
+
+            // We released one proxy but not the other from the current borrowing context. Make sure
+            // a new context is still not able to borrow the texture.
+            otherTestContext->makeCurrent();
+            otherProxy = as_IB(refImg)->asTextureProxyRef(otherCtx, GrSamplerState::ClampNearest(),
+                                                          nullptr, &texColorSpace, nullptr);
+            REPORTER_ASSERT(reporter, !otherProxy);
+
+            // Release second ref from the original context
+            testContext->makeCurrent();
             proxySecondRef.reset(nullptr);
 
             // Now we should be able to borrow the texture from the other context
@@ -1392,3 +1497,32 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(ImageScalePixels_Gpu, reporter, ctxInfo) {
     test_scale_pixels(reporter, gpuImage.get(), pmRed);
 }
 #endif
+
+static sk_sp<SkImage> any_image_will_do() {
+    return GetResourceAsImage("images/mandrill_32.png");
+}
+
+DEF_TEST(Image_nonfinite_dst, reporter) {
+    auto surf = SkSurface::MakeRasterN32Premul(10, 10);
+    auto img = any_image_will_do();
+    SkPaint paint;
+
+    for (SkScalar bad : { SK_ScalarInfinity, SK_ScalarNaN}) {
+        for (int bits = 1; bits <= 15; ++bits) {
+            SkRect dst = { 0, 0, 10, 10 };
+            if (bits & 1) dst.fLeft = bad;
+            if (bits & 2) dst.fTop = bad;
+            if (bits & 4) dst.fRight = bad;
+            if (bits & 8) dst.fBottom = bad;
+
+            surf->getCanvas()->drawImageRect(img, dst, &paint);
+
+            // we should draw nothing
+            sk_tool_utils::PixelIter iter(surf.get());
+            while (void* addr = iter.next()) {
+                REPORTER_ASSERT(reporter, *(SkPMColor*)addr == 0);
+            }
+        }
+    }
+}
+

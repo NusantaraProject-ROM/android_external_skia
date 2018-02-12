@@ -3,6 +3,19 @@ SkBitmap Reference
 
 # <a name="Bitmap"></a> Bitmap
 
+## <a name="Overview"></a> Overview
+
+## <a name="Subtopics"></a> Subtopics
+
+| name | description |
+| --- | --- |
+| <a href="#Classes_and_Structs">Classes and Structs</a> | embedded struct and class members |
+| Constants | enum and enum class, const values |
+| <a href="#Constructors">Constructors</a> | functions that construct <a href="SkBitmap_Reference#SkBitmap">SkBitmap</a> |
+| <a href="#Member_Functions">Member Functions</a> | static functions and member methods |
+| <a href="#Operators">Operators</a> | operator overloading methods |
+| <a href="#Related_Functions">Related Functions</a> | similar methods grouped together |
+
 # <a name="SkBitmap"></a> Class SkBitmap
 <a href="#Bitmap">Bitmap</a> describes a two-dimensional raster pixel array. <a href="#Bitmap">Bitmap</a> is built on
 <a href="SkImageInfo_Reference#Image_Info">Image Info</a>, containing integer width and height, <a href="SkImageInfo_Reference#Color_Type">Color Type</a> and <a href="SkImageInfo_Reference#Alpha_Type">Alpha Type</a>
@@ -24,51 +37,47 @@ pixels. Declaring <a href="#SkBitmap">SkBitmap</a> const affects <a href="#Bitma
 <a href="#Bitmap">Bitmap</a> is not thread safe. Each thread must have its own copy of <a href="#Bitmap">Bitmap</a> fields,
 although threads may share the underlying pixel array.
 
-# <a name="Row_Bytes"></a> Row Bytes
+## <a name="Row_Bytes"></a> Row Bytes
+
 <a href="#Bitmap">Bitmap</a> pixels may be contiguous, or may have a gap at the end of each row.
 <a href="#Row_Bytes">Row Bytes</a> is the interval from one row to the next. <a href="#Row_Bytes">Row Bytes</a> may be specified;
 sometimes passing zero will compute the <a href="#Row_Bytes">Row Bytes</a> from the row width and the
 number of bytes in a pixel. <a href="#Row_Bytes">Row Bytes</a> may be larger than the row requires. This
 is useful to position one or more <a href="#Bitmap">Bitmaps</a> within a shared pixel array.
 
-# <a name="Overview"></a> Overview
-
-## <a name="Subtopics"></a> Subtopics
+## <a name="Related_Functions"></a> Related Functions
 
 | name | description |
-| --- | ---  |
-| <a href="#Overview_Classes_and_Structs">Classes and Structs</a> | embedded struct and class members |
-| <a href="#Overview_Constructors">Constructors</a> | functions that construct <a href="SkPath_Reference#SkPath">SkPath</a> |
-| <a href="#Overview_Member_Functions">Member Functions</a> | static functions and member methods |
-| <a href="#Overview_Operators">Operators</a> | operator overloading methods |
+| --- | --- |
+| <a href="#Row_Bytes">Row Bytes</a> | interval from one row to the next |
 
 ## <a name="Classes_and_Structs"></a> Classes and Structs
 
 | name | description |
-| --- | ---  |
-| <a href="#SkBitmap_Allocator">Allocator</a> |  |
-| <a href="#SkBitmap_HeapAllocator">HeapAllocator</a> |  |
+| --- | --- |
+| <a href="#SkBitmap_Allocator">Allocator</a> | abstract subclass of <a href="#SkBitmap_HeapAllocator">HeapAllocator</a> |
+| <a href="#SkBitmap_HeapAllocator">HeapAllocator</a> | allocates pixel memory from heap |
 
 ## <a name="Constructors"></a> Constructors
 
 | name | description |
-| --- | ---  |
+| --- | --- |
 | <a href="#SkBitmap_empty_constructor">SkBitmap()</a> | constructs with default values |
 | <a href="#SkBitmap_move_SkBitmap">SkBitmap(SkBitmap&& src)</a> | takes ownership of pixels |
 | <a href="#SkBitmap_copy_const_SkBitmap">SkBitmap(const SkBitmap& src)</a> | shares ownership of pixels |
-|  | releases ownership of pixels |
+| <a href="#SkBitmap_destructor">~SkBitmap()</a> | releases ownership of pixels |
 
 ## <a name="Operators"></a> Operators
 
 | name | description |
-| --- | ---  |
-| <a href="#SkBitmap">SkBitmap</a>& <a href="#SkBitmap_move_operator">operator=(SkBitmap&& src)</a> | takes ownership of pixels |
-| <a href="#SkBitmap">SkBitmap</a>& <a href="#SkBitmap_copy_operator">operator=(const SkBitmap& src)</a> | shares ownership of pixels |
+| --- | --- |
+| <a href="#SkBitmap_move_operator">operator=(SkBitmap&& src)</a> | takes ownership of pixels |
+| <a href="#SkBitmap_copy_operator">operator=(const SkBitmap& src)</a> | shares ownership of pixels |
 
 ## <a name="Member_Functions"></a> Member Functions
 
 | name | description |
-| --- | ---  |
+| --- | --- |
 | <a href="#SkBitmap_ComputeIsOpaque">ComputeIsOpaque</a> | returns true if all pixels are opaque |
 | <a href="#SkBitmap_allocN32Pixels">allocN32Pixels</a> | allocates compatible <a href="#ARGB">Color ARGB</a> pixels, or aborts |
 | <a href="#SkBitmap_allocPixels">allocPixels</a> | allocates pixels from <a href="SkImageInfo_Reference#Image_Info">Image Info</a>, or aborts |
@@ -247,7 +256,7 @@ empty <a href="#Bitmap">Bitmap</a>
 
 ### Example
 
-<div><fiddle-embed name="8bf225da00df80970271722cd3d1ced4">
+<div><fiddle-embed name="6739d14ec0d6a373f2fcadc6b3077fd4">
 
 #### Example Output
 
@@ -461,7 +470,7 @@ Swaps the fields of the two bitmaps.
 
 ### Example
 
-<div><fiddle-embed name="aaf9157531f4969b4ec048e9edcdb069">
+<div><fiddle-embed name="274d02e5f33866b1a9a78423c5569e22">
 
 #### Example Output
 
@@ -537,7 +546,7 @@ reference to <a href="SkImageInfo_Reference#Image_Info">Image Info</a>
 
 ### Example
 
-<div><fiddle-embed name="2932fccfb074cf52b17cec238f70d888">
+<div><fiddle-embed name="ec47c4dc23e2925ad565eaba55a91553">
 
 #### Example Output
 
@@ -640,12 +649,12 @@ Returns <a href="SkImageInfo_Reference#Color_Type">Color Type</a>, one of: <a hr
 
 ### Example
 
-<div><fiddle-embed name="8aa2ab0565091082a874c23886ddb0c5">
+<div><fiddle-embed name="ceb77fab7326b57822a147b04aa0960e">
 
 #### Example Output
 
 ~~~~
-color type: kAlpha_SkColorType
+color type: kAlpha_8_SkColorType
 ~~~~
 
 </fiddle-embed></div>
@@ -773,19 +782,19 @@ bytes in pixel
 
 ### Example
 
-<div><fiddle-embed name="f09e181f3210d427e4b3d2ae6667ae6a">
+<div><fiddle-embed name="4bfe28ea3f70f3bfd73d956e913c1a20">
 
 #### Example Output
 
 ~~~~
-color: kUnknown_SkColorType   bytesPerPixel: 0
-color: kAlpha_SkColorType     bytesPerPixel: 1
-color: kRGB_565_SkColorType   bytesPerPixel: 2
-color: kARGB_4444_SkColorType bytesPerPixel: 2
-color: kRGBA_8888_SkColorType bytesPerPixel: 4
-color: kBGRA_8888_SkColorType bytesPerPixel: 4
-color: kGray_8_SkColorType    bytesPerPixel: 1
-color: kRGBA_F16_SkColorType  bytesPerPixel: 8
+color: kUnknown_SkColorType      bytesPerPixel: 0
+color: kAlpha_8_SkColorType      bytesPerPixel: 1
+color: kRGB_565_SkColorType      bytesPerPixel: 2
+color: kARGB_4444_SkColorType    bytesPerPixel: 2
+color: kRGBA_8888_SkColorType    bytesPerPixel: 4
+color: kBGRA_8888_SkColorType    bytesPerPixel: 4
+color: kGray_8_SkColorType       bytesPerPixel: 1
+color: kRGBA_F16_SkColorType     bytesPerPixel: 8
 ~~~~
 
 </fiddle-embed></div>
@@ -848,13 +857,13 @@ one of: 0, 1, 2, 3; left shift to convert pixels to bytes
 
 ### Example
 
-<div><fiddle-embed name="8fa214f2b9a655d7b492181d2143538c">
+<div><fiddle-embed name="2c77d92f20b950154b9444d3b639b36c">
 
 #### Example Output
 
 ~~~~
 color: kUnknown_SkColorType   shiftPerPixel: 0
-color: kAlpha_SkColorType     shiftPerPixel: 0
+color: kAlpha_8_SkColorType   shiftPerPixel: 0
 color: kRGB_565_SkColorType   shiftPerPixel: 1
 color: kARGB_4444_SkColorType shiftPerPixel: 1
 color: kRGBA_8888_SkColorType shiftPerPixel: 2
@@ -1059,7 +1068,7 @@ true if <a href="SkImageInfo_Reference#Alpha_Type">Alpha Type</a> is set
 
 ### Example
 
-<div><fiddle-embed name="786005ff582d0369c83e7d686d94138d"></fiddle-embed></div>
+<div><fiddle-embed name="9394975fa8a13204a5cc2e94f86737e5"></fiddle-embed></div>
 
 ### See Also
 
@@ -1854,7 +1863,7 @@ contains width, height, <a href="SkImageInfo_Reference#Alpha_Type">Alpha Type</a
 bool SK_WARN_UNUSED_RESULT tryAllocN32Pixels(int width, int height, bool isOpaque = false)
 </pre>
 
-Sets <a href="SkImageInfo_Reference#Image_Info">Image Info</a> to width, height, and <a href="SkImageInfo_Reference#Native_Color_Type">Native Color Type</a>; and allocates
+Sets <a href="SkImageInfo_Reference#Image_Info">Image Info</a> to width, height, and <a href="SkImageInfo_Reference#Color_Type">Native Color Type</a>; and allocates
 pixel memory. If <a href="#SkBitmap_isOpaque">isOpaque</a> is true, sets <a href="SkImageInfo_Reference#Image_Info">Image Info</a> to <a href="SkImageInfo_Reference#SkAlphaType">kOpaque SkAlphaType</a>;
 otherwise, sets to <a href="SkImageInfo_Reference#SkAlphaType">kPremul SkAlphaType</a>.
 
@@ -1898,7 +1907,7 @@ true if pixel storage is allocated
 void allocN32Pixels(int width, int height, bool isOpaque = false)
 </pre>
 
-Sets <a href="SkImageInfo_Reference#Image_Info">Image Info</a> to width, height, and the <a href="SkImageInfo_Reference#Native_Color_Type">Native Color Type</a>; and allocates
+Sets <a href="SkImageInfo_Reference#Image_Info">Image Info</a> to width, height, and the <a href="SkImageInfo_Reference#Color_Type">Native Color Type</a>; and allocates
 pixel memory. If <a href="#SkBitmap_isOpaque">isOpaque</a> is true, sets <a href="SkImageInfo_Reference#Image_Info">Image Info</a> to <a href="SkImageInfo_Reference#SkAlphaType">kPremul SkAlphaType</a>;
 otherwise, sets to <a href="SkImageInfo_Reference#SkAlphaType">kOpaque SkAlphaType</a>.
 

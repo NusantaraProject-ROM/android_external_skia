@@ -25,7 +25,9 @@
 #include "GrTexture.h"
 #include "GrTextureContext.h"
 #include "GrTracing.h"
+
 #include "SkConvertPixels.h"
+#include "SkDeferredDisplayList.h"
 #include "SkGr.h"
 #include "SkJSONWriter.h"
 #include "SkMakeUnique.h"
@@ -263,6 +265,13 @@ bool GrContext::init(const GrContextOptions& options) {
         prcOptions.fGpuPathRenderers &= ~GpuPathRenderers::kSmall;
     }
 
+    if (!fResourceCache) {
+        // DDL TODO: remove this crippling of the path renderer chain
+        // Disable the small path renderer bc of the proxies in the atlas. They need to be
+        // unified when the opLists are added back to the destination drawing manager.
+        prcOptions.fGpuPathRenderers &= ~GpuPathRenderers::kSmall;
+    }
+
     GrAtlasTextContext::Options atlasTextContextOptions;
     atlasTextContextOptions.fMaxDistanceFieldFontSize = options.fGlyphsAsPathsFontSize;
     atlasTextContextOptions.fMinDistanceFieldFontSize = options.fMinDistanceFieldFontSize;
@@ -407,6 +416,18 @@ void GrContext::getResourceCacheUsage(int* resourceCount, size_t* resourceBytes)
 size_t GrContext::getResourceCachePurgeableBytes() const {
     ASSERT_SINGLE_OWNER
     return fResourceCache->getPurgeableBytes();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool GrContext::colorTypeSupportedAsImage(SkColorType colorType) const {
+    GrPixelConfig config = SkImageInfo2GrPixelConfig(colorType, nullptr, *this->caps());
+    return this->caps()->isConfigTexturable(config);
+}
+
+int GrContext::maxSurfaceSampleCountForColorType(SkColorType colorType) const {
+    GrPixelConfig config = SkImageInfo2GrPixelConfig(colorType, nullptr, *this->caps());
+    return this->caps()->maxRenderTargetSampleCount(config);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -800,14 +821,16 @@ void GrContextPriv::flushSurfaceIO(GrSurfaceProxy* proxy) {
 ////////////////////////////////////////////////////////////////////////////////
 
 sk_sp<GrSurfaceContext> GrContextPriv::makeWrappedSurfaceContext(sk_sp<GrSurfaceProxy> proxy,
-                                                                 sk_sp<SkColorSpace> colorSpace) {
+                                                                 sk_sp<SkColorSpace> colorSpace,
+                                                                 const SkSurfaceProps* props) {
     ASSERT_SINGLE_OWNER_PRIV
 
     if (proxy->asRenderTargetProxy()) {
         return this->drawingManager()->makeRenderTargetContext(std::move(proxy),
-                                                               std::move(colorSpace), nullptr);
+                                                               std::move(colorSpace), props);
     } else {
         SkASSERT(proxy->asTextureProxy());
+        SkASSERT(!props);
         return this->drawingManager()->makeTextureContext(std::move(proxy), std::move(colorSpace));
     }
 }
@@ -828,7 +851,7 @@ sk_sp<GrSurfaceContext> GrContextPriv::makeDeferredSurfaceContext(const GrSurfac
         return nullptr;
     }
 
-    return this->makeWrappedSurfaceContext(std::move(proxy), nullptr);
+    return this->makeWrappedSurfaceContext(std::move(proxy));
 }
 
 sk_sp<GrTextureContext> GrContextPriv::makeBackendTextureContext(const GrBackendTexture& tex,
@@ -851,6 +874,7 @@ sk_sp<GrRenderTargetContext> GrContextPriv::makeBackendTextureRenderTargetContex
                                                                    sk_sp<SkColorSpace> colorSpace,
                                                                    const SkSurfaceProps* props) {
     ASSERT_SINGLE_OWNER_PRIV
+    SkASSERT(sampleCnt > 0);
 
     sk_sp<GrTextureProxy> proxy(this->proxyProvider()->createWrappedTextureProxy(tex, origin,
                                                                                  sampleCnt));
@@ -887,7 +911,7 @@ sk_sp<GrRenderTargetContext> GrContextPriv::makeBackendTextureAsRenderTargetRend
                                                      sk_sp<SkColorSpace> colorSpace,
                                                      const SkSurfaceProps* props) {
     ASSERT_SINGLE_OWNER_PRIV
-
+    SkASSERT(sampleCnt > 0);
     sk_sp<GrSurfaceProxy> proxy(this->proxyProvider()->createWrappedRenderTargetProxy(tex, origin,
                                                                                       sampleCnt));
     if (!proxy) {
@@ -903,6 +927,14 @@ void GrContextPriv::addOnFlushCallbackObject(GrOnFlushCallbackObject* onFlushCBO
     fContext->fDrawingManager->addOnFlushCallbackObject(onFlushCBObject);
 }
 
+void GrContextPriv::moveOpListsToDDL(SkDeferredDisplayList* ddl) {
+    fContext->fDrawingManager->moveOpListsToDDL(ddl);
+}
+
+void GrContextPriv::copyOpListsFromDDL(const SkDeferredDisplayList* ddl,
+                                       GrRenderTargetProxy* newDest) {
+    fContext->fDrawingManager->copyOpListsFromDDL(ddl, newDest);
+}
 
 static inline GrPixelConfig GrPixelConfigFallback(GrPixelConfig config) {
     switch (config) {
@@ -930,7 +962,8 @@ sk_sp<GrRenderTargetContext> GrContext::makeDeferredRenderTargetContextWithFallb
                                                                  GrSurfaceOrigin origin,
                                                                  const SkSurfaceProps* surfaceProps,
                                                                  SkBudgeted budgeted) {
-    if (!this->caps()->isConfigRenderable(config, sampleCnt > 0)) {
+    SkASSERT(sampleCnt > 0);
+    if (0 == this->caps()->getRenderTargetSampleCount(sampleCnt, config)) {
         config = GrPixelConfigFallback(config);
     }
 
@@ -949,6 +982,7 @@ sk_sp<GrRenderTargetContext> GrContext::makeDeferredRenderTargetContext(
                                                         GrSurfaceOrigin origin,
                                                         const SkSurfaceProps* surfaceProps,
                                                         SkBudgeted budgeted) {
+    SkASSERT(sampleCnt > 0);
     if (this->abandoned()) {
         return nullptr;
     }

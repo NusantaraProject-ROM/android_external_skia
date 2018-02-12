@@ -35,6 +35,11 @@ public:
             const SkTypefaceProxy& tf,
             const SkScalerContextRec& rec,
             const SkGlyph& glyph)  = 0;
+    virtual void generateMetricsAndImage(
+            const SkTypefaceProxy& tf,
+            const SkScalerContextRec& rec,
+            SkArenaAlloc* alloc,
+            SkGlyph* glyph)  = 0;
     virtual void generatePath(
             const SkTypefaceProxy& tf,
             const SkScalerContextRec& rec,
@@ -62,6 +67,13 @@ protected:
     void generateFontMetrics(SkPaint::FontMetrics* metrics) override;
 
 private:
+    // Copied from SkGlyphCache
+    // so we don't grow our arrays a lot
+    static constexpr size_t kMinGlyphCount = 8;
+    static constexpr size_t kMinGlyphImageSize = 16 /* height */ * 8 /* width */;
+    static constexpr size_t kMinAllocAmount = kMinGlyphImageSize * kMinGlyphCount;
+    SkArenaAlloc  fAlloc{kMinAllocAmount};
+
     SkTypefaceProxy* typefaceProxy();
     SkRemoteScalerContext* const fRemote;
     typedef SkScalerContext INHERITED;
@@ -71,15 +83,14 @@ class SkTypefaceProxy : public SkTypeface {
 public:
     SkTypefaceProxy(
             SkFontID fontId,
-            std::thread::id threadId,
             const SkFontStyle& style,
             bool isFixed,
             SkRemoteScalerContext* rsc)
             : INHERITED{style, false}
             , fFontId{fontId}
-            , fThreadId{threadId}
             , fRsc{rsc} { }
     SkFontID fontID() const {return fFontId;}
+
 protected:
     int onGetUPEM() const override { SK_ABORT("Should never be called."); return 0; }
     SkStreamAsset* onOpenStream(int* ttcIndex) const override {
@@ -150,7 +161,7 @@ protected:
 
 private:
     const SkFontID fFontId;
-    const std::thread::id fThreadId;
+    // const std::thread::id fThreadId;  // TODO: figure out a good solutions for this.
     SkRemoteScalerContext* const fRsc;
 
     typedef SkTypeface INHERITED;

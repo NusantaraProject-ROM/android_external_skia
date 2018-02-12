@@ -43,6 +43,12 @@ public:
         return true;
     }
 
+    void onQueryMultisampleSpecs(GrRenderTarget* rt, GrSurfaceOrigin, const GrStencilSettings&,
+                                 int* effectiveSampleCnt, SamplePattern*) override {
+        SkASSERT(0);
+        *effectiveSampleCnt = 1;  // ??
+    }
+
     GrGpuRTCommandBuffer* createCommandBuffer(
                                     GrRenderTarget*, GrSurfaceOrigin,
                                     const GrGpuRTCommandBuffer::LoadAndStoreInfo&,

@@ -9,7 +9,6 @@
 #include "SkTypes.h"
 
 #if SK_SUPPORT_GPU
-#ifndef SK_DISABLE_DEFERRED_PROXIES
 #include "Test.h"
 
 #include "GrContextPriv.h"
@@ -148,8 +147,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(ResourceAllocatorTest, reporter, ctxInfo) {
                      std::move(p1), std::move(p2), test.fExpectation);
     }
 
-    int k2 = ctxInfo.grContext()->caps()->getSampleCount(2, kRGBA);
-    int k4 = ctxInfo.grContext()->caps()->getSampleCount(4, kRGBA);
+    int k2 = ctxInfo.grContext()->caps()->getRenderTargetSampleCount(2, kRGBA);
+    int k4 = ctxInfo.grContext()->caps()->getRenderTargetSampleCount(4, kRGBA);
 
     //--------------------------------------------------------------------------------------------
     TestCase gNonOverlappingTests[] = {
@@ -205,5 +204,4 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(ResourceAllocatorTest, reporter, ctxInfo) {
     }
 }
 
-#endif
 #endif

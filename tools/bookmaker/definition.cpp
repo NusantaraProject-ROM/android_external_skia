@@ -533,9 +533,6 @@ bool Definition::exampleToScript(string* result, ExampleOptions exampleOptions) 
             case MarkType::kDuration:
                 durationStr = string(iter->fContentStart, iter->fContentEnd - iter->fContentStart);
                 break;
-            case MarkType::kError:
-                result->clear();
-                return true;
             case MarkType::kHeight:
                 heightStr = string(iter->fContentStart, iter->fContentEnd - iter->fContentStart);
                 break;
@@ -1050,6 +1047,16 @@ bool Definition::hasMatch(const string& name) const {
         }
     }
     return false;
+}
+
+bool Definition::isStructOrClass() const {
+    if (MarkType::kStruct != fMarkType && MarkType::kClass != fMarkType) {
+        return false;
+    }
+    if (string::npos != fFileName.find("undocumented.bmh")) {
+        return false;
+    }
+    return true;
 }
 
 bool Definition::methodHasReturn(const string& name, TextParser* methodParser) const {
