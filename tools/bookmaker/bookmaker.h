@@ -390,6 +390,7 @@ public:
     }
 
     void reportError(const char* errorStr) const;
+    static string ReportFilename(string file);
     void reportWarning(const char* errorStr) const;
 
     template <typename T> T reportError(const char* errorStr) const {
@@ -766,6 +767,11 @@ public:
         kSubtractFrom,
     };
 
+    enum class Format {
+        kIncludeReturn,
+        kOmitReturn,
+    };
+
     Definition() {}
 
     Definition(const char* start, const char* end, int line, Definition* parent)
@@ -841,7 +847,8 @@ public:
     bool exampleToScript(string* result, ExampleOptions ) const;
     string extractText(TrimExtract trimExtract) const;
     string fiddleName() const;
-    string formatFunction() const;
+    const Definition* findClone(string match) const;
+    string formatFunction(Format format) const;
     const Definition* hasChild(MarkType markType) const;
     bool hasMatch(const string& name) const;
     const Definition* hasParam(const string& ref) const;
@@ -895,6 +902,17 @@ public:
 
     void setWrapper();
 
+    const Definition* topicParent() const {
+        Definition* test = fParent;
+        while (test) {
+            if (MarkType::kTopic == test->fMarkType) {
+                return test;
+            }
+            test = test->fParent;
+        }
+        return nullptr;
+    }
+
     string fText;  // if text is constructed instead of in a file, it's put here
     const char* fStart = nullptr;  // .. in original text file, or the start of fText
     const char* fContentStart;  // start past optional markup name
@@ -919,9 +937,11 @@ public:
     Type fType = Type::kNone;
     bool fClone = false;
     bool fCloned = false;
+    bool fDeprecated = false;
     bool fOperatorConst = false;
     bool fPrivate = false;
     bool fShort = false;
+    bool fToBeDeprecated = false;
     bool fMemberStart = false;
     bool fAnonymous = false;
     mutable bool fVisited = false;
@@ -1177,11 +1197,11 @@ public:
     };
 
     enum class Resolvable {
-        kNo,    // neither resolved nor output
-        kYes,   // resolved, output
-        kOut,   // not resolved, but output
+        kNo,      // neither resolved nor output
+        kYes,     // resolved, output
+        kOut,     // not resolved, but output
         kLiteral, // output untouched (FIXME: is this really different from kOut?)
-		kClone, // resolved, output, with references to clones as well
+		kClone,   // resolved, output, with references to clones as well
     };
 
     enum class Exemplary {
@@ -1813,6 +1833,11 @@ public:
         kExternal,
     };
 
+	enum class SkipFirstLine {
+		kNo,
+		kYes,
+	};
+
     enum class Wrote {
         kNone,
         kLF,
@@ -1850,7 +1875,9 @@ public:
         return 0 == size;
     }
 
-    void descriptionOut(const Definition* def);
+	void constOut(const Definition* memberStart, const Definition& child,
+		const Definition* bmhConst);
+    void descriptionOut(const Definition* def, SkipFirstLine );
     void enumHeaderOut(const RootDefinition* root, const Definition& child);
     void enumMembersOut(const RootDefinition* root, Definition& child);
     void enumSizeItems(const Definition& child);
@@ -2034,21 +2061,31 @@ public:
     bool buildReferences(const char* docDir, const char* mdOutDirOrFile);
     bool buildStatus(const char* docDir, const char* mdOutDir);
 
-    static constexpr const char* kClassesAndStructs = "Classes_and_Structs";
-    static constexpr const char* kConstants = "Constants";
-    static constexpr const char* kConstructors = "Constructors";
-    static constexpr const char* kMemberFunctions = "Member_Functions";
-    static constexpr const char* kMembers = "Members";
-    static constexpr const char* kOperators = "Operators";
+    static constexpr const char* kClassesAndStructs = "Class_or_Struct";
+    static constexpr const char* kConstants = "Constant";
+    static constexpr const char* kConstructors = "Constructor";
+    static constexpr const char* kMemberFunctions = "Member_Function";
+    static constexpr const char* kMembers = "Member";
+    static constexpr const char* kOperators = "Operator";
     static constexpr const char* kOverview = "Overview";
-    static constexpr const char* kRelatedFunctions = "Related_Functions";
-    static constexpr const char* kSubtopics = "Subtopics";
+    static constexpr const char* kRelatedFunctions = "Related_Function";
+    static constexpr const char* kSubtopics = "Overview_Subtopic";
 
 private:
     enum class TableState {
         kNone,
         kRow,
         kColumn,
+    };
+
+    struct TableContents {
+        TableContents()
+            : fShowClones(false) {
+        }
+
+        string fDescription;
+        vector<const Definition*> fMembers;
+        bool fShowClones;
     };
 
     string addReferences(const char* start, const char* end, BmhParser::Resolvable );
@@ -2068,8 +2105,11 @@ private:
     bool parseFromFile(const char* path) override { return true; }
     void populateTables(const Definition* def);
 
-    vector<const Definition*>& populator(const char* key) {
-        return fPopulators.find(key)->second.fMembers;
+    TableContents& populator(const char* key) {
+        auto entry = fPopulators.find(key);
+        // FIXME: this should have been detected earlier
+        SkASSERT(fPopulators.end() != entry);
+        return entry->second;
     }
 
     void reset() override {
@@ -2103,13 +2143,8 @@ private:
 
     void resolveOut(const char* start, const char* end, BmhParser::Resolvable );
     void rowOut(const char * name, const string& description);
-    void subtopicOut(vector<const Definition*>& data);
+    void subtopicOut(const TableContents& tableContents);
     void subtopicsOut();
-
-    struct TableContents {
-        string fDescription;
-        vector<const Definition*> fMembers;
-    };
 
     unordered_map<string, TableContents> fPopulators;
     vector<const Definition*> fClassStack;

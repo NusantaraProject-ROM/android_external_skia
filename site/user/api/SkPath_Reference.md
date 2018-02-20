@@ -5,29 +5,29 @@ SkPath Reference
 
 ## <a name="Overview"></a> Overview
 
-## <a name="Subtopics"></a> Subtopics
+## <a name="Overview_Subtopic"></a> Overview Subtopic
 
 | name | description |
 | --- | --- |
-| <a href="#Classes_and_Structs">Classes and Structs</a> | embedded struct and class members |
-| <a href="#Constants">Constants</a> | enum and enum class, const values |
-| <a href="#Constructors">Constructors</a> | functions that construct <a href="SkPath_Reference#SkPath">SkPath</a> |
-| <a href="#Member_Functions">Member Functions</a> | static functions and member methods |
-| <a href="#Operators">Operators</a> | operator overloading methods |
-| <a href="#Related_Functions">Related Functions</a> | similar methods grouped together |
-<a href="#Path">Path</a> contains <a href="#Line">Lines</a> and <a href="#Curve">Curves</a> which can be stroked or filled. <a href="#Contour">Contour</a> is
-composed of a series of connected <a href="#Line">Lines</a> and <a href="#Curve">Curves</a>. <a href="#Path">Path</a> may contain zero,
+| <a href="#Class_or_Struct">Class or Struct</a> | embedded struct and class members |
+| <a href="#Constant">Constant</a> | enum and enum class, const values |
+| <a href="#Constructor">Constructor</a> | functions that construct <a href="#SkPath">SkPath</a> |
+| <a href="#Member_Function">Member Function</a> | static functions and member methods |
+| <a href="#Operator">Operator</a> | operator overloading methods |
+| <a href="#Related_Function">Related Function</a> | similar methods grouped together |
+<a href="#Path">Path</a> contains <a href="undocumented#Line">Lines</a> and <a href="undocumented#Curve">Curves</a> which can be stroked or filled. <a href="#Contour">Contour</a> is
+composed of a series of connected <a href="undocumented#Line">Lines</a> and <a href="undocumented#Curve">Curves</a>. <a href="#Path">Path</a> may contain zero,
 one, or more <a href="#Contour">Contours</a>.
-Each <a href="undocumented#Line">Line</a> and <a href="undocumented#Curve">Curve</a> are described by <a href="#Verb">Verb</a>, <a href="#Point">Points</a>, and optional <a href="#Conic_Weight">Conic Weight</a>.
+Each <a href="undocumented#Line">Line</a> and <a href="undocumented#Curve">Curve</a> are described by <a href="#Verb">Verb</a>, <a href="SkPoint_Reference#Point">Points</a>, and optional <a href="#Conic_Weight">Conic Weight</a>.
 
-Each pair of connected <a href="#Line">Lines</a> and <a href="#Curve">Curves</a> share common <a href="SkPoint_Reference#Point">Point</a>; for instance, <a href="#Path">Path</a>
-containing two connected <a href="#Line">Lines</a> are described the <a href="#Verb">Verb</a> sequence:
+Each pair of connected <a href="undocumented#Line">Lines</a> and <a href="undocumented#Curve">Curves</a> share common <a href="SkPoint_Reference#Point">Point</a>; for instance, <a href="#Path">Path</a>
+containing two connected <a href="undocumented#Line">Lines</a> are described the <a href="#Verb">Verb</a> sequence:
 <a href="#SkPath_kMove_Verb">SkPath::kMove Verb</a>, <a href="#SkPath_kLine_Verb">SkPath::kLine Verb</a>, <a href="#SkPath_kLine_Verb">SkPath::kLine Verb</a>; and a <a href="SkPoint_Reference#Point">Point</a> sequence
 with three entries, sharing
 the middle entry as the end of the first <a href="undocumented#Line">Line</a> and the start of the second <a href="undocumented#Line">Line</a>.
 
 <a href="#Path">Path</a> components <a href="#Arc">Arc</a>, <a href="SkRect_Reference#Rect">Rect</a>, <a href="undocumented#Round_Rect">Round Rect</a>, <a href="undocumented#Circle">Circle</a>, and <a href="undocumented#Oval">Oval</a> are composed of
-<a href="#Line">Lines</a> and <a href="#Curve">Curves</a> with as many <a href="#Verb">Verbs</a> and <a href="#Point">Points</a> required
+<a href="undocumented#Line">Lines</a> and <a href="undocumented#Curve">Curves</a> with as many <a href="#Verb">Verbs</a> and <a href="SkPoint_Reference#Point">Points</a> required
 for an exact description. Once added to <a href="#Path">Path</a>, these components may lose their
 identity; although <a href="#Path">Path</a> can be inspected to determine if it describes a single
 <a href="SkRect_Reference#Rect">Rect</a>, <a href="undocumented#Oval">Oval</a>, <a href="undocumented#Round_Rect">Round Rect</a>, and so on.
@@ -40,7 +40,7 @@ is stroked and filled, but since it is not closed, <a href="#Quad">Quad</a> does
 
 <a href="#Path">Path</a> contains a <a href="#Fill_Type">Fill Type</a> which determines whether overlapping <a href="#Contour">Contours</a>
 form fills or holes. <a href="#Fill_Type">Fill Type</a> also determines whether area inside or outside
-<a href="#Line">Lines</a> and <a href="#Curve">Curves</a> is filled.
+<a href="undocumented#Line">Lines</a> and <a href="undocumented#Curve">Curves</a> is filled.
 
 ### Example
 
@@ -52,7 +52,7 @@ its contents until it is edited, to reduce memory use and improve performance.
 
 ## <a name="Contour"></a> Contour
 
-<a href="#Contour">Contour</a> contains one or more <a href="#Verb">Verbs</a>, and as many <a href="#Point">Points</a> as
+<a href="#Contour">Contour</a> contains one or more <a href="#Verb">Verbs</a>, and as many <a href="SkPoint_Reference#Point">Points</a> as
 are required to satisfy <a href="#Verb_Array">Verb Array</a>. First <a href="#Verb">Verb</a> in <a href="#Path">Path</a> is always
 <a href="#SkPath_kMove_Verb">SkPath::kMove Verb</a>; each <a href="#SkPath_kMove_Verb">SkPath::kMove Verb</a> that follows starts a new <a href="#Contour">Contour</a>.
 
@@ -65,20 +65,20 @@ of the second <a href="#Contour">Contour</a>.</div></fiddle-embed></div>
 
 If final <a href="#Verb">Verb</a> in <a href="#Contour">Contour</a> is <a href="#SkPath_kClose_Verb">SkPath::kClose Verb</a>, <a href="undocumented#Line">Line</a> connects <a href="#Last_Point">Last Point</a> in
 <a href="#Contour">Contour</a> with first <a href="SkPoint_Reference#Point">Point</a>. A closed <a href="#Contour">Contour</a>, stroked, draws
-<a href="#Stroke_Join">Paint Stroke Join</a> at <a href="#Last_Point">Last Point</a> and first <a href="SkPoint_Reference#Point">Point</a>. Without <a href="#SkPath_kClose_Verb">SkPath::kClose Verb</a>
+<a href="SkPaint_Reference#Stroke_Join">Paint Stroke Join</a> at <a href="#Last_Point">Last Point</a> and first <a href="SkPoint_Reference#Point">Point</a>. Without <a href="#SkPath_kClose_Verb">SkPath::kClose Verb</a>
 as final <a href="#Verb">Verb</a>, <a href="#Last_Point">Last Point</a> and first <a href="SkPoint_Reference#Point">Point</a> are not connected; <a href="#Contour">Contour</a>
-remains open. An open <a href="#Contour">Contour</a>, stroked, draws <a href="#Stroke_Cap">Paint Stroke Cap</a> at
+remains open. An open <a href="#Contour">Contour</a>, stroked, draws <a href="SkPaint_Reference#Stroke_Cap">Paint Stroke Cap</a> at
 <a href="#Last_Point">Last Point</a> and first <a href="SkPoint_Reference#Point">Point</a>.
 
 ### Example
 
 <div><fiddle-embed name="7a1f39b12d2cd8b7f5b1190879259cb2"><div><a href="#Path">Path</a> is drawn stroked, with an open <a href="#Contour">Contour</a> and a closed <a href="#Contour">Contour</a>.</div></fiddle-embed></div>
 
-## <a name="Zero_Length"></a> Zero Length
+## <a name="Contour_Zero_Length"></a> Contour Zero Length
 
 <a href="#Contour">Contour</a> length is distance traveled from first <a href="SkPoint_Reference#Point">Point</a> to <a href="#Last_Point">Last Point</a>,
 plus, if <a href="#Contour">Contour</a> is closed, distance from <a href="#Last_Point">Last Point</a> to first <a href="SkPoint_Reference#Point">Point</a>.
-Even if <a href="#Contour">Contour</a> length is zero, stroked <a href="#Line">Lines</a> are drawn if <a href="#Stroke_Cap">Paint Stroke Cap</a>
+Even if <a href="#Contour">Contour</a> length is zero, stroked <a href="undocumented#Line">Lines</a> are drawn if <a href="SkPaint_Reference#Stroke_Cap">Paint Stroke Cap</a>
 makes them visible.
 
 ### Example
@@ -103,25 +103,31 @@ overlapping contours.
 Internally, <a href="#Path">Path</a> lazily computes metrics likes bounds and convexity. Call
 <a href="#SkPath_updateBoundsCache">SkPath::updateBoundsCache</a> to make <a href="#Path">Path</a> thread safe.
 
-## <a name="Related_Functions"></a> Related Functions
+## <a name="Related_Function"></a> Related Function
 
 | name | description |
 | --- | --- |
 | <a href="#Arc">Arc</a> | part of <a href="undocumented#Oval">Oval</a> or <a href="undocumented#Circle">Circle</a> |
+| <a href="#Build">Build</a> | adds points and verbs to path |
 | <a href="#Conic">Conic</a> | conic section defined by three points and a weight |
+| <a href="#Conic_Weight">Conic Weight</a> | strength of <a href="#Conic">Conic</a> control <a href="SkPoint_Reference#Point">Point</a> |
 | <a href="#SkPath_Convexity">Convexity</a> | if <a href="#Path">Path</a> is concave or convex |
 | <a href="#Cubic">Cubic</a> | Bezier_Curve described by third-order polynomial |
 | <a href="#SkPath_Direction">Direction</a> | <a href="#Path">Path</a> contour orientation |
 | <a href="#Fill_Type">Fill Type</a> | <a href="#Path">Path</a> fill rule, normal and inverted |
 | <a href="#Generation_ID">Generation ID</a> | value reflecting contents change |
+| <a href="#Interpolate">Interpolate</a> | weighted average of <a href="#Path">Path</a> pair |
 | <a href="#Last_Point">Last Point</a> | final <a href="SkPoint_Reference#Point">Point</a> in <a href="#Contour">Contour</a> |
 | <a href="#Point_Array">Point Array</a> | end points and control points for lines and curves |
+| <a href="#Property">Property</a> | metrics and attributes |
 | <a href="#Quad">Quad</a> | Bezier_Curve described by second-order polynomial |
+| <a href="#Transform">Transform</a> | modify all points |
+| <a href="#Utility">Utility</a> | rarely called management functions |
 | <a href="#SkPath_Verb">Verb</a> | line and curve type |
 | <a href="#Verb_Array">Verb Array</a> | line and curve type for points |
-| Weight | strength of <a href="#Conic">Conic</a> control <a href="SkPoint_Reference#Point">Point</a> |
+| <a href="#Volatile">Volatile</a> | caching attribute |
 
-## <a name="Constants"></a> Constants
+## <a name="Constant"></a> Constant
 
 | name | description |
 | --- | --- |
@@ -131,32 +137,35 @@ Internally, <a href="#Path">Path</a> lazily computes metrics likes bounds and co
 | <a href="#SkPath_Direction">Direction</a> | sets <a href="#Contour">Contour</a> clockwise or counterclockwise |
 | <a href="#SkPath_FillType">FillType</a> | sets winding rule and inverse fill |
 | <a href="#SkPath_SegmentMask">SegmentMask</a> | returns <a href="#SkPath_Verb">Verb</a> types in <a href="#Path">Path</a> |
-| <a href="#SkPath_Verb">Verb</a> | controls how <a href="#Path">Path</a> <a href="#Point">Points</a> are interpreted |
+| <a href="#SkPath_Verb">Verb</a> | controls how <a href="#Path">Path</a> <a href="SkPoint_Reference#Point">Points</a> are interpreted |
 
-## <a name="Classes_and_Structs"></a> Classes and Structs
+## <a name="Class_or_Struct"></a> Class or Struct
 
 | name | description |
 | --- | --- |
 | <a href="#SkPath_Iter">Iter</a> | <a href="#Path">Path</a> data iterator |
 | <a href="#SkPath_RawIter">RawIter</a> | <a href="#Path">Path</a> raw data iterator |
 
-## <a name="Constructors"></a> Constructors
+## <a name="Constructor"></a> Constructor
 
 | name | description |
 | --- | --- |
 | <a href="#SkPath_empty_constructor">SkPath()</a> | constructs with default values |
 | <a href="#SkPath_copy_const_SkPath">SkPath(const SkPath& path)</a> | makes a shallow copy |
+| <a href="#SkPath_reset">reset</a> | removes <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Weights</a>; frees memory |
+| <a href="#SkPath_rewind">rewind</a> | removes <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Weights</a>, keeping memory |
 | <a href="#SkPath_destructor">~SkPath()</a> | decreases <a href="undocumented#Reference_Count">Reference Count</a> of owned objects |
 
-## <a name="Operators"></a> Operators
+## <a name="Operator"></a> Operator
 
 | name | description |
 | --- | --- |
 | <a href="#SkPath_notequal_operator">operator!=(const SkPath& a, const SkPath& b)</a> | compares paths for inequality |
 | <a href="#SkPath_copy_operator">operator=(const SkPath& path)</a> | makes a shallow copy |
 | <a href="#SkPath_equal_operator">operator==(const SkPath& a, const SkPath& b)</a> | compares paths for equality |
+| <a href="#SkPath_swap">swap</a> | exchanges <a href="#Path">Path</a> pair |
 
-## <a name="Member_Functions"></a> Member Functions
+## <a name="Member_Function"></a> Member Function
 
 | name | description |
 | --- | --- |
@@ -200,7 +209,7 @@ Internally, <a href="#Path">Path</a> lazily computes metrics likes bounds and co
 | <a href="#SkPath_isConvex">isConvex</a> | returns if geometry is convex |
 | <a href="#SkPath_isEmpty">isEmpty</a> | returns if verb count is zero |
 | <a href="#SkPath_isFinite">isFinite</a> | returns if all <a href="SkPoint_Reference#Point">Point</a> values are finite |
-| <a href="#SkPath_isInterpolatable">isInterpolatable</a> | returns if pair contains equal counts of <a href="#Verb_Array">Verb Array</a> and <a href="#Weight">Weights</a> |
+| <a href="#SkPath_isInterpolatable">isInterpolatable</a> | returns if pair contains equal counts of <a href="#Verb_Array">Verb Array</a> and <a href="#Conic_Weight">Weights</a> |
 | <a href="#SkPath_isInverseFillType">isInverseFillType</a> | returns if <a href="#Fill_Type">Fill Type</a> fills outside geometry |
 | <a href="#SkPath_isLastContourClosed">isLastContourClosed</a> | returns if final <a href="#Contour">Contour</a> forms a loop |
 | <a href="#SkPath_isLine">isLine</a> | returns if describes <a href="undocumented#Line">Line</a> |
@@ -213,7 +222,6 @@ Internally, <a href="#Path">Path</a> lazily computes metrics likes bounds and co
 | <a href="#SkPath_lineTo">lineTo</a> | appends <a href="undocumented#Line">Line</a> |
 | <a href="#SkPath_moveTo">moveTo</a> | starts <a href="#Contour">Contour</a> |
 | <a href="#SkPath_offset">offset</a> | translates <a href="#Point_Array">Point Array</a> |
-| <a href="#SkPath_pathRefIsValid">pathRefIsValid</a> | to be deprecated |
 | <a href="#SkPath_quadTo">quadTo</a> | appends <a href="#Quad">Quad</a> |
 | <a href="#SkPath_rArcTo">rArcTo</a> | appends <a href="#Arc">Arc</a> relative to <a href="#Last_Point">Last Point</a> |
 | <a href="#SkPath_rConicTo">rConicTo</a> | appends <a href="#Conic">Conic</a> relative to <a href="#Last_Point">Last Point</a> |
@@ -222,19 +230,17 @@ Internally, <a href="#Path">Path</a> lazily computes metrics likes bounds and co
 | <a href="#SkPath_rMoveTo">rMoveTo</a> | starts <a href="#Contour">Contour</a> relative to <a href="#Last_Point">Last Point</a> |
 | <a href="#SkPath_rQuadTo">rQuadTo</a> | appends <a href="#Quad">Quad</a> relative to <a href="#Last_Point">Last Point</a> |
 | <a href="#SkPath_readFromMemory">readFromMemory</a> | Initializes from buffer |
-| <a href="#SkPath_reset">reset</a> | removes <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Weight">Weights</a>; frees memory |
+| <a href="#SkPath_reset">reset</a> | removes <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Weights</a>; frees memory |
 | <a href="#SkPath_reverseAddPath">reverseAddPath</a> | adds contents of <a href="#Path">Path</a> back to front |
-| <a href="#SkPath_rewind">rewind</a> | removes <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Weight">Weights</a>, keeping memory |
+| <a href="#SkPath_rewind">rewind</a> | removes <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Weights</a>, keeping memory |
 | <a href="#SkPath_serialize">serialize</a> | copies data to buffer |
 | <a href="#SkPath_setConvexity">setConvexity</a> | sets if geometry is convex to avoid future computation |
 | <a href="#SkPath_setFillType">setFillType</a> | sets <a href="#Fill_Type">Fill Type</a>: winding, even-odd, inverse |
-| <a href="#SkPath_setIsConvex">setIsConvex</a> | deprecated |
 | <a href="#SkPath_setIsVolatile">setIsVolatile</a> | sets if <a href="undocumented#Device">Device</a> should not cache |
 | <a href="#SkPath_setLastPt">setLastPt</a> | replaces <a href="#Last_Point">Last Point</a> |
 | <a href="#SkPath_swap">swap</a> | exchanges <a href="#Path">Path</a> pair |
 | <a href="#SkPath_toggleInverseFillType">toggleInverseFillType</a> | toggles <a href="#Fill_Type">Fill Type</a> between inside and outside geometry |
-| <a href="#SkPath_transform">transform</a> | applies <a href="SkMatrix_Reference#Matrix">Matrix</a> to <a href="#Point_Array">Point Array</a> and <a href="#Weight">Weights</a> |
-| <a href="#SkPath_unique">unique</a> | returns if data has single owner |
+| <a href="#SkPath_transform">transform</a> | applies <a href="SkMatrix_Reference#Matrix">Matrix</a> to <a href="#Point_Array">Point Array</a> and <a href="#Conic_Weight">Weights</a> |
 | <a href="#SkPath_updateBoundsCache">updateBoundsCache</a> | refreshes result of <a href="#SkPath_getBounds">getBounds</a> |
 | <a href="#SkPath_writeToMemory">writeToMemory</a> | copies data to buffer |
 
@@ -279,7 +285,7 @@ by <a href="#Conic_Weight">Conic Weight</a>. <a href="#Conic_Weight">Conic Weigh
 parabolic (and identical to <a href="#Quad">Quad</a>); greater than one hyperbolic.</td>
   </tr>
   <tr>
-    <td><a name="SkPath_kCubic_Verb"> <code><strong>SkPath::kCubic_Verb </strong></code> </a></td><td>4</td><td>Adds <a href="#Cubic">Cubic</a> from <a href="#Last_Point">Last Point</a>, using two control <a href="#Point">Points</a>, and end <a href="SkPoint_Reference#Point">Point</a>.
+    <td><a name="SkPath_kCubic_Verb"> <code><strong>SkPath::kCubic_Verb </strong></code> </a></td><td>4</td><td>Adds <a href="#Cubic">Cubic</a> from <a href="#Last_Point">Last Point</a>, using two control <a href="SkPoint_Reference#Point">Points</a>, and end <a href="SkPoint_Reference#Point">Point</a>.
 <a href="#Cubic">Cubic</a> is a third-order Bezier_Curve section within tangents from <a href="#Last_Point">Last Point</a>
 to first control <a href="SkPoint_Reference#Point">Point</a>, and from second control <a href="SkPoint_Reference#Point">Point</a> to end <a href="SkPoint_Reference#Point">Point</a>.</td>
   </tr>
@@ -289,13 +295,13 @@ to first control <a href="SkPoint_Reference#Point">Point</a>, and from second co
   <tr>
     <td><a name="SkPath_kDone_Verb"> <code><strong>SkPath::kDone_Verb </strong></code> </a></td><td>6</td><td>Terminates <a href="#Path">Path</a>. Not in <a href="#Verb_Array">Verb Array</a>, but returned by <a href="#Path">Path</a> iterator.</td>
   </tr>
-Each <a href="#Verb">Verb</a> has zero or more <a href="#Point">Points</a> stored in <a href="#Path">Path</a>.
-<a href="#Path">Path</a> iterator returns complete curve descriptions, duplicating shared <a href="#Point">Points</a>
+Each <a href="#Verb">Verb</a> has zero or more <a href="SkPoint_Reference#Point">Points</a> stored in <a href="#Path">Path</a>.
+<a href="#Path">Path</a> iterator returns complete curve descriptions, duplicating shared <a href="SkPoint_Reference#Point">Points</a>
 for consecutive entries.
 
 </table>
 
-| <a href="#Verb">Verb</a> | Allocated <a href="#Point">Points</a> | Iterated <a href="#Point">Points</a> | <a href="#Weight">Weights</a> |
+| <a href="#Verb">Verb</a> | Allocated <a href="SkPoint_Reference#Point">Points</a> | Iterated <a href="SkPoint_Reference#Point">Points</a> | <a href="#Conic_Weight">Weights</a> |
 | --- | --- | --- | ---  |
 | <a href="#SkPath_kMove_Verb">kMove Verb</a> | 1 | 1 | 0 |
 | <a href="#SkPath_kLine_Verb">kLine Verb</a> | 1 | 2 | 0 |
@@ -370,7 +376,7 @@ travel counterclockwise.
 SkPath()
 </pre>
 
-By default, <a href="#Path">Path</a> has no <a href="#Verb">Verbs</a>, no <a href="#Point">Points</a>, and no <a href="#Weight">Weights</a>.
+By default, <a href="#Path">Path</a> has no <a href="#Verb">Verbs</a>, no <a href="SkPoint_Reference#Point">Points</a>, and no <a href="#Conic_Weight">Weights</a>.
 <a href="#Fill_Type">Fill Type</a> is set to <a href="#SkPath_kWinding_FillType">kWinding FillType</a>.
 
 ### Return Value
@@ -404,7 +410,7 @@ SkPath(const SkPath& path)
 
 Copy constructor makes two paths identical by value. Internally, <a href="#SkPath_copy_const_SkPath_path">path</a> and
 the returned result share pointer values. The underlying <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>
-and <a href="#Weight">Weights</a> are copied when modified.
+and <a href="#Conic_Weight">Weights</a> are copied when modified.
 
 Creating a <a href="#Path">Path</a> copy is very efficient and never allocates memory.
 <a href="#Path">Paths</a> are always copied by value from the interface; the underlying shared
@@ -471,7 +477,7 @@ SkPath& operator=(const SkPath& path)
 </pre>
 
 <a href="#Path">Path</a> assignment makes two paths identical by value. Internally, assignment
-shares pointer values. The underlying <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a> and <a href="#Weight">Weights</a>
+shares pointer values. The underlying <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a> and <a href="#Conic_Weight">Weights</a>
 are copied when modified.
 
 Copying <a href="#Path">Paths</a> by assignment is very efficient and never allocates memory.
@@ -481,7 +487,7 @@ pointers are not exposed.
 ### Parameters
 
 <table>  <tr>    <td><a name="SkPath_copy_operator_path"> <code><strong>path </strong></code> </a></td> <td>
-<a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, <a href="#Weight">Weights</a>, and <a href="#Fill_Type">Fill Type</a> to copy</td>
+<a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, <a href="#Conic_Weight">Weights</a>, and <a href="#Fill_Type">Fill Type</a> to copy</td>
   </tr>
 </table>
 
@@ -515,7 +521,7 @@ path2 bounds = 10, 20, 30, 40
 bool operator==(const SkPath& a, const SkPath& b)
 </pre>
 
-Compares <a href="#SkPath_equal_operator_a">a</a> and <a href="#SkPath_equal_operator_b">b</a>; returns true if <a href="#Fill_Type">Fill Type</a>, <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Weight">Weights</a>
+Compares <a href="#SkPath_equal_operator_a">a</a> and <a href="#SkPath_equal_operator_b">b</a>; returns true if <a href="#Fill_Type">Fill Type</a>, <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Weights</a>
 are equivalent.
 
 ### Parameters
@@ -556,7 +562,7 @@ reset one == two
 bool operator!=(const SkPath& a, const SkPath& b)
 </pre>
 
-Compares <a href="#SkPath_notequal_operator_a">a</a> and <a href="#SkPath_notequal_operator_b">b</a>; returns true if <a href="#Fill_Type">Fill Type</a>, <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Weight">Weights</a>
+Compares <a href="#SkPath_notequal_operator_a">a</a> and <a href="#SkPath_notequal_operator_b">b</a>; returns true if <a href="#Fill_Type">Fill Type</a>, <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Weights</a>
 are not equivalent.
 
 ### Parameters
@@ -589,6 +595,31 @@ convexity !=
 
 ---
 
+## <a name="Property"></a> Property
+
+| name | description |
+| --- | --- |
+| <a href="#SkPath_IsCubicDegenerate">IsCubicDegenerate</a> | returns if <a href="#Cubic">Cubic</a> is very small |
+| <a href="#SkPath_IsInverseFillType">IsInverseFillType</a> | returns if <a href="#Fill_Type">Fill Type</a> represents outside geometry |
+| <a href="#SkPath_IsLineDegenerate">IsLineDegenerate</a> | returns if <a href="undocumented#Line">Line</a> is very small |
+| <a href="#SkPath_IsQuadDegenerate">IsQuadDegenerate</a> | returns if <a href="#Quad">Quad</a> is very small |
+| <a href="#SkPath_computeTightBounds">computeTightBounds</a> | returns extent of geometry |
+| <a href="#SkPath_conservativelyContainsRect">conservativelyContainsRect</a> | returns true if <a href="SkRect_Reference#Rect">Rect</a> may be inside |
+| <a href="#SkPath_contains">contains</a> | returns if <a href="SkPoint_Reference#Point">Point</a> is in fill area |
+| <a href="#SkPath_getBounds">getBounds</a> | returns maximum and minimum of <a href="#Point_Array">Point Array</a> |
+| <a href="#SkPath_getLastPt">getLastPt</a> | returns <a href="#Last_Point">Last Point</a> |
+| <a href="#SkPath_isEmpty">isEmpty</a> | returns if verb count is zero |
+| <a href="#SkPath_isFinite">isFinite</a> | returns if all <a href="SkPoint_Reference#Point">Point</a> values are finite |
+| <a href="#SkPath_isInterpolatable">isInterpolatable</a> | returns if pair contains equal counts of <a href="#Verb_Array">Verb Array</a> and <a href="#Conic_Weight">Weights</a> |
+| <a href="#SkPath_isLastContourClosed">isLastContourClosed</a> | returns if final <a href="#Contour">Contour</a> forms a loop |
+| <a href="#SkPath_isLine">isLine</a> | returns if describes <a href="undocumented#Line">Line</a> |
+| <a href="#SkPath_isNestedFillRects">isNestedFillRects</a> | returns if describes <a href="SkRect_Reference#Rect">Rect</a> pair, one inside the other |
+| <a href="#SkPath_isOval">isOval</a> | returns if describes <a href="undocumented#Oval">Oval</a> |
+| <a href="#SkPath_isRRect">isRRect</a> | returns if describes <a href="undocumented#Round_Rect">Round Rect</a> |
+| <a href="#SkPath_isRect">isRect</a> | returns if describes <a href="SkRect_Reference#Rect">Rect</a> |
+| <a href="#SkPath_isValid">isValid</a> | returns if data is internally consistent |
+| <a href="#SkPath_isVolatile">isVolatile</a> | returns if <a href="undocumented#Device">Device</a> should not cache |
+
 <a name="SkPath_isInterpolatable"></a>
 ## isInterpolatable
 
@@ -596,8 +627,8 @@ convexity !=
 bool isInterpolatable(const SkPath& compare) const
 </pre>
 
-Return true if <a href="#Path">Paths</a> contain equal <a href="#Verb">Verbs</a> and equal <a href="#Weight">Weights</a>.
-If <a href="#Path">Paths</a> contain one or more <a href="#Conic">Conics</a>, the <a href="#Weight">Weights</a> must match.
+Return true if <a href="#Path">Paths</a> contain equal <a href="#Verb">Verbs</a> and equal <a href="#Conic_Weight">Weights</a>.
+If <a href="#Path">Paths</a> contain one or more <a href="#Conic">Conics</a>, the <a href="#Conic_Weight">Weights</a> must match.
 
 <a href="#SkPath_conicTo">conicTo</a> may add different <a href="#Verb">Verbs</a> depending on <a href="#Conic_Weight">Conic Weight</a>, so it is not
 trivial to interpolate a pair of <a href="#Path">Paths</a> containing <a href="#Conic">Conics</a> with different
@@ -612,7 +643,7 @@ trivial to interpolate a pair of <a href="#Path">Paths</a> containing <a href="#
 
 ### Return Value
 
-true if <a href="#Path">Paths</a> <a href="#Verb_Array">Verb Array</a> and <a href="#Weight">Weights</a> are equivalent
+true if <a href="#Path">Paths</a> <a href="#Verb_Array">Verb Array</a> and <a href="#Conic_Weight">Weights</a> are equivalent
 
 ### Example
 
@@ -632,6 +663,12 @@ paths are interpolatable
 
 ---
 
+## <a name="Interpolate"></a> Interpolate
+
+| name | description |
+| --- | --- |
+| <a href="#SkPath_interpolate">interpolate</a> | interpolates between <a href="#Path">Path</a> pair |
+
 <a name="SkPath_interpolate"></a>
 ## interpolate
 
@@ -639,8 +676,8 @@ paths are interpolatable
 bool interpolate(const SkPath& ending, SkScalar weight, SkPath* out) const
 </pre>
 
-Interpolate between <a href="#Path">Paths</a> with <a href="#Point_Array">Point Array</a> of equal size.
-Copy <a href="#Verb_Array">Verb Array</a> and <a href="#Weight">Weights</a> to <a href="#SkPath_interpolate_out">out</a>, and set <a href="#SkPath_interpolate_out">out</a> <a href="#Point_Array">Point Array</a> to a weighted
+<a href="#Interpolate">Interpolate</a> between <a href="#Path">Paths</a> with <a href="#Point_Array">Point Array</a> of equal size.
+Copy <a href="#Verb_Array">Verb Array</a> and <a href="#Conic_Weight">Weights</a> to <a href="#SkPath_interpolate_out">out</a>, and set <a href="#SkPath_interpolate_out">out</a> <a href="#Point_Array">Point Array</a> to a weighted
 average of this <a href="#Point_Array">Point Array</a> and <a href="#SkPath_interpolate_ending">ending</a> <a href="#Point_Array">Point Array</a>, using the formula:
 (<a href="#Path">Path</a> <a href="SkPoint_Reference#Point">Point</a> * <a href="#SkPath_interpolate_weight">weight</a>) + <a href="#SkPath_interpolate_ending">ending</a> <a href="SkPoint_Reference#Point">Point</a> * (1 - <a href="#SkPath_interpolate_weight">weight</a>).
 
@@ -666,7 +703,7 @@ one minus contribution of <a href="#SkPath_interpolate_ending">ending</a> <a hre
 
 ### Return Value
 
-true if <a href="#Path">Paths</a> contain same number of <a href="#Point">Points</a>
+true if <a href="#Path">Paths</a> contain same number of <a href="SkPoint_Reference#Point">Points</a>
 
 ### Example
 
@@ -685,9 +722,7 @@ true if <a href="#Path">Paths</a> contain same number of <a href="#Point">Points
 bool unique() const
 </pre>
 
-### Return Value
-
-true if <a href="#Path">Path</a> has one owner
+soonOnly valid for Android framework.
 
 ---
 
@@ -741,7 +776,7 @@ same as the outer parts of the top rectangles, which have a winding of 1.</div><
 
 ### See Also
 
-<a href="#SkPaint_Style">SkPaint::Style</a> <a href="#SkPath_Direction">Direction</a> <a href="#SkPath_getFillType">getFillType</a> <a href="#SkPath_setFillType">setFillType</a>
+<a href="SkPaint_Reference#SkPaint_Style">SkPaint::Style</a> <a href="#SkPath_Direction">Direction</a> <a href="#SkPath_getFillType">getFillType</a> <a href="#SkPath_setFillType">setFillType</a>
 
 
 
@@ -1029,11 +1064,7 @@ true if <a href="#Convexity">Convexity</a> stored or computed is <a href="#SkPat
 void setIsConvex(bool isConvex)
 </pre>
 
-Deprecated. Use <a href="#SkPath_setConvexity">setConvexity</a>.
-
-### See Also
-
-<a href="#Convexity">Convexity</a> <a href="#SkPath_setConvexity">setConvexity</a> <a href="#SkPath_getConvexity">getConvexity</a>
+Use <a href="#SkPath_setConvexity">setConvexity</a>.
 
 ---
 
@@ -1136,7 +1167,7 @@ void reset()
 </pre>
 
 Sets <a href="#Path">Path</a> to its initial state.
-Removes <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Weight">Weights</a>, and sets <a href="#SkPath_FillType">FillType</a> to <a href="#SkPath_kWinding_FillType">kWinding FillType</a>.
+Removes <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Weights</a>, and sets <a href="#SkPath_FillType">FillType</a> to <a href="#SkPath_kWinding_FillType">kWinding FillType</a>.
 Internal storage associated with <a href="#Path">Path</a> is released.
 
 ### Example
@@ -1157,7 +1188,7 @@ void rewind()
 </pre>
 
 Sets <a href="#Path">Path</a> to its initial state, preserving internal storage.
-Removes <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Weight">Weights</a>, and sets <a href="#SkPath_FillType">FillType</a> to <a href="#SkPath_kWinding_FillType">kWinding FillType</a>.
+Removes <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Weights</a>, and sets <a href="#SkPath_FillType">FillType</a> to <a href="#SkPath_kWinding_FillType">kWinding FillType</a>.
 Internal storage associated with <a href="#Path">Path</a> is retained.
 
 Use <a href="#SkPath_rewind">rewind</a> instead of <a href="#SkPath_reset">reset</a> if <a href="#Path">Path</a> storage will be reused and performance
@@ -1218,7 +1249,7 @@ bool isLastContourClosed() const
 </pre>
 
 <a href="#Contour">Contour</a> is closed if <a href="#Path">Path</a> <a href="#SkPath_Verb">Verb</a> array was last modified by <a href="#SkPath_close">close</a>. When stroked,
-closed <a href="#Contour">Contour</a> draws <a href="#Stroke_Join">Paint Stroke Join</a> instead of <a href="#Stroke_Cap">Paint Stroke Cap</a> at first and last <a href="SkPoint_Reference#Point">Point</a>.
+closed <a href="#Contour">Contour</a> draws <a href="SkPaint_Reference#Stroke_Join">Paint Stroke Join</a> instead of <a href="SkPaint_Reference#Stroke_Cap">Paint Stroke Cap</a> at first and last <a href="SkPoint_Reference#Point">Point</a>.
 
 ### Return Value
 
@@ -1314,6 +1345,12 @@ volatile by default is false
 <a href="#SkPath_setIsVolatile">setIsVolatile</a>
 
 ---
+
+## <a name="Volatile"></a> Volatile
+
+| name | description |
+| --- | --- |
+| <a href="#SkPath_setIsVolatile">setIsVolatile</a> | sets if <a href="undocumented#Device">Device</a> should not cache |
 
 <a name="SkPath_setIsVolatile"></a>
 ## setIsVolatile
@@ -1546,10 +1583,10 @@ second move is not line
 
 ## <a name="Point_Array"></a> Point Array
 
-<a href="#Point_Array">Point Array</a> contains <a href="#Point">Points</a> satisfying the allocated <a href="#Point">Points</a> for
+<a href="#Point_Array">Point Array</a> contains <a href="SkPoint_Reference#Point">Points</a> satisfying the allocated <a href="SkPoint_Reference#Point">Points</a> for
 each <a href="#SkPath_Verb">Verb</a> in <a href="#Verb_Array">Verb Array</a>. For instance, <a href="#Path">Path</a> containing one <a href="#Contour">Contour</a> with <a href="undocumented#Line">Line</a>
 and <a href="#Quad">Quad</a> is described by <a href="#Verb_Array">Verb Array</a>: Verb::kMoveTo, Verb::kLineTo, Verb::kQuadTo; and
-one <a href="SkPoint_Reference#Point">Point</a> for move, one <a href="SkPoint_Reference#Point">Point</a> for <a href="undocumented#Line">Line</a>, two <a href="#Point">Points</a> for <a href="#Quad">Quad</a>; totaling four <a href="#Point">Points</a>.
+one <a href="SkPoint_Reference#Point">Point</a> for move, one <a href="SkPoint_Reference#Point">Point</a> for <a href="undocumented#Line">Line</a>, two <a href="SkPoint_Reference#Point">Points</a> for <a href="#Quad">Quad</a>; totaling four <a href="SkPoint_Reference#Point">Points</a>.
 
 <a href="#Point_Array">Point Array</a> may be read directly from <a href="#Path">Path</a> with <a href="#SkPath_getPoints">getPoints</a>, or inspected with
 <a href="#SkPath_getPoint">getPoint</a>, with <a href="#SkPath_Iter">Iter</a>, or with <a href="#SkPath_RawIter">RawIter</a>.
@@ -1770,7 +1807,7 @@ just right verb count: 3  move line line
 void swap(SkPath& other)
 </pre>
 
-Exchanges the <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, <a href="#Weight">Weights</a>, and <a href="#Fill_Type">Fill Type</a> with <a href="#SkPath_swap_other">other</a>.
+Exchanges the <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, <a href="#Conic_Weight">Weights</a>, and <a href="#Fill_Type">Fill Type</a> with <a href="#SkPath_swap_other">other</a>.
 Cached state is also exchanged. <a href="#SkPath_swap">swap</a> internally exchanges pointers, so
 it is lightweight and does not allocate memory.
 
@@ -1815,17 +1852,17 @@ Returns minimum and maximum x and y values of <a href="#Point_Array">Point Array
 Returns (0, 0, 0, 0) if <a href="#Path">Path</a> contains no points. Returned bounds width and height may
 be larger or smaller than area affected when <a href="#Path">Path</a> is drawn.
 
-<a href="SkRect_Reference#Rect">Rect</a> returned includes all <a href="#Point">Points</a> added to <a href="#Path">Path</a>, including <a href="#Point">Points</a> associated with
+<a href="SkRect_Reference#Rect">Rect</a> returned includes all <a href="SkPoint_Reference#Point">Points</a> added to <a href="#Path">Path</a>, including <a href="SkPoint_Reference#Point">Points</a> associated with
 <a href="#SkPath_kMove_Verb">kMove Verb</a> that define empty <a href="#Contour">Contours</a>.
 
 ### Return Value
 
-bounds of all <a href="#Point">Points</a> in <a href="#Point_Array">Point Array</a>
+bounds of all <a href="SkPoint_Reference#Point">Points</a> in <a href="#Point_Array">Point Array</a>
 
 ### Example
 
 <div><fiddle-embed name="9160aa6d1476bd87d927cfc8a4bf25e7"><div>Bounds of upright <a href="undocumented#Circle">Circle</a> can be predicted from center and radius.
-Bounds of rotated <a href="undocumented#Circle">Circle</a> includes control <a href="#Point">Points</a> outside of filled area.</div>
+Bounds of rotated <a href="undocumented#Circle">Circle</a> includes control <a href="SkPoint_Reference#Point">Points</a> outside of filled area.</div>
 
 #### Example Output
 
@@ -1842,6 +1879,25 @@ rotated circle bounds = 14.6447, 9.64466, 85.3553, 80.3553
 <a href="#SkPath_computeTightBounds">computeTightBounds</a> <a href="#SkPath_updateBoundsCache">updateBoundsCache</a>
 
 ---
+
+## <a name="Utility"></a> Utility
+
+| name | description |
+| --- | --- |
+| <a href="#SkPath_ConvertConicToQuads">ConvertConicToQuads</a> | approximates <a href="#Conic">Conic</a> with <a href="#Quad">Quad</a> array |
+| <a href="#SkPath_ConvertToNonInverseFillType">ConvertToNonInverseFillType</a> | returns <a href="#Fill_Type">Fill Type</a> representing inside geometry |
+| <a href="#SkPath_dump_2">dump</a> | sends text representation using floats to standard output |
+|  | <a href="#SkPath_dump">dump(SkWStream* stream, bool forceClose, bool dumpAsHex)</a> const |
+|  | <a href="#SkPath_dump_2">dump</a> const |
+| <a href="#SkPath_dumpHex">dumpHex</a> | sends text representation using hexadecimal to standard output |
+| <a href="#SkPath_getSegmentMasks">getSegmentMasks</a> | returns types in <a href="#Verb_Array">Verb Array</a> |
+| <a href="#SkPath_incReserve">incReserve</a> | reserves space for additional data |
+| <a href="#SkPath_readFromMemory">readFromMemory</a> | Initializes from buffer |
+| <a href="#SkPath_serialize">serialize</a> | copies data to buffer |
+| <a href="#SkPath_setLastPt">setLastPt</a> | replaces <a href="#Last_Point">Last Point</a> |
+|  | <a href="#SkPath_setLastPt">setLastPt(SkScalar x, SkScalar y)</a> |
+| <a href="#SkPath_updateBoundsCache">updateBoundsCache</a> | refreshes result of <a href="#SkPath_getBounds">getBounds</a> |
+| <a href="#SkPath_writeToMemory">writeToMemory</a> | copies data to buffer |
 
 <a name="SkPath_updateBoundsCache"></a>
 ## updateBoundsCache
@@ -1890,7 +1946,7 @@ Returns (0, 0, 0, 0) if <a href="#Path">Path</a> contains no points.
 Returned bounds width and height may be larger or smaller than area affected
 when <a href="#Path">Path</a> is drawn.
 
-Includes <a href="#Point">Points</a> associated with <a href="#SkPath_kMove_Verb">kMove Verb</a> that define empty
+Includes <a href="SkPoint_Reference#Point">Points</a> associated with <a href="#SkPath_kMove_Verb">kMove Verb</a> that define empty
 <a href="#Contour">Contours</a>.
 
 Behaves identically to <a href="#SkPath_getBounds">getBounds</a> when <a href="#Path">Path</a> contains
@@ -1965,14 +2021,14 @@ true if <a href="#SkPath_conservativelyContainsRect_rect">rect</a> is contained
 void incReserve(unsigned extraPtCount)
 </pre>
 
-grows <a href="#Path">Path</a> <a href="#Verb_Array">Verb Array</a> and <a href="#Point_Array">Point Array</a> to contain <a href="#SkPath_incReserve_extraPtCount">extraPtCount</a> additional <a href="#Point">Points</a>.
+grows <a href="#Path">Path</a> <a href="#Verb_Array">Verb Array</a> and <a href="#Point_Array">Point Array</a> to contain <a href="#SkPath_incReserve_extraPtCount">extraPtCount</a> additional <a href="SkPoint_Reference#Point">Points</a>.
 May improve performance and use less memory by
 reducing the number and size of allocations when creating <a href="#Path">Path</a>.
 
 ### Parameters
 
 <table>  <tr>    <td><a name="SkPath_incReserve_extraPtCount"> <code><strong>extraPtCount </strong></code> </a></td> <td>
-number of additional <a href="#Point">Points</a> to allocate</td>
+number of additional <a href="SkPoint_Reference#Point">Points</a> to allocate</td>
   </tr>
 </table>
 
@@ -1985,6 +2041,49 @@ number of additional <a href="#Point">Points</a> to allocate</td>
 <a href="#Point_Array">Point Array</a>
 
 ---
+
+## <a name="Build"></a> Build
+
+| name | description |
+| --- | --- |
+| <a href="#SkPath_addArc">addArc</a> | adds one <a href="#Contour">Contour</a> containing <a href="#Arc">Arc</a> |
+| <a href="#SkPath_addCircle">addCircle</a> | adds one <a href="#Contour">Contour</a> containing <a href="undocumented#Circle">Circle</a> |
+| <a href="#SkPath_addOval">addOval</a> | adds one <a href="#Contour">Contour</a> containing <a href="undocumented#Oval">Oval</a> |
+|  | <a href="#SkPath_addOval">addOval(const SkRect& oval, Direction dir = kCW Direction)</a> |
+|  | <a href="#SkPath_addOval_2">addOval(const SkRect& oval, Direction dir, unsigned start)</a> |
+| <a href="#SkPath_addPath">addPath</a> | adds contents of <a href="#Path">Path</a> |
+|  | <a href="#SkPath_addPath">addPath(const SkPath& src, SkScalar dx, SkScalar dy, AddPathMode mode = kAppend AddPathMode)</a> |
+|  | <a href="#SkPath_addPath_2">addPath(const SkPath& src, AddPathMode mode = kAppend AddPathMode)</a> |
+|  | <a href="#SkPath_addPath_3">addPath(const SkPath& src, const SkMatrix& matrix, AddPathMode mode = kAppend AddPathMode)</a> |
+| <a href="#SkPath_addPoly">addPoly</a> | adds one <a href="#Contour">Contour</a> containing connected lines |
+| <a href="#SkPath_addRRect">addRRect</a> | adds one <a href="#Contour">Contour</a> containing <a href="undocumented#Round_Rect">Round Rect</a> |
+|  | <a href="#SkPath_addRRect">addRRect(const SkRRect& rrect, Direction dir = kCW Direction)</a> |
+|  | <a href="#SkPath_addRRect_2">addRRect(const SkRRect& rrect, Direction dir, unsigned start)</a> |
+| <a href="#SkPath_addRect">addRect</a> | adds one <a href="#Contour">Contour</a> containing <a href="SkRect_Reference#Rect">Rect</a> |
+|  | <a href="#SkPath_addRect">addRect(const SkRect& rect, Direction dir = kCW Direction)</a> |
+|  | <a href="#SkPath_addRect_2">addRect(const SkRect& rect, Direction dir, unsigned start)</a> |
+|  | <a href="#SkPath_addRect_3">addRect(SkScalar left, SkScalar top, SkScalar right, SkScalar bottom, Direction dir = kCW Direction)</a> |
+| <a href="#SkPath_addRoundRect">addRoundRect</a> | adds one <a href="#Contour">Contour</a> containing <a href="undocumented#Round_Rect">Round Rect</a> with common corner radii |
+|  | <a href="#SkPath_addRoundRect">addRoundRect(const SkRect& rect, SkScalar rx, SkScalar ry, Direction dir = kCW Direction)</a> |
+|  | <a href="#SkPath_addRoundRect_2">addRoundRect(const SkRect& rect, const SkScalar radii[], Direction dir = kCW Direction)</a> |
+| <a href="#SkPath_arcTo">arcTo</a> | appends <a href="#Arc">Arc</a> |
+|  | <a href="#SkPath_arcTo">arcTo(const SkRect& oval, SkScalar startAngle, SkScalar sweepAngle, bool forceMoveTo)</a> |
+| <a href="#SkPath_close">close</a> | makes last <a href="#Contour">Contour</a> a loop |
+| <a href="#SkPath_cubicTo">cubicTo</a> | appends <a href="#Cubic">Cubic</a> |
+|  | <a href="#SkPath_cubicTo">cubicTo(SkScalar x1, SkScalar y1, SkScalar x2, SkScalar y2, SkScalar x3, SkScalar y3)</a> |
+| <a href="#SkPath_lineTo">lineTo</a> | appends <a href="undocumented#Line">Line</a> |
+|  | <a href="#SkPath_lineTo">lineTo(SkScalar x, SkScalar y)</a> |
+|  | <a href="#SkPath_lineTo_2">lineTo(const SkPoint& p)</a> |
+| <a href="#SkPath_moveTo">moveTo</a> | starts <a href="#Contour">Contour</a> |
+|  | <a href="#SkPath_moveTo">moveTo(SkScalar x, SkScalar y)</a> |
+|  | <a href="#SkPath_moveTo_2">moveTo(const SkPoint& p)</a> |
+| <a href="#SkPath_rArcTo">rArcTo</a> | appends <a href="#Arc">Arc</a> relative to <a href="#Last_Point">Last Point</a> |
+| <a href="#SkPath_rConicTo">rConicTo</a> | appends <a href="#Conic">Conic</a> relative to <a href="#Last_Point">Last Point</a> |
+| <a href="#SkPath_rCubicTo">rCubicTo</a> | appends <a href="#Cubic">Cubic</a> relative to <a href="#Last_Point">Last Point</a> |
+| <a href="#SkPath_rLineTo">rLineTo</a> | appends <a href="undocumented#Line">Line</a> relative to <a href="#Last_Point">Last Point</a> |
+| <a href="#SkPath_rMoveTo">rMoveTo</a> | starts <a href="#Contour">Contour</a> relative to <a href="#Last_Point">Last Point</a> |
+| <a href="#SkPath_rQuadTo">rQuadTo</a> | appends <a href="#Quad">Quad</a> relative to <a href="#Last_Point">Last Point</a> |
+| <a href="#SkPath_reverseAddPath">reverseAddPath</a> | adds contents of <a href="#Path">Path</a> back to front |
 
 <a name="SkPath_moveTo"></a>
 ## moveTo
@@ -2165,7 +2264,8 @@ offset from <a href="#Last_Point">Last Point</a> y to <a href="undocumented#Line
 
 ---
 
-# <a name="Quad"></a> Quad
+## <a name="Quad"></a> Quad
+
 <a href="#Quad">Quad</a> describes a quadratic Bezier, a second-order curve identical to a section
 of a parabola. <a href="#Quad">Quad</a> begins at a start <a href="SkPoint_Reference#Point">Point</a>, curves towards a control <a href="SkPoint_Reference#Point">Point</a>,
 and then curves to an end <a href="SkPoint_Reference#Point">Point</a>.
@@ -2176,7 +2276,7 @@ and then curves to an end <a href="SkPoint_Reference#Point">Point</a>.
 
 <a href="#Quad">Quad</a> is a special case of <a href="#Conic">Conic</a> where <a href="#Conic_Weight">Conic Weight</a> is set to one.
 
-<a href="#Quad">Quad</a> is always contained by the triangle connecting its three <a href="#Point">Points</a>. <a href="#Quad">Quad</a>
+<a href="#Quad">Quad</a> is always contained by the triangle connecting its three <a href="SkPoint_Reference#Point">Points</a>. <a href="#Quad">Quad</a>
 begins tangent to the line between start <a href="SkPoint_Reference#Point">Point</a> and control <a href="SkPoint_Reference#Point">Point</a>, and ends
 tangent to the line between control <a href="SkPoint_Reference#Point">Point</a> and end <a href="SkPoint_Reference#Point">Point</a>.
 
@@ -2233,7 +2333,7 @@ If <a href="#Path">Path</a> is empty, or last <a href="#SkPath_Verb">Verb</a> is
 before adding <a href="#Quad">Quad</a>.
 
 Appends <a href="#SkPath_kMove_Verb">kMove Verb</a> to <a href="#Verb_Array">Verb Array</a> and (0, 0) to <a href="#Point_Array">Point Array</a>, if needed;
-then appends <a href="#SkPath_kQuad_Verb">kQuad Verb</a> to <a href="#Verb_Array">Verb Array</a>; and <a href="#Point">Points</a> <a href="#SkPath_quadTo_2_p1">p1</a>, <a href="#SkPath_quadTo_2_p2">p2</a>
+then appends <a href="#SkPath_kQuad_Verb">kQuad Verb</a> to <a href="#Verb_Array">Verb Array</a>; and <a href="SkPoint_Reference#Point">Points</a> <a href="#SkPath_quadTo_2_p1">p1</a>, <a href="#SkPath_quadTo_2_p2">p2</a>
 to <a href="#Point_Array">Point Array</a>.
 
 ### Parameters
@@ -2296,16 +2396,17 @@ offset from <a href="#Last_Point">Last Point</a> x to <a href="#Quad">Quad</a> e
 
 ---
 
-# <a name="Conic"></a> Conic
+## <a name="Conic"></a> Conic
+
 <a href="#Conic">Conic</a> describes a conical section: a piece of an ellipse, or a piece of a
 parabola, or a piece of a hyperbola. <a href="#Conic">Conic</a> begins at a start <a href="SkPoint_Reference#Point">Point</a>,
 curves towards a control <a href="SkPoint_Reference#Point">Point</a>, and then curves to an end <a href="SkPoint_Reference#Point">Point</a>. The influence
 of the control <a href="SkPoint_Reference#Point">Point</a> is determined by <a href="#Conic_Weight">Conic Weight</a>.
 
-Each <a href="#Conic">Conic</a> in <a href="#Path">Path</a> adds two <a href="#Point">Points</a> and one <a href="#Conic_Weight">Conic Weight</a>. <a href="#Weight">Conic Weights</a> in <a href="#Path">Path</a>
+Each <a href="#Conic">Conic</a> in <a href="#Path">Path</a> adds two <a href="SkPoint_Reference#Point">Points</a> and one <a href="#Conic_Weight">Conic Weight</a>. <a href="#Conic_Weight">Conic Weights</a> in <a href="#Path">Path</a>
 may be inspected with <a href="#SkPath_Iter">Iter</a>, or with <a href="#SkPath_RawIter">RawIter</a>.
 
-## <a name="Weight"></a> Weight
+## <a name="Conic_Weight"></a> Conic Weight
 
 <a href="#Conic_Weight">Weight</a> determines both the strength of the control <a href="SkPoint_Reference#Point">Point</a> and the type of <a href="#Conic">Conic</a>.
 If <a href="#Conic_Weight">Weight</a> is exactly one, then <a href="#Conic">Conic</a> is identical to <a href="#Quad">Quad</a>; it is always a
@@ -2343,7 +2444,7 @@ done
 
 If weight is greater than one, <a href="#Conic">Conic</a> is a hyperbolic segment. As weight gets large,
 a hyperbolic segment can be approximated by straight lines connecting the
-control <a href="SkPoint_Reference#Point">Point</a> with the end <a href="#Point">Points</a>.
+control <a href="SkPoint_Reference#Point">Point</a> with the end <a href="SkPoint_Reference#Point">Points</a>.
 
 ### Example
 
@@ -2374,7 +2475,7 @@ before adding <a href="#Conic">Conic</a>.
 Appends <a href="#SkPath_kMove_Verb">kMove Verb</a> to <a href="#Verb_Array">Verb Array</a> and (0, 0) to <a href="#Point_Array">Point Array</a>, if needed.
 
 If <a href="#SkPath_conicTo_w">w</a> is finite and not one, appends <a href="#SkPath_kConic_Verb">kConic Verb</a> to <a href="#Verb_Array">Verb Array</a>;
-and (<a href="#SkPath_conicTo_x1">x1</a>, <a href="#SkPath_conicTo_y1">y1</a>), (<a href="#SkPath_conicTo_x2">x2</a>, <a href="#SkPath_conicTo_y2">y2</a>) to <a href="#Point_Array">Point Array</a>; and <a href="#SkPath_conicTo_w">w</a> to <a href="#Weight">Conic Weights</a>.
+and (<a href="#SkPath_conicTo_x1">x1</a>, <a href="#SkPath_conicTo_y1">y1</a>), (<a href="#SkPath_conicTo_x2">x2</a>, <a href="#SkPath_conicTo_y2">y2</a>) to <a href="#Point_Array">Point Array</a>; and <a href="#SkPath_conicTo_w">w</a> to <a href="#Conic_Weight">Conic Weights</a>.
 
 If <a href="#SkPath_conicTo_w">w</a> is one, appends <a href="#SkPath_kQuad_Verb">kQuad Verb</a> to <a href="#Verb_Array">Verb Array</a>, and
 (<a href="#SkPath_conicTo_x1">x1</a>, <a href="#SkPath_conicTo_y1">y1</a>), (<a href="#SkPath_conicTo_x2">x2</a>, <a href="#SkPath_conicTo_y2">y2</a>) to <a href="#Point_Array">Point Array</a>.
@@ -2422,13 +2523,13 @@ before adding <a href="#Conic">Conic</a>.
 Appends <a href="#SkPath_kMove_Verb">kMove Verb</a> to <a href="#Verb_Array">Verb Array</a> and (0, 0) to <a href="#Point_Array">Point Array</a>, if needed.
 
 If <a href="#SkPath_conicTo_2_w">w</a> is finite and not one, appends <a href="#SkPath_kConic_Verb">kConic Verb</a> to <a href="#Verb_Array">Verb Array</a>;
-and <a href="#Point">Points</a> <a href="#SkPath_conicTo_2_p1">p1</a>, <a href="#SkPath_conicTo_2_p2">p2</a> to <a href="#Point_Array">Point Array</a>; and <a href="#SkPath_conicTo_2_w">w</a> to <a href="#Weight">Conic Weights</a>.
+and <a href="SkPoint_Reference#Point">Points</a> <a href="#SkPath_conicTo_2_p1">p1</a>, <a href="#SkPath_conicTo_2_p2">p2</a> to <a href="#Point_Array">Point Array</a>; and <a href="#SkPath_conicTo_2_w">w</a> to <a href="#Conic_Weight">Conic Weights</a>.
 
-If <a href="#SkPath_conicTo_2_w">w</a> is one, appends <a href="#SkPath_kQuad_Verb">kQuad Verb</a> to <a href="#Verb_Array">Verb Array</a>, and <a href="#Point">Points</a> <a href="#SkPath_conicTo_2_p1">p1</a>, <a href="#SkPath_conicTo_2_p2">p2</a>
+If <a href="#SkPath_conicTo_2_w">w</a> is one, appends <a href="#SkPath_kQuad_Verb">kQuad Verb</a> to <a href="#Verb_Array">Verb Array</a>, and <a href="SkPoint_Reference#Point">Points</a> <a href="#SkPath_conicTo_2_p1">p1</a>, <a href="#SkPath_conicTo_2_p2">p2</a>
 to <a href="#Point_Array">Point Array</a>.
 
 If <a href="#SkPath_conicTo_2_w">w</a> is not finite, appends <a href="#SkPath_kLine_Verb">kLine Verb</a> twice to <a href="#Verb_Array">Verb Array</a>, and
-<a href="#Point">Points</a> <a href="#SkPath_conicTo_2_p1">p1</a>, <a href="#SkPath_conicTo_2_p2">p2</a> to <a href="#Point_Array">Point Array</a>.
+<a href="SkPoint_Reference#Point">Points</a> <a href="#SkPath_conicTo_2_p1">p1</a>, <a href="#SkPath_conicTo_2_p2">p2</a> to <a href="#Point_Array">Point Array</a>.
 
 ### Parameters
 
@@ -2470,7 +2571,7 @@ and <a href="#SkPath_rConicTo_w">w</a> is recorded as <a href="#Conic_Weight">Co
 <a href="#SkPath_kQuad_Verb">kQuad Verb</a> to <a href="#Verb_Array">Verb Array</a>; or if <a href="#SkPath_rConicTo_w">w</a> is not finite, appends <a href="#SkPath_kLine_Verb">kLine Verb</a>
 twice to <a href="#Verb_Array">Verb Array</a>.
 
-In all cases appends <a href="#Point">Points</a> control and end to <a href="#Point_Array">Point Array</a>.
+In all cases appends <a href="SkPoint_Reference#Point">Points</a> control and end to <a href="#Point_Array">Point Array</a>.
 control is <a href="#Last_Point">Last Point</a> plus <a href="SkPoint_Reference#Vector">Vector</a> (<a href="#SkPath_rConicTo_dx1">dx1</a>, <a href="#SkPath_rConicTo_dy1">dy1</a>).
 end is <a href="#Last_Point">Last Point</a> plus <a href="SkPoint_Reference#Vector">Vector</a> (<a href="#SkPath_rConicTo_dx2">dx2</a>, <a href="#SkPath_rConicTo_dy2">dy2</a>).
 
@@ -2501,7 +2602,8 @@ weight of added <a href="#Conic">Conic</a></td>
 
 ---
 
-# <a name="Cubic"></a> Cubic
+## <a name="Cubic"></a> Cubic
+
 <a href="#Cubic">Cubic</a> describes a Bezier_Curve segment described by a third-order polynomial.
 <a href="#Cubic">Cubic</a> begins at a start <a href="SkPoint_Reference#Point">Point</a>, curving towards the first control <a href="SkPoint_Reference#Point">Point</a>;
 and curves from the end <a href="SkPoint_Reference#Point">Point</a> towards the second control <a href="SkPoint_Reference#Point">Point</a>.
@@ -2563,7 +2665,7 @@ Adds <a href="#Cubic">Cubic</a> from <a href="#Last_Point">Last Point</a> toward
 (0, 0) before adding <a href="#Cubic">Cubic</a>.
 
 Appends <a href="#SkPath_kMove_Verb">kMove Verb</a> to <a href="#Verb_Array">Verb Array</a> and (0, 0) to <a href="#Point_Array">Point Array</a>, if needed;
-then appends <a href="#SkPath_kCubic_Verb">kCubic Verb</a> to <a href="#Verb_Array">Verb Array</a>; and <a href="#Point">Points</a> <a href="#SkPath_cubicTo_2_p1">p1</a>, <a href="#SkPath_cubicTo_2_p2">p2</a>, <a href="#SkPath_cubicTo_2_p3">p3</a>
+then appends <a href="#SkPath_kCubic_Verb">kCubic Verb</a> to <a href="#Verb_Array">Verb Array</a>; and <a href="SkPoint_Reference#Point">Points</a> <a href="#SkPath_cubicTo_2_p1">p1</a>, <a href="#SkPath_cubicTo_2_p2">p2</a>, <a href="#SkPath_cubicTo_2_p3">p3</a>
 to <a href="#Point_Array">Point Array</a>.
 
 ### Parameters
@@ -2723,7 +2825,7 @@ is not empty.</div></fiddle-embed></div>
 
 ### See Also
 
-<a href="#SkPath_addArc">addArc</a> <a href="#SkCanvas_drawArc">SkCanvas::drawArc</a> <a href="#SkPath_conicTo">conicTo</a><sup><a href="#SkPath_conicTo_2">[2]</a></sup>
+<a href="#SkPath_addArc">addArc</a> <a href="SkCanvas_Reference#SkCanvas_drawArc">SkCanvas::drawArc</a> <a href="#SkPath_conicTo">conicTo</a><sup><a href="#SkPath_conicTo_2">[2]</a></sup>
 
 ---
 
@@ -2753,7 +2855,7 @@ The length of <a href="SkPoint_Reference#Vector">Vector</a> from (<a href="#SkPa
 tangents are nearly parallel, <a href="#SkPath_arcTo">arcTo</a> appends <a href="undocumented#Line">Line</a> from last <a href="#Path">Path</a> <a href="SkPoint_Reference#Point">Point</a> to (<a href="#SkPath_arcTo_2_x1">x1</a>, <a href="#SkPath_arcTo_2_y1">y1</a>).
 
 <a href="#SkPath_arcTo">arcTo</a> appends at most one <a href="undocumented#Line">Line</a> and one <a href="#Conic">Conic</a>.
-<a href="#SkPath_arcTo">arcTo</a> implements the functionality of <a href="#Arct">PostScript Arct</a> and <a href="undocumented#HTML_Canvas_ArcTo">HTML Canvas ArcTo</a>.
+<a href="#SkPath_arcTo">arcTo</a> implements the functionality of <a href="undocumented#Arct">PostScript Arct</a> and <a href="undocumented#ArcTo">HTML Canvas ArcTo</a>.
 
 ### Parameters
 
@@ -2808,7 +2910,7 @@ The length of <a href="SkPoint_Reference#Vector">Vector</a> from <a href="#SkPat
 tangents are nearly parallel, <a href="#SkPath_arcTo">arcTo</a> appends <a href="undocumented#Line">Line</a> from last <a href="#Path">Path</a> <a href="SkPoint_Reference#Point">Point</a> to <a href="#SkPath_arcTo_3_p1">p1</a>.
 
 <a href="#SkPath_arcTo">arcTo</a> appends at most one <a href="undocumented#Line">Line</a> and one <a href="#Conic">Conic</a>.
-<a href="#SkPath_arcTo">arcTo</a> implements the functionality of <a href="#Arct">PostScript Arct</a> and <a href="undocumented#HTML_Canvas_ArcTo">HTML Canvas ArcTo</a>.
+<a href="#SkPath_arcTo">arcTo</a> implements the functionality of <a href="undocumented#Arct">PostScript Arct</a> and <a href="undocumented#ArcTo">HTML Canvas ArcTo</a>.
 
 ### Parameters
 
@@ -2893,7 +2995,7 @@ either radii are zero, or if last <a href="#Path">Path</a> <a href="SkPoint_Refe
 too small.
 
 <a href="#SkPath_arcTo">arcTo</a> appends up to four <a href="#Conic">Conic</a> curves.
-<a href="#SkPath_arcTo">arcTo</a> implements the functionality of <a href="#Arc">SVG Arc</a>, although <a href="undocumented#SVG">SVG</a> "<a href="#SkPath_arcTo_4_sweep">sweep</a>-flag" value
+<a href="#SkPath_arcTo">arcTo</a> implements the functionality of <a href="undocumented#Arc">SVG Arc</a>, although <a href="undocumented#SVG">SVG</a> "<a href="#SkPath_arcTo_4_sweep">sweep</a>-flag" value
 is opposite the integer value of <a href="#SkPath_arcTo_4_sweep">sweep</a>; <a href="undocumented#SVG">SVG</a> "<a href="#SkPath_arcTo_4_sweep">sweep</a>-flag" uses 1 for clockwise,
 while <a href="#SkPath_kCW_Direction">kCW Direction</a>  cast to int is zero.
 
@@ -2942,7 +3044,7 @@ or if last <a href="#Path">Path</a> <a href="SkPoint_Reference#Point">Point</a> 
 <a href="#SkPath_arcTo_5_xy">xy</a> if both are greater than zero but too small to describe an arc.
 
 <a href="#SkPath_arcTo">arcTo</a> appends up to four <a href="#Conic">Conic</a> curves.
-<a href="#SkPath_arcTo">arcTo</a> implements the functionality of <a href="#Arc">SVG Arc</a>, although <a href="undocumented#SVG">SVG</a> "<a href="#SkPath_arcTo_5_sweep">sweep</a>-flag" value is
+<a href="#SkPath_arcTo">arcTo</a> implements the functionality of <a href="undocumented#Arc">SVG Arc</a>, although <a href="undocumented#SVG">SVG</a> "<a href="#SkPath_arcTo_5_sweep">sweep</a>-flag" value is
 opposite the integer value of <a href="#SkPath_arcTo_5_sweep">sweep</a>; <a href="undocumented#SVG">SVG</a> "<a href="#SkPath_arcTo_5_sweep">sweep</a>-flag" uses 1 for clockwise, while
 <a href="#SkPath_kCW_Direction">kCW Direction</a> cast to int is zero.
 
@@ -2994,7 +3096,7 @@ if either radii are zero, or if last <a href="#Path">Path</a> <a href="SkPoint_R
 greater than zero but too small to describe an arc.
 
 <a href="#SkPath_arcTo">arcTo</a> appends up to four <a href="#Conic">Conic</a> curves.
-<a href="#SkPath_arcTo">arcTo</a> implements the functionality of <a href="#Arc">SVG Arc</a>, although <a href="undocumented#SVG">SVG</a> "<a href="#SkPath_rArcTo_sweep">sweep</a>-flag" value is
+<a href="#SkPath_arcTo">arcTo</a> implements the functionality of <a href="undocumented#Arc">SVG Arc</a>, although <a href="undocumented#SVG">SVG</a> "<a href="#SkPath_rArcTo_sweep">sweep</a>-flag" value is
 opposite the integer value of <a href="#SkPath_rArcTo_sweep">sweep</a>; <a href="undocumented#SVG">SVG</a> "<a href="#SkPath_rArcTo_sweep">sweep</a>-flag" uses 1 for clockwise, while
 <a href="#SkPath_kCW_Direction">kCW Direction</a> cast to int is zero.
 
@@ -3036,9 +3138,9 @@ void close()
 
 Append <a href="#SkPath_kClose_Verb">kClose Verb</a> to <a href="#Path">Path</a>. A closed <a href="#Contour">Contour</a> connects the first and last <a href="SkPoint_Reference#Point">Point</a>
 with <a href="undocumented#Line">Line</a>, forming a continuous loop. Open and closed <a href="#Contour">Contour</a> draw the same
-with <a href="#SkPaint_kFill_Style">SkPaint::kFill Style</a>. With <a href="#SkPaint_kStroke_Style">SkPaint::kStroke Style</a>, open <a href="#Contour">Contour</a> draws
-<a href="#Stroke_Cap">Paint Stroke Cap</a> at <a href="#Contour">Contour</a> start and end; closed <a href="#Contour">Contour</a> draws
-<a href="#Stroke_Join">Paint Stroke Join</a> at <a href="#Contour">Contour</a> start and end.
+with <a href="SkPaint_Reference#SkPaint_kFill_Style">SkPaint::kFill Style</a>. With <a href="SkPaint_Reference#SkPaint_kStroke_Style">SkPaint::kStroke Style</a>, open <a href="#Contour">Contour</a> draws
+<a href="SkPaint_Reference#Stroke_Cap">Paint Stroke Cap</a> at <a href="#Contour">Contour</a> start and end; closed <a href="#Contour">Contour</a> draws
+<a href="SkPaint_Reference#Stroke_Join">Paint Stroke Join</a> at <a href="#Contour">Contour</a> start and end.
 
 <a href="#SkPath_close">close</a> has no effect if <a href="#Path">Path</a> is empty or last <a href="#Path">Path</a> <a href="#SkPath_Verb">Verb</a> is <a href="#SkPath_kClose_Verb">kClose Verb</a>.
 
@@ -3335,7 +3437,7 @@ The right <a href="SkRect_Reference#Rect">Rect</a> dashes starting at the top-le
 
 ### See Also
 
-<a href="#SkCanvas_drawRect">SkCanvas::drawRect</a> <a href="#SkPath_Direction">Direction</a>
+<a href="SkCanvas_Reference#SkCanvas_drawRect">SkCanvas::drawRect</a> <a href="#SkPath_Direction">Direction</a>
 
 ---
 
@@ -3375,7 +3477,7 @@ corner appended to <a href="#Path">Path</a>.</div></fiddle-embed></div>
 
 ### See Also
 
-<a href="#SkCanvas_drawRect">SkCanvas::drawRect</a> <a href="#SkPath_Direction">Direction</a>
+<a href="SkCanvas_Reference#SkCanvas_drawRect">SkCanvas::drawRect</a> <a href="#SkPath_Direction">Direction</a>
 
 ---
 
@@ -3414,7 +3516,7 @@ The <a href="#SkPath_addRect_3_right">right</a> <a href="SkRect_Reference#Rect">
 
 ### See Also
 
-<a href="#SkCanvas_drawRect">SkCanvas::drawRect</a> <a href="#SkPath_Direction">Direction</a>
+<a href="SkCanvas_Reference#SkCanvas_drawRect">SkCanvas::drawRect</a> <a href="#SkPath_Direction">Direction</a>
 
 ---
 
@@ -3447,7 +3549,7 @@ bounds of ellipse added</td>
 
 ### See Also
 
-<a href="#SkCanvas_drawOval">SkCanvas::drawOval</a> <a href="#SkPath_Direction">Direction</a> <a href="undocumented#Oval">Oval</a>
+<a href="SkCanvas_Reference#SkCanvas_drawOval">SkCanvas::drawOval</a> <a href="#SkPath_Direction">Direction</a> <a href="undocumented#Oval">Oval</a>
 
 ---
 
@@ -3486,7 +3588,7 @@ index of initial point of ellipse</td>
 
 ### See Also
 
-<a href="#SkCanvas_drawOval">SkCanvas::drawOval</a> <a href="#SkPath_Direction">Direction</a> <a href="undocumented#Oval">Oval</a>
+<a href="SkCanvas_Reference#SkCanvas_drawOval">SkCanvas::drawOval</a> <a href="#SkPath_Direction">Direction</a> <a href="undocumented#Oval">Oval</a>
 
 ---
 
@@ -3524,7 +3626,7 @@ distance from center to edge</td>
 
 ### See Also
 
-<a href="#SkCanvas_drawCircle">SkCanvas::drawCircle</a><sup><a href="#SkCanvas_drawCircle_2">[2]</a></sup> <a href="#SkPath_Direction">Direction</a> <a href="undocumented#Circle">Circle</a>
+<a href="SkCanvas_Reference#SkCanvas_drawCircle">SkCanvas::drawCircle</a><sup><a href="SkCanvas_Reference#SkCanvas_drawCircle_2">[2]</a></sup> <a href="#SkPath_Direction">Direction</a> <a href="undocumented#Circle">Circle</a>
 
 ---
 
@@ -3563,7 +3665,7 @@ and <a href="#SkPath_addArc_startAngle">startAngle</a> modulo 90 is not zero.</d
 
 ### See Also
 
-<a href="#Arc">Arc</a> <a href="#SkPath_arcTo">arcTo</a><sup><a href="#SkPath_arcTo_2">[2]</a></sup><sup><a href="#SkPath_arcTo_3">[3]</a></sup><sup><a href="#SkPath_arcTo_4">[4]</a></sup><sup><a href="#SkPath_arcTo_5">[5]</a></sup> <a href="#SkCanvas_drawArc">SkCanvas::drawArc</a>
+<a href="#Arc">Arc</a> <a href="#SkPath_arcTo">arcTo</a><sup><a href="#SkPath_arcTo_2">[2]</a></sup><sup><a href="#SkPath_arcTo_3">[3]</a></sup><sup><a href="#SkPath_arcTo_4">[4]</a></sup><sup><a href="#SkPath_arcTo_5">[5]</a></sup> <a href="SkCanvas_Reference#SkCanvas_drawArc">SkCanvas::drawArc</a>
 
 ---
 
@@ -3609,7 +3711,7 @@ drawn in green.</div></fiddle-embed></div>
 
 ### See Also
 
-<a href="#SkPath_addRRect">addRRect</a><sup><a href="#SkPath_addRRect_2">[2]</a></sup> <a href="#SkCanvas_drawRoundRect">SkCanvas::drawRoundRect</a>
+<a href="#SkPath_addRRect">addRRect</a><sup><a href="#SkPath_addRRect_2">[2]</a></sup> <a href="SkCanvas_Reference#SkCanvas_drawRoundRect">SkCanvas::drawRoundRect</a>
 
 ---
 
@@ -3661,7 +3763,7 @@ array of 8 <a href="undocumented#SkScalar">SkScalar</a> values, a radius pair fo
 
 ### See Also
 
-<a href="#SkPath_addRRect">addRRect</a><sup><a href="#SkPath_addRRect_2">[2]</a></sup> <a href="#SkCanvas_drawRoundRect">SkCanvas::drawRoundRect</a>
+<a href="#SkPath_addRRect">addRRect</a><sup><a href="#SkPath_addRRect_2">[2]</a></sup> <a href="SkCanvas_Reference#SkCanvas_drawRoundRect">SkCanvas::drawRoundRect</a>
 
 ---
 
@@ -3694,7 +3796,7 @@ bounds and radii of rounded rectangle</td>
 
 ### See Also
 
-<a href="#SkPath_addRoundRect">addRoundRect</a><sup><a href="#SkPath_addRoundRect_2">[2]</a></sup> <a href="#SkCanvas_drawRRect">SkCanvas::drawRRect</a>
+<a href="#SkPath_addRoundRect">addRoundRect</a><sup><a href="#SkPath_addRoundRect_2">[2]</a></sup> <a href="SkCanvas_Reference#SkCanvas_drawRRect">SkCanvas::drawRRect</a>
 
 ---
 
@@ -3738,7 +3840,7 @@ index of initial point of <a href="undocumented#Round_Rect">Round Rect</a></td>
 
 ### See Also
 
-<a href="#SkPath_addRoundRect">addRoundRect</a><sup><a href="#SkPath_addRoundRect_2">[2]</a></sup> <a href="#SkCanvas_drawRRect">SkCanvas::drawRRect</a>
+<a href="#SkPath_addRoundRect">addRoundRect</a><sup><a href="#SkPath_addRoundRect_2">[2]</a></sup> <a href="SkCanvas_Reference#SkCanvas_drawRRect">SkCanvas::drawRRect</a>
 
 ---
 
@@ -3774,7 +3876,7 @@ true to add <a href="undocumented#Line">Line</a> connecting <a href="#Contour">C
 
 ### See Also
 
-<a href="#SkCanvas_drawPoints">SkCanvas::drawPoints</a>
+<a href="SkCanvas_Reference#SkCanvas_drawPoints">SkCanvas::drawPoints</a>
 
 ---
 
@@ -3798,7 +3900,7 @@ starts a new <a href="#Contour">Contour</a>.</td>
   </tr>
   <tr>
     <td><a name="SkPath_kExtend_AddPathMode"> <code><strong>SkPath::kExtend_AddPathMode </strong></code> </a></td><td>If destination is closed or empty, start a new Contour. If destination</td><td>is not empty, add <a href="undocumented#Line">Line</a> from <a href="#Last_Point">Last Point</a> to added <a href="#Path">Path</a> first <a href="SkPoint_Reference#Point">Point</a>. Skip added
-<a href="#Path">Path</a> initial <a href="#SkPath_kMove_Verb">kMove Verb</a>, then append remining <a href="#Verb">Verbs</a>, <a href="#Point">Points</a>, and <a href="#Weight">Conic Weights</a>.</td>
+<a href="#Path">Path</a> initial <a href="#SkPath_kMove_Verb">kMove Verb</a>, then append remining <a href="#Verb">Verbs</a>, <a href="SkPoint_Reference#Point">Points</a>, and <a href="#Conic_Weight">Conic Weights</a>.</td>
   </tr>
 </table>
 
@@ -3823,14 +3925,14 @@ void addPath(const SkPath& src, SkScalar dx, SkScalar dy, AddPathMode mode = kAp
 
 Append <a href="#SkPath_addPath_src">src</a> to <a href="#Path">Path</a>, offset by (<a href="#SkPath_addPath_dx">dx</a>, <a href="#SkPath_addPath_dy">dy</a>).
 
-If <a href="#SkPath_addPath_mode">mode</a> is <a href="#SkPath_kAppend_AddPathMode">kAppend AddPathMode</a>, <a href="#SkPath_addPath_src">src</a> <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Weight">Conic Weights</a> are
+If <a href="#SkPath_addPath_mode">mode</a> is <a href="#SkPath_kAppend_AddPathMode">kAppend AddPathMode</a>, <a href="#SkPath_addPath_src">src</a> <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Conic Weights</a> are
 added unaltered. If <a href="#SkPath_addPath_mode">mode</a> is <a href="#SkPath_kExtend_AddPathMode">kExtend AddPathMode</a>, add <a href="undocumented#Line">Line</a> before appending
-<a href="#Verb">Verbs</a>, <a href="#Point">Points</a>, and <a href="#Weight">Conic Weights</a>.
+<a href="#Verb">Verbs</a>, <a href="SkPoint_Reference#Point">Points</a>, and <a href="#Conic_Weight">Conic Weights</a>.
 
 ### Parameters
 
 <table>  <tr>    <td><a name="SkPath_addPath_src"> <code><strong>src </strong></code> </a></td> <td>
-<a href="#Path">Path</a> <a href="#Verb">Verbs</a>, <a href="#Point">Points</a>, and <a href="#Weight">Conic Weights</a> to add</td>
+<a href="#Path">Path</a> <a href="#Verb">Verbs</a>, <a href="SkPoint_Reference#Point">Points</a>, and <a href="#Conic_Weight">Conic Weights</a> to add</td>
   </tr>  <tr>    <td><a name="SkPath_addPath_dx"> <code><strong>dx </strong></code> </a></td> <td>
 offset added to <a href="#SkPath_addPath_src">src</a> <a href="#Point_Array">Point Array</a> x coordinates</td>
   </tr>  <tr>    <td><a name="SkPath_addPath_dy"> <code><strong>dy </strong></code> </a></td> <td>
@@ -3858,14 +3960,14 @@ void addPath(const SkPath& src, AddPathMode mode = kAppend_AddPathMode)
 
 Append <a href="#SkPath_addPath_2_src">src</a> to <a href="#Path">Path</a>.
 
-If <a href="#SkPath_addPath_2_mode">mode</a> is <a href="#SkPath_kAppend_AddPathMode">kAppend AddPathMode</a>, <a href="#SkPath_addPath_2_src">src</a> <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Weight">Conic Weights</a> are
+If <a href="#SkPath_addPath_2_mode">mode</a> is <a href="#SkPath_kAppend_AddPathMode">kAppend AddPathMode</a>, <a href="#SkPath_addPath_2_src">src</a> <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Conic Weights</a> are
 added unaltered. If <a href="#SkPath_addPath_2_mode">mode</a> is <a href="#SkPath_kExtend_AddPathMode">kExtend AddPathMode</a>, add <a href="undocumented#Line">Line</a> before appending
-<a href="#Verb">Verbs</a>, <a href="#Point">Points</a>, and <a href="#Weight">Conic Weights</a>.
+<a href="#Verb">Verbs</a>, <a href="SkPoint_Reference#Point">Points</a>, and <a href="#Conic_Weight">Conic Weights</a>.
 
 ### Parameters
 
 <table>  <tr>    <td><a name="SkPath_addPath_2_src"> <code><strong>src </strong></code> </a></td> <td>
-<a href="#Path">Path</a> <a href="#Verb">Verbs</a>, <a href="#Point">Points</a>, and <a href="#Weight">Conic Weights</a> to add</td>
+<a href="#Path">Path</a> <a href="#Verb">Verbs</a>, <a href="SkPoint_Reference#Point">Points</a>, and <a href="#Conic_Weight">Conic Weights</a> to add</td>
   </tr>  <tr>    <td><a name="SkPath_addPath_2_mode"> <code><strong>mode </strong></code> </a></td> <td>
 <a href="#SkPath_kAppend_AddPathMode">kAppend AddPathMode</a> or <a href="#SkPath_kExtend_AddPathMode">kExtend AddPathMode</a></td>
   </tr>
@@ -3888,16 +3990,16 @@ void addPath(const SkPath& src, const SkMatrix& matrix, AddPathMode mode = kAppe
 </pre>
 
 Append <a href="#SkPath_addPath_3_src">src</a> to <a href="#Path">Path</a>, transformed by <a href="#SkPath_addPath_3_matrix">matrix</a>. Transformed curves may have different
-<a href="#Verb">Verbs</a>, <a href="#Point">Points</a>, and <a href="#Weight">Conic Weights</a>.
+<a href="#Verb">Verbs</a>, <a href="SkPoint_Reference#Point">Points</a>, and <a href="#Conic_Weight">Conic Weights</a>.
 
-If <a href="#SkPath_addPath_3_mode">mode</a> is <a href="#SkPath_kAppend_AddPathMode">kAppend AddPathMode</a>, <a href="#SkPath_addPath_3_src">src</a> <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Weight">Conic Weights</a> are
+If <a href="#SkPath_addPath_3_mode">mode</a> is <a href="#SkPath_kAppend_AddPathMode">kAppend AddPathMode</a>, <a href="#SkPath_addPath_3_src">src</a> <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Conic Weights</a> are
 added unaltered. If <a href="#SkPath_addPath_3_mode">mode</a> is <a href="#SkPath_kExtend_AddPathMode">kExtend AddPathMode</a>, add <a href="undocumented#Line">Line</a> before appending
-<a href="#Verb">Verbs</a>, <a href="#Point">Points</a>, and <a href="#Weight">Conic Weights</a>.
+<a href="#Verb">Verbs</a>, <a href="SkPoint_Reference#Point">Points</a>, and <a href="#Conic_Weight">Conic Weights</a>.
 
 ### Parameters
 
 <table>  <tr>    <td><a name="SkPath_addPath_3_src"> <code><strong>src </strong></code> </a></td> <td>
-<a href="#Path">Path</a> <a href="#Verb">Verbs</a>, <a href="#Point">Points</a>, and <a href="#Weight">Conic Weights</a> to add</td>
+<a href="#Path">Path</a> <a href="#Verb">Verbs</a>, <a href="SkPoint_Reference#Point">Points</a>, and <a href="#Conic_Weight">Conic Weights</a> to add</td>
   </tr>  <tr>    <td><a name="SkPath_addPath_3_matrix"> <code><strong>matrix </strong></code> </a></td> <td>
 transform applied to <a href="#SkPath_addPath_3_src">src</a></td>
   </tr>  <tr>    <td><a name="SkPath_addPath_3_mode"> <code><strong>mode </strong></code> </a></td> <td>
@@ -3928,7 +4030,7 @@ Reversed <a href="#SkPath_reverseAddPath_src">src</a> always appends a new <a hr
 ### Parameters
 
 <table>  <tr>    <td><a name="SkPath_reverseAddPath_src"> <code><strong>src </strong></code> </a></td> <td>
-<a href="#Path">Path</a> <a href="#Verb">Verbs</a>, <a href="#Point">Points</a>, and <a href="#Weight">Conic Weights</a> to add</td>
+<a href="#Path">Path</a> <a href="#Verb">Verbs</a>, <a href="SkPoint_Reference#Point">Points</a>, and <a href="#Conic_Weight">Conic Weights</a> to add</td>
   </tr>
 </table>
 
@@ -3973,6 +4075,17 @@ overwritten, translated copy of <a href="#Path">Path</a>; may be nullptr</td>
 
 ---
 
+## <a name="Transform"></a> Transform
+
+| name | description |
+| --- | --- |
+| <a href="#SkPath_offset">offset</a> | translates <a href="#Point_Array">Point Array</a> |
+|  | <a href="#SkPath_offset">offset(SkScalar dx, SkScalar dy, SkPath* dst)</a> const |
+|  | <a href="#SkPath_offset_2">offset(SkScalar dx, SkScalar dy)</a> |
+| <a href="#SkPath_transform">transform</a> | applies <a href="SkMatrix_Reference#Matrix">Matrix</a> to <a href="#Point_Array">Point Array</a> and <a href="#Conic_Weight">Weights</a> |
+|  | <a href="#SkPath_transform">transform(const SkMatrix& matrix, SkPath* dst)</a> const |
+|  | <a href="#SkPath_transform_2">transform(const SkMatrix& matrix)</a> |
+
 <a name="SkPath_offset_2"></a>
 
 <pre style="padding: 1em 1em 1em 1em;width: 62.5em; background-color: #f0f0f0">
@@ -3996,7 +4109,7 @@ offset added to <a href="#Point_Array">Point Array</a> y coordinates</td>
 
 ### See Also
 
-<a href="#SkPath_addPath">addPath</a><sup><a href="#SkPath_addPath_2">[2]</a></sup><sup><a href="#SkPath_addPath_3">[3]</a></sup> <a href="#SkPath_transform">transform</a><sup><a href="#SkPath_transform_2">[2]</a></sup> <a href="#SkCanvas_translate">SkCanvas::translate()</a>
+<a href="#SkPath_addPath">addPath</a><sup><a href="#SkPath_addPath_2">[2]</a></sup><sup><a href="#SkPath_addPath_3">[3]</a></sup> <a href="#SkPath_transform">transform</a><sup><a href="#SkPath_transform_2">[2]</a></sup> <a href="SkCanvas_Reference#SkCanvas_translate">SkCanvas::translate()</a>
 
 ---
 
@@ -4007,7 +4120,7 @@ offset added to <a href="#Point_Array">Point Array</a> y coordinates</td>
 void transform(const SkMatrix& matrix, SkPath* dst) const
 </pre>
 
-Transform <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and weight by <a href="#SkPath_transform_matrix">matrix</a>.
+<a href="#Transform">Transform</a> <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and weight by <a href="#SkPath_transform_matrix">matrix</a>.
 transform may change <a href="#Verb">Verbs</a> and increase their number.
 Transformed <a href="#Path">Path</a> replaces <a href="#SkPath_transform_dst">dst</a>; if <a href="#SkPath_transform_dst">dst</a> is nullptr, original data
 is replaced.
@@ -4027,7 +4140,7 @@ overwritten, transformed copy of <a href="#Path">Path</a>; may be nullptr</td>
 
 ### See Also
 
-<a href="#SkPath_addPath">addPath</a><sup><a href="#SkPath_addPath_2">[2]</a></sup><sup><a href="#SkPath_addPath_3">[3]</a></sup> <a href="#SkPath_offset">offset</a><sup><a href="#SkPath_offset_2">[2]</a></sup> <a href="#SkCanvas_concat">SkCanvas::concat()</a> <a href="SkMatrix_Reference#SkMatrix">SkMatrix</a>
+<a href="#SkPath_addPath">addPath</a><sup><a href="#SkPath_addPath_2">[2]</a></sup><sup><a href="#SkPath_addPath_3">[3]</a></sup> <a href="#SkPath_offset">offset</a><sup><a href="#SkPath_offset_2">[2]</a></sup> <a href="SkCanvas_Reference#SkCanvas_concat">SkCanvas::concat()</a> <a href="SkMatrix_Reference#SkMatrix">SkMatrix</a>
 
 ---
 
@@ -4037,7 +4150,7 @@ overwritten, transformed copy of <a href="#Path">Path</a>; may be nullptr</td>
 void transform(const SkMatrix& matrix)
 </pre>
 
-Transform <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and weight by <a href="#SkPath_transform_2_matrix">matrix</a>.
+<a href="#Transform">Transform</a> <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and weight by <a href="#SkPath_transform_2_matrix">matrix</a>.
 transform may change <a href="#Verb">Verbs</a> and increase their number.
 <a href="#Path">Path</a> is replaced by transformed data.
 
@@ -4054,7 +4167,7 @@ transform may change <a href="#Verb">Verbs</a> and increase their number.
 
 ### See Also
 
-<a href="#SkPath_addPath">addPath</a><sup><a href="#SkPath_addPath_2">[2]</a></sup><sup><a href="#SkPath_addPath_3">[3]</a></sup> <a href="#SkPath_offset">offset</a><sup><a href="#SkPath_offset_2">[2]</a></sup> <a href="#SkCanvas_concat">SkCanvas::concat()</a> <a href="SkMatrix_Reference#SkMatrix">SkMatrix</a>
+<a href="#SkPath_addPath">addPath</a><sup><a href="#SkPath_addPath_2">[2]</a></sup><sup><a href="#SkPath_addPath_3">[3]</a></sup> <a href="#SkPath_offset">offset</a><sup><a href="#SkPath_offset_2">[2]</a></sup> <a href="SkCanvas_Reference#SkCanvas_concat">SkCanvas::concat()</a> <a href="SkMatrix_Reference#SkMatrix">SkMatrix</a>
 
 ---
 
@@ -4083,7 +4196,7 @@ storage for final <a href="SkPoint_Reference#Point">Point</a> in <a href="#Point
 
 ### Return Value
 
-true if <a href="#Point_Array">Point Array</a> contains one or more <a href="#Point">Points</a>
+true if <a href="#Point_Array">Point Array</a> contains one or more <a href="SkPoint_Reference#Point">Points</a>
 
 ### Example
 
@@ -4168,7 +4281,7 @@ enum <a href="#SkPath_SegmentMask">SegmentMask</a> {
 };</pre>
 
 <a href="#SkPath_SegmentMask">SegmentMask</a> constants correspond to each drawing <a href="#SkPath_Verb">Verb</a> type in <a href="#Path">Path</a>; for
-instance, if <a href="#Path">Path</a> only contains <a href="#Line">Lines</a>, only the <a href="#SkPath_kLine_SegmentMask">kLine SegmentMask</a> bit is set.
+instance, if <a href="#Path">Path</a> only contains <a href="undocumented#Line">Lines</a>, only the <a href="#SkPath_kLine_SegmentMask">kLine SegmentMask</a> bit is set.
 
 ### Constants
 
@@ -4215,7 +4328,7 @@ uint32_t getSegmentMasks() const
 
 Returns a mask, where each set bit corresponds to a <a href="#SkPath_SegmentMask">SegmentMask</a> constant
 if <a href="#Path">Path</a> contains one or more <a href="#Verb">Verbs</a> of that type.
-Returns zero if <a href="#Path">Path</a> contains no <a href="#Line">Lines</a>, or <a href="#Curve">Curves</a>: <a href="#Quad">Quads</a>, <a href="#Conic">Conics</a>, or <a href="#Cubic">Cubics</a>.
+Returns zero if <a href="#Path">Path</a> contains no <a href="undocumented#Line">Lines</a>, or <a href="undocumented#Curve">Curves</a>: <a href="#Quad">Quads</a>, <a href="#Conic">Conics</a>, or <a href="#Cubic">Cubics</a>.
 
 <a href="#SkPath_getSegmentMasks">getSegmentMasks</a> returns a cached result; it is very fast.
 
@@ -4291,7 +4404,7 @@ void dump(SkWStream* stream, bool forceClose, bool dumpAsHex) const
 Writes text representation of <a href="#Path">Path</a> to <a href="#SkPath_dump_stream">stream</a>. If <a href="#SkPath_dump_stream">stream</a> is nullptr, writes to
 standard output. Set <a href="#SkPath_dump_forceClose">forceClose</a> to true to get edges used to fill <a href="#Path">Path</a>.
 Set <a href="#SkPath_dump_dumpAsHex">dumpAsHex</a> true to generate exact binary representations
-of floating point numbers used in <a href="#Point_Array">Point Array</a> and <a href="#Weight">Conic Weights</a>.
+of floating point numbers used in <a href="#Point_Array">Point Array</a> and <a href="#Conic_Weight">Conic Weights</a>.
 
 ### Parameters
 
@@ -4333,7 +4446,7 @@ path.close();
 
 ### See Also
 
-<a href="#SkRect_dump">SkRect::dump()</a><sup><a href="#SkRect_dump_2">[2]</a></sup> <a href="#SkRRect_dump">SkRRect::dump()</a> <a href="#SkPathMeasure_dump">SkPathMeasure::dump()</a>
+<a href="SkRect_Reference#SkRect_dump">SkRect::dump()</a><sup><a href="SkRect_Reference#SkRect_dump_2">[2]</a></sup> <a href="undocumented#SkRRect_dump">SkRRect::dump()</a> <a href="undocumented#SkPathMeasure_dump">SkPathMeasure::dump()</a>
 
 ---
 
@@ -4365,7 +4478,7 @@ path is not equal to copy
 
 ### See Also
 
-<a href="#SkPath_dumpHex">dumpHex</a> <a href="#SkRect_dump">SkRect::dump()</a><sup><a href="#SkRect_dump_2">[2]</a></sup> <a href="#SkRRect_dump">SkRRect::dump()</a> <a href="#SkPathMeasure_dump">SkPathMeasure::dump()</a> <a href="#SkPath_writeToMemory">writeToMemory</a>
+<a href="#SkPath_dumpHex">dumpHex</a> <a href="SkRect_Reference#SkRect_dump">SkRect::dump()</a><sup><a href="SkRect_Reference#SkRect_dump_2">[2]</a></sup> <a href="undocumented#SkRRect_dump">SkRRect::dump()</a> <a href="undocumented#SkPathMeasure_dump">SkPathMeasure::dump()</a> <a href="#SkPath_writeToMemory">writeToMemory</a>
 
 ---
 
@@ -4534,10 +4647,11 @@ length = 68; returned by readFromMemory = 64
 
 ---
 
-# <a name="Generation_ID"></a> Generation ID
+## <a name="Generation_ID"></a> Generation ID
+
 <a href="#Generation_ID">Generation ID</a> provides a quick way to check if <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, or
 <a href="#Conic_Weight">Conic Weight</a> has changed. <a href="#Generation_ID">Generation ID</a> is not a hash; identical <a href="#Path">Paths</a> will
-not necessarily have matching <a href="SkPath_Reference#Generation_ID">Generation IDs</a>.
+not necessarily have matching <a href="#Generation_ID">Generation IDs</a>.
 
 Empty <a href="#Path">Paths</a> have a <a href="#Generation_ID">Generation ID</a> of one.
 
@@ -4554,6 +4668,8 @@ if <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>,
 Setting <a href="#Fill_Type">Fill Type</a> does not change <a href="#Generation_ID">Generation ID</a>.
 
 Each time the path is modified, a different <a href="#Generation_ID">Generation ID</a> will be returned.
+
+<a href="#Fill_Type">Fill Type</a> does affect <a href="#Generation_ID">Generation ID</a> on Android framework.
 
 ### Return Value
 
@@ -4604,13 +4720,7 @@ true if <a href="#Path">Path</a> data is consistent
 bool pathRefIsValid() const
 </pre>
 
-Returns if <a href="#Path">Path</a> data is consistent.
-
-To be deprecated soon.
-
-### Return Value
-
-true if <a href="#Path">Path</a> data is consistent
+soon
 
 ---
 
@@ -4780,12 +4890,12 @@ Verb next(SkPoint pts[4], bool doConsumeDegenerates = true, bool exact = false)
 Returns next <a href="#SkPath_Verb">Verb</a> in <a href="#Verb_Array">Verb Array</a>, and advances <a href="#SkPath_Iter_Iter">Iter</a>.
 When <a href="#Verb_Array">Verb Array</a> is exhausted, returns <a href="#SkPath_kDone_Verb">kDone Verb</a>.
 
-Zero to four <a href="#Point">Points</a> are stored in <a href="#SkPath_Iter_next_pts">pts</a>, depending on the returned <a href="#SkPath_Verb">Verb</a>.
+Zero to four <a href="SkPoint_Reference#Point">Points</a> are stored in <a href="#SkPath_Iter_next_pts">pts</a>, depending on the returned <a href="#SkPath_Verb">Verb</a>.
 
 If <a href="#SkPath_Iter_next_doConsumeDegenerates">doConsumeDegenerates</a> is true, skip consecutive <a href="#SkPath_kMove_Verb">kMove Verb</a> entries, returning
-only the last in the series; and skip very small <a href="#Line">Lines</a>, <a href="#Quad">Quads</a>, and <a href="#Conic">Conics</a>; and
+only the last in the series; and skip very small <a href="undocumented#Line">Lines</a>, <a href="#Quad">Quads</a>, and <a href="#Conic">Conics</a>; and
 skip <a href="#SkPath_kClose_Verb">kClose Verb</a> following <a href="#SkPath_kMove_Verb">kMove Verb</a>.
-if <a href="#SkPath_Iter_next_doConsumeDegenerates">doConsumeDegenerates</a> is true and <a href="#SkPath_Iter_next_exact">exact</a> is true, only skip <a href="#Line">Lines</a>, <a href="#Quad">Quads</a>, and
+if <a href="#SkPath_Iter_next_doConsumeDegenerates">doConsumeDegenerates</a> is true and <a href="#SkPath_Iter_next_exact">exact</a> is true, only skip <a href="undocumented#Line">Lines</a>, <a href="#Quad">Quads</a>, and
 <a href="#Conic">Conics</a> with zero lengths.
 
 ### Parameters
@@ -4811,7 +4921,7 @@ followed by the <a href="#SkPath_kClose_Verb">kClose Verb</a>, the zero length <
 skip degenerate if <a href="#SkPath_Iter_next_exact">exact</a> skips the same as skip degenerate, but shows
 the very small <a href="undocumented#Line">Line</a>.
 
-skip none shows all of the <a href="#Verb">Verbs</a> and <a href="#Point">Points</a> in <a href="#Path">Path</a>.</div>
+skip none shows all of the <a href="#Verb">Verbs</a> and <a href="SkPoint_Reference#Point">Points</a> in <a href="#Path">Path</a>.</div>
 
 #### Example Output
 
@@ -4861,7 +4971,7 @@ result is undefined.
 
 ### Return Value
 
-<a href="#Conic_Weight">Conic Weight</a> for <a href="#Conic">Conic</a> <a href="#Point">Points</a> returned by <a href="#SkPath_Iter_next">next</a>
+<a href="#Conic_Weight">Conic Weight</a> for <a href="#Conic">Conic</a> <a href="SkPoint_Reference#Point">Points</a> returned by <a href="#SkPath_Iter_next">next</a>
 
 ### Example
 
@@ -4985,7 +5095,7 @@ RawIter()
 </pre>
 
 Initializes <a href="#SkPath_RawIter_RawIter">RawIter</a> with an empty <a href="#Path">Path</a>. <a href="#SkPath_RawIter_next">next</a> on <a href="#SkPath_RawIter_RawIter">RawIter</a> returns <a href="#SkPath_kDone_Verb">kDone Verb</a>.
-Call <a href="#SkPath_RawIter_setPath">setPath</a> to initialize <a href="#SkPath_Iter">Iter</a> at a later time.
+Call <a href="#SkPath_RawIter_setPath">setPath</a> to initialize <a href="#SkPath_Iter">SkPath::Iter</a> at a later time.
 
 ### Return Value
 
@@ -5021,7 +5131,7 @@ Sets <a href="#SkPath_RawIter_RawIter">RawIter</a> to return elements of <a href
 void setPath(const SkPath& path)
 </pre>
 
-Sets <a href="#SkPath_Iter">Iter</a> to return elements of <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Conic Weight</a> in <a href="#SkPath_RawIter_setPath_path">path</a>.
+Sets <a href="#SkPath_Iter">SkPath::Iter</a> to return elements of <a href="#Verb_Array">Verb Array</a>, <a href="#Point_Array">Point Array</a>, and <a href="#Conic_Weight">Conic Weight</a> in <a href="#SkPath_RawIter_setPath_path">path</a>.
 
 ### Parameters
 
@@ -5041,7 +5151,7 @@ Verb next(SkPoint pts[4])
 
 Returns next <a href="#SkPath_Verb">Verb</a> in <a href="#Verb_Array">Verb Array</a>, and advances <a href="#SkPath_RawIter_RawIter">RawIter</a>.
 When <a href="#Verb_Array">Verb Array</a> is exhausted, returns <a href="#SkPath_kDone_Verb">kDone Verb</a>.
-Zero to four <a href="#Point">Points</a> are stored in <a href="#SkPath_RawIter_next_pts">pts</a>, depending on the returned <a href="#SkPath_Verb">Verb</a>.
+Zero to four <a href="SkPoint_Reference#Point">Points</a> are stored in <a href="#SkPath_RawIter_next_pts">pts</a>, depending on the returned <a href="#SkPath_Verb">Verb</a>.
 
 ### Parameters
 
@@ -5110,6 +5220,11 @@ peek Done == verb Done
 
 </fiddle-embed></div>
 
+StdOut isn't really volatile, it just produces the wrong result.
+A simple fix changes the output of hairlines and needs to be
+investigated to see if the change is correct or not.
+https://skia-review.googlesource.com/c/21340/
+
 ### See Also
 
 <a href="#SkPath_RawIter_next">next</a>
@@ -5130,7 +5245,7 @@ result is undefined.
 
 ### Return Value
 
-<a href="#Conic_Weight">Conic Weight</a> for <a href="#Conic">Conic</a> <a href="#Point">Points</a> returned by <a href="#SkPath_RawIter_next">next</a>
+<a href="#Conic_Weight">Conic Weight</a> for <a href="#Conic">Conic</a> <a href="SkPoint_Reference#Point">Points</a> returned by <a href="#SkPath_RawIter_next">next</a>
 
 ### Example
 

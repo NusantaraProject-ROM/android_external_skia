@@ -134,7 +134,6 @@ enum GrSLType {
     kUint_GrSLType,
     kUint2_GrSLType,
     kTexture2DSampler_GrSLType,
-    kITexture2DSampler_GrSLType,
     kTextureExternalSampler_GrSLType,
     kTexture2DRectSampler_GrSLType,
     kBufferSampler_GrSLType,
@@ -202,7 +201,6 @@ static inline bool GrSLTypeIsFloatType(GrSLType type) {
 
         case kVoid_GrSLType:
         case kTexture2DSampler_GrSLType:
-        case kITexture2DSampler_GrSLType:
         case kTextureExternalSampler_GrSLType:
         case kTexture2DRectSampler_GrSLType:
         case kBufferSampler_GrSLType:
@@ -271,7 +269,6 @@ static inline int GrSLTypeVecLength(GrSLType type) {
         case kHalf4x4_GrSLType:
         case kVoid_GrSLType:
         case kTexture2DSampler_GrSLType:
-        case kITexture2DSampler_GrSLType:
         case kTextureExternalSampler_GrSLType:
         case kTexture2DRectSampler_GrSLType:
         case kBufferSampler_GrSLType:
@@ -286,7 +283,6 @@ static inline int GrSLTypeVecLength(GrSLType type) {
 static inline bool GrSLTypeIs2DCombinedSamplerType(GrSLType type) {
     switch (type) {
         case kTexture2DSampler_GrSLType:
-        case kITexture2DSampler_GrSLType:
         case kTextureExternalSampler_GrSLType:
         case kTexture2DRectSampler_GrSLType:
             return true;
@@ -333,7 +329,6 @@ static inline bool GrSLTypeIs2DCombinedSamplerType(GrSLType type) {
 static inline bool GrSLTypeIsCombinedSamplerType(GrSLType type) {
     switch (type) {
         case kTexture2DSampler_GrSLType:
-        case kITexture2DSampler_GrSLType:
         case kTextureExternalSampler_GrSLType:
         case kTexture2DRectSampler_GrSLType:
         case kBufferSampler_GrSLType:
@@ -380,7 +375,6 @@ static inline bool GrSLTypeIsCombinedSamplerType(GrSLType type) {
 static inline bool GrSLTypeAcceptsPrecision(GrSLType type) {
     switch (type) {
         case kTexture2DSampler_GrSLType:
-        case kITexture2DSampler_GrSLType:
         case kTextureExternalSampler_GrSLType:
         case kTexture2DRectSampler_GrSLType:
         case kBufferSampler_GrSLType:
@@ -451,7 +445,6 @@ static inline bool GrSLTypeTemporarilyAcceptsPrecision(GrSLType type) {
         case kUint_GrSLType:
         case kUint2_GrSLType:
         case kTexture2DSampler_GrSLType:
-        case kITexture2DSampler_GrSLType:
         case kTextureExternalSampler_GrSLType:
         case kTexture2DRectSampler_GrSLType:
         case kBufferSampler_GrSLType:
@@ -787,7 +780,6 @@ static inline bool GrPixelConfigIs8888Unorm(GrPixelConfig config) {
         case kGray_8_as_Red_GrPixelConfig:
         case kRGB_565_GrPixelConfig:
         case kRGBA_4444_GrPixelConfig:
-        case kRGBA_8888_sint_GrPixelConfig:
         case kRGBA_float_GrPixelConfig:
         case kRG_float_GrPixelConfig:
         case kAlpha_half_GrPixelConfig:
@@ -799,13 +791,27 @@ static inline bool GrPixelConfigIs8888Unorm(GrPixelConfig config) {
     return false;
 }
 
-// Returns true if the color (non-alpha) components represent sRGB values. It does NOT indicate that
-// all three color components are present in the config or anything about their order.
-static inline bool GrPixelConfigIsSRGB(GrPixelConfig config) {
+/**
+ * Refers to the encoding of a GPU buffer as it will be interpreted by the GPU when sampling and
+ * blending.
+ */
+enum class GrSRGBEncoded : bool { kNo = false, kYes = true };
+
+/**
+ * Describes whether pixel data encoding should be converted to/from linear/sRGB encoding.
+ */
+enum class GrSRGBConversion {
+    kNone,
+    kSRGBToLinear,
+    kLinearToSRGB,
+};
+
+// Returns whether the config's color channels are sRGB encoded.
+static inline GrSRGBEncoded GrPixelConfigIsSRGBEncoded(GrPixelConfig config) {
     switch (config) {
         case kSRGBA_8888_GrPixelConfig:
         case kSBGRA_8888_GrPixelConfig:
-            return true;
+            return GrSRGBEncoded::kYes;
         case kUnknown_GrPixelConfig:
         case kAlpha_8_GrPixelConfig:
         case kAlpha_8_as_Alpha_GrPixelConfig:
@@ -817,18 +823,20 @@ static inline bool GrPixelConfigIsSRGB(GrPixelConfig config) {
         case kRGBA_4444_GrPixelConfig:
         case kRGBA_8888_GrPixelConfig:
         case kBGRA_8888_GrPixelConfig:
-        case kRGBA_8888_sint_GrPixelConfig:
         case kRGBA_float_GrPixelConfig:
         case kRG_float_GrPixelConfig:
         case kAlpha_half_GrPixelConfig:
         case kAlpha_half_as_Red_GrPixelConfig:
         case kRGBA_half_GrPixelConfig:
-            return false;
+            return GrSRGBEncoded::kNo;
     }
     SK_ABORT("Invalid pixel config");
-    return false;
+    return GrSRGBEncoded::kNo;
 }
 
+static inline bool GrPixelConfigIsSRGB(GrPixelConfig config) {
+    return GrSRGBEncoded::kYes == GrPixelConfigIsSRGBEncoded(config);
+}
 // Takes a config and returns the equivalent config with the R and B order
 // swapped if such a config exists. Otherwise, kUnknown_GrPixelConfig
 static inline GrPixelConfig GrPixelConfigSwapRAndB(GrPixelConfig config) {
@@ -850,7 +858,6 @@ static inline GrPixelConfig GrPixelConfigSwapRAndB(GrPixelConfig config) {
         case kGray_8_as_Red_GrPixelConfig:
         case kRGB_565_GrPixelConfig:
         case kRGBA_4444_GrPixelConfig:
-        case kRGBA_8888_sint_GrPixelConfig:
         case kRGBA_float_GrPixelConfig:
         case kRG_float_GrPixelConfig:
         case kAlpha_half_GrPixelConfig:
@@ -880,7 +887,6 @@ static inline size_t GrBytesPerPixel(GrPixelConfig config) {
         case kBGRA_8888_GrPixelConfig:
         case kSRGBA_8888_GrPixelConfig:
         case kSBGRA_8888_GrPixelConfig:
-        case kRGBA_8888_sint_GrPixelConfig:
             return 4;
         case kRGBA_half_GrPixelConfig:
             return 8;
@@ -913,7 +919,6 @@ static inline bool GrPixelConfigIsOpaque(GrPixelConfig config) {
         case kBGRA_8888_GrPixelConfig:
         case kSRGBA_8888_GrPixelConfig:
         case kSBGRA_8888_GrPixelConfig:
-        case kRGBA_8888_sint_GrPixelConfig:
         case kRGBA_half_GrPixelConfig:
         case kRGBA_float_GrPixelConfig:
         case kUnknown_GrPixelConfig:
@@ -941,7 +946,6 @@ static inline bool GrPixelConfigIsAlphaOnly(GrPixelConfig config) {
         case kBGRA_8888_GrPixelConfig:
         case kSRGBA_8888_GrPixelConfig:
         case kSBGRA_8888_GrPixelConfig:
-        case kRGBA_8888_sint_GrPixelConfig:
         case kRGBA_float_GrPixelConfig:
         case kRG_float_GrPixelConfig:
         case kRGBA_half_GrPixelConfig:
@@ -972,15 +976,10 @@ static inline bool GrPixelConfigIsFloatingPoint(GrPixelConfig config) {
         case kBGRA_8888_GrPixelConfig:
         case kSRGBA_8888_GrPixelConfig:
         case kSBGRA_8888_GrPixelConfig:
-        case kRGBA_8888_sint_GrPixelConfig:
             return false;
     }
     SK_ABORT("Invalid pixel config");
     return false;
-}
-
-static inline bool GrPixelConfigIsSint(GrPixelConfig config) {
-    return config == kRGBA_8888_sint_GrPixelConfig;
 }
 
 static inline bool GrPixelConfigIsUnorm(GrPixelConfig config) {
@@ -1001,7 +1000,6 @@ static inline bool GrPixelConfigIsUnorm(GrPixelConfig config) {
         case kUnknown_GrPixelConfig:
         case kAlpha_half_GrPixelConfig:
         case kAlpha_half_as_Red_GrPixelConfig:
-        case kRGBA_8888_sint_GrPixelConfig:
         case kRGBA_float_GrPixelConfig:
         case kRG_float_GrPixelConfig:
         case kRGBA_half_GrPixelConfig:
@@ -1029,7 +1027,6 @@ static inline GrSLPrecision GrSLSamplerPrecision(GrPixelConfig config) {
         case kBGRA_8888_GrPixelConfig:
         case kSRGBA_8888_GrPixelConfig:
         case kSBGRA_8888_GrPixelConfig:
-        case kRGBA_8888_sint_GrPixelConfig:
             return kLow_GrSLPrecision;
         case kRGBA_float_GrPixelConfig:
         case kRG_float_GrPixelConfig:

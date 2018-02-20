@@ -375,9 +375,16 @@ void SkBitmapDevice::drawVertices(const SkVertices* vertices, SkBlendMode bmode,
                               vertices->indices(), vertices->indexCount(), paint);
 }
 
-void SkBitmapDevice::drawDevice(SkBaseDevice* device, int x, int y, const SkPaint& paint) {
-    SkASSERT(!paint.getImageFilter());
-    BDDraw(this).drawSprite(static_cast<SkBitmapDevice*>(device)->fBitmap, x, y, paint);
+void SkBitmapDevice::drawDevice(SkBaseDevice* device, int x, int y, const SkPaint& origPaint) {
+    SkASSERT(!origPaint.getImageFilter());
+
+    // todo: can we unify with similar adjustment in SkGpuDevice?
+    SkTCopyOnFirstWrite<SkPaint> paint(origPaint);
+    if (paint->getMaskFilter()) {
+        paint.writable()->setMaskFilter(paint->getMaskFilter()->makeWithLocalMatrix(this->ctm()));
+    }
+
+    BDDraw(this).drawSprite(static_cast<SkBitmapDevice*>(device)->fBitmap, x, y, *paint);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -431,6 +438,10 @@ void SkBitmapDevice::drawSpecial(SkSpecialImage* src, int x, int y, const SkPain
         paint.writable()->setImageFilter(nullptr);
         x += offset.x();
         y += offset.y();
+    }
+
+    if (paint->getMaskFilter()) {
+        paint.writable()->setMaskFilter(paint->getMaskFilter()->makeWithLocalMatrix(this->ctm()));
     }
 
     if (!clipImage) {

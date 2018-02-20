@@ -135,10 +135,30 @@ struct GrContextOptions {
     bool fAvoidStencilBuffers = false;
 
     /**
+     * If true, texture fetches from mip-mapped textures will be biased to read larger MIP levels.
+     * This has the effect of sharpening those textures, at the cost of some aliasing, and possible
+     * performance impact.
+     */
+    bool fSharpenMipmappedTextures = false;
+
+    /**
      * Enables driver workaround to use draws instead of glClear. This only applies to
      * kOpenGL_GrBackend.
      */
     Enable fUseDrawInsteadOfGLClear = Enable::kDefault;
+
+    /**
+     * Allow Ganesh to explicitly allocate resources at flush time rather than incrementally while
+     * drawing. This will eventually just be the way it is but, for now, it is optional.
+     */
+    Enable fExplicitlyAllocateGPUResources = Enable::kDefault;
+
+    /**
+     * Allow Ganesh to sort the opLists prior to allocating resources. This is an optional
+     * behavior that is only relevant when 'fExplicitlyAllocateGPUResources' is enabled.
+     * Eventually this will just be what is done and will not be optional.
+     */
+    Enable fSortRenderTargets = Enable::kDefault;
 
     /**
      * Disables correctness workarounds that are enabled for particular GPUs, OSes, or drivers.

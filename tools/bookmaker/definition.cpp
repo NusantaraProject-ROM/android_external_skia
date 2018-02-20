@@ -560,6 +560,7 @@ bool Definition::exampleToScript(string* result, ExampleOptions exampleOptions) 
                 break;
             case MarkType::kToDo:
                 break;
+            case MarkType::kBug:
             case MarkType::kMarkChar:
             case MarkType::kPlatform:
                 // ignore for now
@@ -896,7 +897,7 @@ bool Definition::crossCheckInside(const char* start, const char* end,
     return false;
 }
 
-string Definition::formatFunction() const {
+string Definition::formatFunction(Format format) const {
     const char* end = fContentStart;
     while (end > fStart && ' ' >= end[-1]) {
         --end;
@@ -912,6 +913,9 @@ string Definition::formatFunction() const {
     const char* nameInParser = methodParser.strnstr(name.c_str(), methodParser.fEnd);
     methodParser.skipTo(nameInParser);
     const char* lastEnd = methodParser.fChar;
+    if (Format::kOmitReturn == format) {
+        lastStart = lastEnd;
+    }
     const char* paren = methodParser.strnchr('(', methodParser.fEnd);
     size_t indent;
     if (paren) {
@@ -982,8 +986,10 @@ string Definition::formatFunction() const {
         if (delimiter) {
             if (nextEnd - nextStart >= (ptrdiff_t) (limit - written)) {
                 written = indent;
-                methodStr += '\n';
-                methodStr += string(indent, ' ');
+                if (Format::kIncludeReturn == format) {
+                    methodStr += '\n';
+                    methodStr += string(indent, ' ');
+                }
             }
             methodParser.skipTo(delimiter);
         }
@@ -1012,6 +1018,22 @@ string Definition::fiddleName() const {
     }
     size_t end = fFiddle.find_first_of('(', start);
     return fFiddle.substr(start, end - start);
+}
+
+const Definition* Definition::findClone(string match) const {
+    for (auto child : fChildren) {
+        if (!child->fClone) {
+            continue;
+        }
+        if (match == child->fName) {
+            return child;
+        }
+        auto inner = child->findClone(match);
+        if (inner) {
+            return inner;
+        }
+    }
+    return nullptr;
 }
 
 const Definition* Definition::hasChild(MarkType markType) const {
@@ -1197,7 +1219,73 @@ string Definition::NormalizedName(string name) {
     return normalizedName;
 }
 
-bool Definition::paramsMatch(const string& match, const string& name) const {
+static string unpreformat(const string& orig) {
+    string result;
+    int amp = 0;
+    for (auto c : orig) {
+        switch (amp) {
+        case 0:
+            if ('&' == c) {
+                amp = 1;
+            } else {
+                amp = 0;
+                result += c;
+            }
+            break;
+        case 1:
+            if ('l' == c) {
+                amp = 2;
+            } else if ('g' == c) {
+                amp = 3;
+            } else {
+                amp = 0;
+                result += "&";
+                result += c;
+            }
+            break;
+        case 2:
+            if ('t' == c) {
+                amp = 4;
+            } else {
+                amp = 0;
+                result += "&l";
+                result += c;
+            }
+            break;
+        case 3:
+            if ('t' == c) {
+                amp = 5;
+            } else {
+                amp = 0;
+                result += "&g";
+                result += c;
+            }
+            break;
+        case 4:
+            if (';' == c) {
+                result += '<';
+            } else {
+                result += "&lt";
+                result += c;
+            }
+            amp = 0;
+            break;
+        case 5:
+            if (';' == c) {
+                result += '>';
+            } else {
+                result += "&gt";
+                result += c;
+            }
+            amp = 0;
+            break;
+        }
+    }
+    return result;
+}
+
+bool Definition::paramsMatch(const string& matchFormatted, const string& name) const {
+    string match = unpreformat(matchFormatted);
     TextParser def(fFileName, fStart, fContentStart, fLineCount);
     const char* dName = def.strnstr(name.c_str(), fContentStart);
     if (!dName) {

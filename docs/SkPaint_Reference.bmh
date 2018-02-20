@@ -2,7 +2,7 @@
 #Alias Paint_Reference
 
 #Subtopic Overview
-    #Subtopic Subtopics
+    #Subtopic Subtopic
     #Populate
     ##
 ##
@@ -35,27 +35,27 @@ Paint describes a single color, a single font, a single image quality, and so on
 Multiple colors are drawn either by using multiple paints or with objects like
 Shader attached to Paint.
 
-#Subtopic Related_Functions
+#Subtopic Related_Function
 #Populate
 ##
 
-#Subtopic Constants
+#Subtopic Constant
 #Populate
 ##
 
-#Subtopic Classes_and_Structs
+#Subtopic Class_or_Struct
 #Populate
 ##
 
-#Subtopic Constructors
+#Subtopic Constructor
 #Populate
 ##
 
-#Subtopic Operators
+#Subtopic Operator
 #Populate
 ##
 
-#Subtopic Member_Functions
+#Subtopic Member_Function
 #Populate
 ##
 
@@ -405,7 +405,7 @@ can reconstitute the paint at a later time.
 #Param buffer  Write_Buffer receiving the flattened Paint data ##
 
 # why is flatten() public? 
-#Bug 6172 ##
+#Bug 6172
 
 #NoExample
 ##
@@ -429,7 +429,7 @@ by the client.
 #Return false if the buffer contains invalid data ##
 
 # why is unflatten() public? 
-#Bug 6172 ##
+#Bug 6172
 
 #NoExample 
 ##
@@ -494,7 +494,7 @@ as the Font_Engine.
 #Track
 #File SkFontHost_mac.cpp:1777,1806
 #Time 2013-03-03 07:16:29 +0000
-#Bug 915 ##
+#Bug 915
 On OS_X and iOS, hinting controls whether Core_Graphics dilates the font outlines
 to account for LCD text. No hinting uses Core_Text gray scale output.
 Normal hinting uses Core_Text LCD output. If kLCDRenderText_Flag is clear,
@@ -640,11 +640,9 @@ Flags default to all flags clear, disabling the associated feature.
 #Enum ##
 
 #Enum ReserveFlags
-#Line # values described by bits and masks ##
+#Deprecated soon
 
-#Private 
-To be deprecated; only valid for Android framework.
-##
+Only valid for Android framework.
 
 #Code
     enum ReserveFlags {
@@ -653,16 +651,13 @@ To be deprecated; only valid for Android framework.
     };
 ##
 
-    #Const kUnderlineText_ReserveFlag   0x0008
-        mask for underline text
-    ##
-    #Const kStrikeThruText_ReserveFlag  0x0010
-        mask for strike-thru text
-    ##
-
-#SeeAlso Flags getFlags
-
-#Enum ##
+#Const kUnderlineText_ReserveFlag   0x0008
+#Deprecated soon
+##
+#Const kStrikeThruText_ReserveFlag  0x0010
+#Deprecated soon
+##
+##
 
 #Method uint32_t getFlags() const
 
@@ -713,7 +708,7 @@ All Flags members may be cleared, or one or more may be set.
 # ------------------------------------------------------------------------------
 #Subtopic Anti-alias
 #Alias Anti-alias  # permit hyphen in topic name, should probably not substitute hyphen with _
-#In Related_Functions
+#In Related_Function
 #Line # approximating coverage with transparency ##
 
 Anti-alias drawing approximates partial pixel coverage with transparency.
@@ -770,7 +765,7 @@ at compile time.
 ##
 
 #Method bool isAntiAlias() const
-#In Anti-alias
+#In Anti_alias
 #Line # returns true if Anti-alias is set ##
 
     If true, pixels on the active edges of Path may be drawn with partial transparency.
@@ -796,7 +791,7 @@ at compile time.
 
 #Method void setAntiAlias(bool aa)
 
-#In Anti-alias
+#In Anti_alias
 #Line # sets or clears Anti-alias ##
     Requests, but does not require, that Path edge pixels draw opaque or with
     partial transparency.
@@ -1973,7 +1968,7 @@ a fill draw.
 #Const kStroke_Style 1
     Set to stroke geometry.
     Applies to Rect, Region, Round_Rect, Arcs, Circles, Ovals, Path, and Text. 
-    Arcs, Lines, and Points, are always drawn as if kStroke_Style is set,
+    Arcs, Lines, and points, are always drawn as if kStroke_Style is set,
     and ignore the set Style.
     The stroke construction is unaffected by the Path_Fill_Type.
 ##
@@ -3498,20 +3493,11 @@ Set Draw_Looper to nullptr to prevent Draw_Looper from modifying the draw.
 ##
 
 #Method SkDrawLooper* getLooper() const
-
-#Line # deprecated ##
-#In Draw_Looper_Methods
-Deprecated.
-
+#Bug 6259
 #Deprecated
-(see bug.skia.org/6259)
-#Deprecated ##
-
-#Return  Draw_Looper if previously set, nullptr otherwise ##
 ##
 
 #Method void setDrawLooper(sk_sp<SkDrawLooper> drawLooper)
-
 #In Draw_Looper_Methods
 #Line # sets Draw_Looper, multiple layers ##
 Sets Draw_Looper to drawLooper, decreasing Reference_Count of the previous
@@ -3538,20 +3524,12 @@ Increments drawLooper Reference_Count by one.
 ##
 
 #Method void setLooper(sk_sp<SkDrawLooper> drawLooper)
-
-#Line # deprecated ##
-#In Draw_Looper_Methods
-Deprecated.
-
+#Bug 6259
 #Deprecated
-(see bug.skia.org/6259)
-#Deprecated ##
-
-#Param drawLooper  sets Draw_Looper to drawLooper ##
-
 ##
 
 #Subtopic Draw_Looper_Methods ##
+
 # ------------------------------------------------------------------------------
 #Subtopic Text_Align
 #Line # text placement relative to position ##
@@ -4398,6 +4376,7 @@ FontMetrics::fTop, FontMetrics::fXMax, FontMetrics::fBottom }.
 
 #Method int textToGlyphs(const void* text, size_t byteLength,
                      SkGlyphID glyphs[]) const
+#In Utility
 #Line # converts text into glyph indices ##
 
 Converts text into glyph indices.
@@ -4437,7 +4416,7 @@ text contains an invalid UTF-8 sequence, zero is returned.
 ##
 
 #Method int countText(const void* text, size_t byteLength) const
-
+#In Utility
 #Line # returns number of Glyphs in text ##
     Returns the number of Glyphs in text.
     Uses Text_Encoding to count the Glyphs.
@@ -4462,7 +4441,7 @@ text contains an invalid UTF-8 sequence, zero is returned.
 # ------------------------------------------------------------------------------
 
 #Method bool containsText(const void* text, size_t byteLength) const
-
+#In Utility
 #Line # returns if all text corresponds to Glyphs ##
     Returns true if all text corresponds to a non-zero glyph index. 
     Returns false if any characters in text are not supported in
@@ -4531,6 +4510,7 @@ text contains an invalid UTF-8 sequence, zero is returned.
 
 #Method void glyphsToUnichars(const SkGlyphID glyphs[],
                               int count, SkUnichar text[]) const
+#In Utility
 #Line # converts Glyphs into text ##
 
     Converts glyphs into text if possible. 
@@ -5069,7 +5049,7 @@ void draw(SkCanvas* canvas) {
 # ------------------------------------------------------------------------------
 
 #Method bool nothingToDraw() const
-
+#In Utility
 #Line # returns true if Paint prevents all drawing ##
     Returns true if Paint prevents all drawing;
     otherwise, the Paint may or may not allow drawing.
@@ -5201,8 +5181,13 @@ Paint may draw to.
 #Subtopic Fast_Bounds Fast_Bounds ##
 
 # ------------------------------------------------------------------------------
-#Method void toString(SkString* str) const
+#Subtopic Utility
+#Populate
+#Line # rarely called management functions ##
+##
 
+#Method void toString(SkString* str) const
+#In Utility
 #Line # converts Paint to machine readable form ##
 #DefinedBy SK_TO_STRING_NONVIRT() ##
 
@@ -5242,3 +5227,4 @@ suppressed by defining SK_IGNORE_TO_STRING.
 #Class SkPaint ##
 
 #Topic Paint ##
+

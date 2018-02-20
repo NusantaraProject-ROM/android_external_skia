@@ -7,11 +7,34 @@
 
 #include "bookmaker.h"
 
-void IncludeWriter::descriptionOut(const Definition* def) {
+void IncludeWriter::constOut(const Definition* memberStart, const Definition& child,
+	const Definition* bmhConst) {
+	const char* bodyEnd = fDeferComment ? fDeferComment->fContentStart - 1 :
+		memberStart->fContentStart;
+	this->writeBlockTrim((int) (bodyEnd - fStart), fStart);  // may write nothing
+	this->lf(2);
+	this->writeCommentHeader();
+	fIndent += 4;
+	this->descriptionOut(bmhConst, SkipFirstLine::kYes);
+	fIndent -= 4;
+	this->writeCommentTrailer();
+	fStart = memberStart->fContentStart;
+}
+
+void IncludeWriter::descriptionOut(const Definition* def, SkipFirstLine skipFirstLine) {
     const char* commentStart = def->fContentStart;
-    int commentLen = (int) (def->fContentEnd - commentStart);
-    bool breakOut = false;
+	if (SkipFirstLine::kYes == skipFirstLine) {
+		TextParser parser(def);
+		SkAssertResult(parser.skipLine());
+		commentStart = parser.fChar;
+	}
+	int commentLen = (int) (def->fContentEnd - commentStart);
+	bool breakOut = false;
     SkDEBUGCODE(bool wroteCode = false);
+	if (def->fDeprecated) {
+		this->writeString(def->fToBeDeprecated ? "To be deprecated soon." : "Deprecated.");
+		this->lfcr();
+	}
     for (auto prop : def->fChildren) {
         switch (prop->fMarkType) {
             case MarkType::kCode: {
@@ -52,6 +75,12 @@ void IncludeWriter::descriptionOut(const Definition* def) {
             case MarkType::kDefinedBy:
                 commentStart = prop->fTerminator;
                 break;
+			case MarkType::kBug: {
+				string bugstr("(see skbug.com/" + string(prop->fContentStart,
+					prop->fContentEnd - prop->fContentStart) + ')');
+				this->writeString(bugstr);
+				this->lfcr();
+			}
             case MarkType::kDeprecated:
             case MarkType::kPrivate:
                 commentLen = (int) (prop->fStart - commentStart);
@@ -62,6 +91,11 @@ void IncludeWriter::descriptionOut(const Definition* def) {
                     }
                 }
                 commentStart = prop->fContentStart;
+                if (def->fToBeDeprecated) {
+                    commentStart += 4; // skip over "soon" // FIXME: this is awkward
+				} else if (MarkType::kBug == prop->fMarkType) {
+					commentStart = prop->fContentEnd;
+				}
                 commentLen = (int) (prop->fContentEnd - commentStart);
                 if (commentLen > 0) {
                     this->writeBlockIndent(commentLen, commentStart);
@@ -141,7 +175,7 @@ void IncludeWriter::descriptionOut(const Definition* def) {
                         SkASSERT(MarkType::kColumn == column->fMarkType);
                         this->writeString("-");
                         this->writeSpace();
-                        this->descriptionOut(column);
+                        this->descriptionOut(column, SkipFirstLine::kNo);
                         this->lf(1);
                     }
                 }
@@ -159,7 +193,7 @@ void IncludeWriter::descriptionOut(const Definition* def) {
             break;
         }
     }
-    SkASSERT(wroteCode || (commentLen > 0 && commentLen < 1500));
+    SkASSERT(wroteCode || (commentLen > 0 && commentLen < 1500) || def->fDeprecated);
     if (commentLen > 0) {
         this->rewriteBlock(commentLen, commentStart, Phrase::kNo);
     }
@@ -386,9 +420,16 @@ void IncludeWriter::enumMembersOut(const RootDefinition* root, Definition& child
             SkASSERT(currentEnumItem);
             if (currentEnumItem->fShort) {
                 this->indentToColumn(fEnumItemCommentTab);
-                this->writeString("//!<");
-                this->writeSpace();
-                this->rewriteBlock(commentLen, commentStart, Phrase::kNo);
+				if (commentLen || currentEnumItem->fDeprecated) {
+					this->writeString("//!<");
+					this->writeSpace();
+					if (currentEnumItem->fDeprecated) {
+						this->writeString(child.fToBeDeprecated ? "to be deprecated soon"
+								: "deprecated");
+					} else {
+						this->rewriteBlock(commentLen, commentStart, Phrase::kNo);
+					}
+				}
             }
             if (onePast) {
                 fIndent -= 4;
@@ -440,23 +481,35 @@ void IncludeWriter::enumMembersOut(const RootDefinition* root, Definition& child
             commentEnd = currentEnumItem->fContentEnd;
         }
         TextParser enumComment(fFileName, commentStart, commentEnd, currentEnumItem->fLineCount);
+        bool isDeprecated = false;
         if (enumComment.skipToLineStart()) {  // skip const value
             commentStart = enumComment.fChar;
             commentLen = (int) (commentEnd - commentStart);
         } else {
-            const Definition* privateDef = currentEnumItem->fChildren[0];
-            SkASSERT(MarkType::kPrivate == privateDef->fMarkType);
-            commentStart = privateDef->fContentStart;
-            commentLen = (int) (privateDef->fContentEnd - privateDef->fContentStart);
+            const Definition* childDef = currentEnumItem->fChildren[0];
+            isDeprecated = MarkType::kDeprecated == childDef->fMarkType;
+            if (MarkType::kPrivate == childDef->fMarkType || isDeprecated) {
+                commentStart = childDef->fContentStart;
+                if (currentEnumItem->fToBeDeprecated) {
+                    SkASSERT(isDeprecated);
+                    commentStart += 4; // skip over "soon" // FIXME: this is awkward
+                }
+                commentLen = (int) (childDef->fContentEnd - commentStart);
+            }
         }
         // FIXME: may assert here if there's no const value
         // should have detected and errored on that earlier when enum fContentStart was set
-        SkASSERT(commentLen > 0 && commentLen < 1000);
+        SkASSERT((commentLen > 0 && commentLen < 1000) || isDeprecated);
         if (!currentEnumItem->fShort) {
             this->writeCommentHeader();
             fIndent += 4;
-            bool wroteLineFeed = Wrote::kLF ==
-                    this->rewriteBlock(commentLen, commentStart, Phrase::kNo);
+            bool wroteLineFeed = false;
+            if (isDeprecated) {
+                this->writeString(currentEnumItem->fToBeDeprecated
+                        ? "To be deprecated soon." : "Deprecated.");
+            }
+            wroteLineFeed  = Wrote::kLF ==
+                this->rewriteBlock(commentLen, commentStart, Phrase::kNo);
             fIndent -= 4;
             if (wroteLineFeed || fColumn > 100 - 3 /* space * / */ ) {
                 this->lfcr();
@@ -601,7 +654,7 @@ void IncludeWriter::methodOut(const Definition* method, const Definition& child)
     }
     this->writeCommentHeader();
     fIndent += 4;
-    this->descriptionOut(method);
+    this->descriptionOut(method, SkipFirstLine::kNo);
     // compute indention column
     size_t column = 0;
     bool hasParmReturn = false;
@@ -652,6 +705,7 @@ void IncludeWriter::methodOut(const Definition* method, const Definition& child)
     this->writeCommentTrailer();
     fBmhMethod = nullptr;
     fMethodDef = nullptr;
+    fEnumDef = nullptr;
     fWroteMethod = true;
 }
 
@@ -665,7 +719,11 @@ void IncludeWriter::structOut(const Definition* root, const Definition& child,
     this->writeString(child.fName.c_str());
     fIndent += 4;
     this->lfcr();
-    this->rewriteBlock((int) (commentEnd - commentStart), commentStart, Phrase::kNo);
+	if (child.fDeprecated) {
+		this->writeString(child.fToBeDeprecated ? "to be deprecated soon" : "deprecated");
+	} else {
+		this->rewriteBlock((int)(commentEnd - commentStart), commentStart, Phrase::kNo);
+	}
     fIndent -= 4;
     this->lfcr();
     this->writeCommentTrailer();
@@ -907,6 +965,9 @@ static bool find_start(const Definition* startDef, const char* start) {
 }
 
 bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefinition* root) {
+	if (!def->fTokens.size()) {
+		return true;
+	}
     ParentPair pair = { def, prevPair };
     // write bulk of original include up to class, method, enum, etc., excepting preceding comment
     // find associated bmh object
@@ -923,6 +984,8 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
     bool inConstructor = false;
     bool inInline = false;
     bool eatOperator = false;
+	bool sawConst = false;
+	bool staticOnly = false;
     const Definition* requireDense = nullptr;
     const Definition* startDef = nullptr;
     for (auto& child : def->fTokens) {
@@ -1048,6 +1111,10 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
                 methodName += string(fContinuation, continueEnd - fContinuation);
                 method = root->find(methodName, RootDefinition::AllowParens::kNo);
                 if (!method) {
+                    if (fBmhStructDef && fBmhStructDef->fDeprecated) {
+						fContinuation = nullptr;
+                        continue;
+                    }
                     fLineCount = child.fLineCount;
                     return this->reportError<bool>("method not found");
                 }
@@ -1073,6 +1140,9 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
                 }
                 this->methodOut(method, child);
                 continue;
+            } else if (fBmhStructDef && fBmhStructDef->fDeprecated) {
+				fContinuation = nullptr;
+				continue;
             }
             fLineCount = child.fLineCount;
             return this->reportError<bool>("method not found");
@@ -1248,14 +1318,14 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
                                 }
                             }
                             // FIXME: trigger error earlier if inner #Struct or #Class is missing #Code
-                            SkASSERT(nextBlock);  // FIXME: check enum for correct order earlier
-                            const char* commentStart = codeBlock->fTerminator;
-                            const char* commentEnd = nextBlock->fStart;
-                            if (fIndentNext) {
-//                                fIndent += 4;
+                            if (!fBmhStructDef->fDeprecated) {
+                                SkASSERT(codeBlock);
+                                SkASSERT(nextBlock);  // FIXME: check enum for correct order earlier
+                                const char* commentStart = codeBlock->fTerminator;
+                                const char* commentEnd = nextBlock->fStart;
+                                fIndentNext = true;
+                                this->structOut(root, *fBmhStructDef, commentStart, commentEnd);
                             }
-                            fIndentNext = true;
-                            this->structOut(root, *fBmhStructDef, commentStart, commentEnd);
                         }
                         fDeferComment = nullptr;
                     } else {
@@ -1269,7 +1339,18 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
                 } break;
                 case KeyWord::kConst:
                 case KeyWord::kConstExpr:
+					sawConst = !memberStart || staticOnly;
+					if (!memberStart) {
+						memberStart = &child;
+						staticOnly = true;
+					}
+					break;
                 case KeyWord::kStatic:
+					if (!memberStart) {
+						memberStart = &child;
+						staticOnly = true;
+					}
+					break;
                 case KeyWord::kInt:
                 case KeyWord::kUint8_t:
                 case KeyWord::kUint16_t:
@@ -1279,7 +1360,9 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
                 case KeyWord::kSize_t:
                 case KeyWord::kFloat:
                 case KeyWord::kBool:
+                case KeyWord::kChar:
                 case KeyWord::kVoid:
+					staticOnly = false;
                     if (!memberStart) {
                         memberStart = &child;
                     }
@@ -1390,6 +1473,7 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
                     auto iter = def->fTokens.begin();
                     std::advance(iter, child.fParentIndex - 1);
                     memberStart = &*iter;
+					staticOnly = false;
                     if (!fStructMemberTab) {
                         SkASSERT(KeyWord::kStruct == def->fParent->fKeyWord);
                         fIndent += 4;
@@ -1399,13 +1483,36 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
                         fIndentNext = true;
                     }
                 }
-                memberEnd = this->structMemberOut(memberStart, child);
-                startDef = &child;
-                fStart = child.fContentEnd + 1;
-                fDeferComment = nullptr;
-            }
+				SkASSERT(fBmhStructDef);
+				if (!fBmhStructDef->fDeprecated) {
+					memberEnd = this->structMemberOut(memberStart, child);
+					startDef = &child;
+					fStart = child.fContentEnd + 1;
+					fDeferComment = nullptr;
+				}
+            } else if (MarkType::kNone == child.fMarkType && sawConst
+					&& fEnumDef && !fEnumDef->fDeprecated) {
+				const Definition* bmhConst = nullptr;
+				string match;
+				if (root) {
+					match = root->fName + "::";
+				}
+				match += string(child.fContentStart, child.fContentEnd - child.fContentStart);
+				for (auto enumChild : fEnumDef->fChildren) {
+					if (MarkType::kConst == enumChild->fMarkType && enumChild->fName == match) {
+						bmhConst = enumChild;
+						break;
+					}
+				}
+				if (bmhConst) {
+					this->constOut(memberStart, child, bmhConst);
+					fDeferComment = nullptr;
+					sawConst = false;
+				}
+			}
             if (child.fMemberStart) {
                 memberStart = &child;
+				staticOnly = false;
             }
             const char attrDeprecated[] = "SK_ATTR_DEPRECATED";
             const size_t attrDeprecatedLen = sizeof(attrDeprecated) - 1;
@@ -1418,6 +1525,8 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
         if (Definition::Type::kPunctuation == child.fType) {
             if (Punctuation::kSemicolon == child.fPunctuation) {
                 memberStart = nullptr;
+				sawConst = false;
+				staticOnly = false;
                 if (inStruct) {
                     fInStruct = false;
                 }
@@ -1561,6 +1670,7 @@ string IncludeWriter::resolveRef(const char* start, const char* end, bool first,
     *refType = RefType::kNormal;
     SkASSERT(string::npos == undername.find(' '));
     const Definition* rootDef = nullptr;
+    string substitute;
     {
         auto rootDefIter = fBmhParser->fTopicMap.find(undername);
         if (fBmhParser->fTopicMap.end() != rootDefIter) {
@@ -1576,10 +1686,18 @@ string IncludeWriter::resolveRef(const char* start, const char* end, bool first,
                 if (fBmhParser->fTopicMap.end() != rootDefIter) {
                     rootDef = rootDefIter->second;
                 }
-            } else {
+                if (!rootDef) {
+                    size_t doubleColon = fBmhStructDef->fName.rfind("::");
+                    if (string::npos != doubleColon && undername
+                            == fBmhStructDef->fName.substr(doubleColon + 2)) {
+                        substitute = fBmhStructDef->fName;
+                    }
+                }
+            }
+            if (!rootDef && !substitute.length()) {
                 auto aliasIter = fBmhParser->fAliasMap.find(undername);
                 if (fBmhParser->fAliasMap.end() != aliasIter) {
-                    rootDef = aliasIter->second->fParent;
+                    rootDef = aliasIter->second;
                 } else if (!first) {
                     SkDebugf("unfound: %s\n", undername.c_str());
                     this->reportError("reference unfound");
@@ -1588,33 +1706,71 @@ string IncludeWriter::resolveRef(const char* start, const char* end, bool first,
             }
         }
     }
-    string substitute;
     if (rootDef) {
-        for (auto child : rootDef->fChildren) {
-            if (MarkType::kSubstitute == child->fMarkType) {
-                substitute = string(child->fContentStart,
-                        (int) (child->fContentEnd - child->fContentStart));
-                break;
-            }
-        }
-        if (!substitute.length()) {
-            for (auto child : rootDef->fChildren) {
-                if (MarkType::kClass == child->fMarkType ||
-                        MarkType::kStruct == child->fMarkType ||
-                        (MarkType::kEnum == child->fMarkType && !child->fAnonymous) ||
-                        MarkType::kEnumClass == child->fMarkType) {
-                    substitute = child->fName;
-                    if (MarkType::kEnum == child->fMarkType && fInEnum) {
-                        size_t parentClassEnd = substitute.find("::");
-                        SkASSERT(string::npos != parentClassEnd);
-                        substitute = substitute.substr(parentClassEnd + 2);
-                    }
+        MarkType rootType = rootDef->fMarkType;
+        bool isTopic = MarkType::kSubtopic == rootType || MarkType::kTopic == rootType;
+        auto substituteParent = MarkType::kAlias == rootType ? rootDef->fParent :
+                isTopic ? rootDef : nullptr;
+        if (substituteParent) {
+            for (auto child : substituteParent->fChildren) {
+                if (MarkType::kSubstitute == child->fMarkType) {
+                    substitute = string(child->fContentStart,
+                            (int) (child->fContentEnd - child->fContentStart));
                     break;
                 }
             }
         }
         if (!substitute.length()) {
-            auto parent = rootDef->fParent;
+            string match = rootDef->fName;
+            size_t index;
+            while (string::npos != (index = match.find('_'))) {
+                match.erase(index, 1);
+            }
+            string skmatch = "Sk" + match;
+            auto parent = substituteParent ? substituteParent : rootDef;
+            for (auto child : parent->fChildren) {
+                // there may be more than one
+                // prefer the one mostly closely matching in text
+                if ((MarkType::kClass == child->fMarkType ||
+                    MarkType::kStruct == child->fMarkType ||
+                    (MarkType::kEnum == child->fMarkType && !child->fAnonymous) ||
+                    MarkType::kEnumClass == child->fMarkType) && (match == child->fName ||
+                    skmatch == child->fName)) {
+                    substitute = child->fName;
+                    break;
+                }
+            }
+        }
+        if (!substitute.length()) {
+            for (auto child : rootDef->fChildren) {
+                // there may be more than one
+                // if so, it's a bug since it's unknown which is the right one
+                if (MarkType::kClass == child->fMarkType ||
+                        MarkType::kStruct == child->fMarkType ||
+                        (MarkType::kEnum == child->fMarkType && !child->fAnonymous) ||
+                        MarkType::kEnumClass == child->fMarkType) {
+                    SkASSERT("" == substitute);
+                    substitute = child->fName;
+                    if (MarkType::kEnum == child->fMarkType) {
+                        size_t parentClassEnd = substitute.find("::");
+                        SkASSERT(string::npos != parentClassEnd);
+                        string subEnd = substitute.substr(parentClassEnd + 2);
+                        if (fInEnum) {
+                            substitute = subEnd;
+                        }
+                        if (subEnd == undername) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (!substitute.length()) {
+            const Definition* parent = rootDef;
+            do {
+                parent = parent->fParent;
+            } while (parent && (MarkType::kSubtopic == parent->fMarkType
+                        || MarkType::kTopic == parent->fMarkType));
             if (parent) {
                 if (MarkType::kClass == parent->fMarkType ||
                         MarkType::kStruct == parent->fMarkType ||
@@ -1622,10 +1778,8 @@ string IncludeWriter::resolveRef(const char* start, const char* end, bool first,
                         MarkType::kEnumClass == parent->fMarkType) {
                     if (parent->fParent != fRootTopic) {
                         substitute = parent->fName;
-                        size_t under = undername.find('_');
-                        SkASSERT(string::npos != under);
-                        string secondHalf(&undername[under], (size_t) (undername.length() - under));
-                        substitute += ConvertRef(secondHalf, false);
+                        substitute += ' ';
+                        substitute += ConvertRef(undername, false);
                     } else {
                         substitute += ConvertRef(undername, first);
                     }

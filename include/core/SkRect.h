@@ -456,8 +456,7 @@ struct SK_API SkIRect {
         @return   true if (x, y) is inside SkIRect
     */
     bool contains(int32_t x, int32_t y) const {
-        return  (unsigned)(x - fLeft) < (unsigned)(fRight - fLeft) &&
-                (unsigned)(y - fTop) < (unsigned)(fBottom - fTop);
+        return x >= fLeft && x < fRight && y >= fTop && y < fBottom;
     }
 
     /** Constructs SkRect to intersect from (left, top, right, bottom). Does not sort
@@ -850,12 +849,18 @@ struct SK_API SkRect {
     }
 
     /** Returns true if fLeft is equal to or greater than fRight, or if fTop is equal
-        to or greater than fBottom. Call sort() to reverse rectangles with negative
-        width() or height().
-
-        @return  true if width() or height() are zero or negative
-    */
-    bool isEmpty() const { return fLeft >= fRight || fTop >= fBottom; }
+     *  to or greater than fBottom. Call sort() to reverse rectangles with negative
+     *  width() or height().
+     *
+     *  This function also returns true if any of the values are NaN.
+     *
+     *  @return  true if width() or height() are zero or negative
+     */
+    bool isEmpty() const {
+        // We write it as the NOT of a non-empty rect, so we will return true if any values
+        // are NaN.
+        return !(fLeft < fRight && fTop < fBottom);
+    }
 
     /** Returns true if fLeft is equal to or less than fRight, or if fTop is equal
         to or less than fBottom. Call sort() to reverse rectangles with negative

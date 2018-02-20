@@ -9,12 +9,30 @@
 
 #include "GrContext.h"
 #include "GrContextPriv.h"
+#include "GrOnFlushResourceProvider.h"
 #include "GrOpFlushState.h"
 #include "GrRectanizer.h"
 #include "GrProxyProvider.h"
 #include "GrResourceProvider.h"
 #include "GrTexture.h"
 #include "GrTracing.h"
+
+// When proxy allocation is deferred until flush time the proxies acting as atlases require
+// special handling. This is because the usage that can be determined from the ops themselves
+// isn't sufficient. Independent of the ops there will be ASAP and inline uploads to the
+// atlases. Extending the usage interval of any op that uses an atlas to the start of the
+// flush (as is done for proxies that are used for sw-generated masks) also won't work because
+// the atlas persists even beyond the last use in an op - for a given flush. Given this, atlases
+// must explicitly manage the lifetime of their backing proxies via the onFlushCallback system
+// (which calls this method).
+void GrDrawOpAtlas::instantiate(GrOnFlushResourceProvider* onFlushResourceProvider) {
+    for (int i = 0; i < GrDrawOpAtlas::kMaxMultitexturePages; ++i) {
+        if (fProxies[i] && !fProxies[i]->priv().isInstantiated()) {
+            // If instantiation fails we expect the ops that rely on the atlas to be dropped
+            onFlushResourceProvider->instatiateProxy(fProxies[i].get());
+        }
+    }
+}
 
 std::unique_ptr<GrDrawOpAtlas> GrDrawOpAtlas::Make(GrContext* ctx, GrPixelConfig config, int width,
                                                    int height, int numPlotsX, int numPlotsY,
@@ -353,7 +371,7 @@ void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
     // a blinking cursor is drawn.
     // TODO: consider if we should also do this if it's been a long time since the last atlas use
     if (atlasUsedThisFlush) {
-        int availablePlots = 0;
+        SkTArray<Plot*> availablePlots;
         uint32_t lastPageIndex = fNumPages - 1;
 
         // For all plots but the last one, update number of flushes since used, and check to see
@@ -382,7 +400,7 @@ void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
                 // Count plots we can potentially upload to in all pages except the last one
                 // (the potential compactee).
                 if (plot->flushesSinceLastUsed() > kRecentlyUsedCount) {
-                    ++availablePlots;
+                    availablePlots.push_back() = plot;
                 }
 
                 plotIter.next();
@@ -421,9 +439,10 @@ void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
                 // see if there's room in an earlier page and if so evict.
                 // We need to be somewhat harsh here so that one plot that is consistently in use
                 // doesn't end up locking the page in memory.
-                if (availablePlots) {
+                if (availablePlots.count() > 0) {
                     this->processEvictionAndResetRects(plot);
-                    --availablePlots;
+                    this->processEvictionAndResetRects(availablePlots.back());
+                    availablePlots.pop_back();
                 }
             } else if (plot->lastUseToken() != GrDeferredUploadToken::AlreadyFlushedToken()) {
                 // otherwise if aged out just evict it.

@@ -135,9 +135,12 @@ def dm_flags(api, bot):
     elif 'ChromeOS' in bot:
       gl_prefix = 'gles'
 
-    configs.extend([gl_prefix, gl_prefix + 'dft', gl_prefix + 'srgb'])
-    if sample_count is not '':
-      configs.append(gl_prefix + 'msaa' + sample_count)
+    if 'NativeFonts' in bot:
+      configs.append(gl_prefix)
+    else:
+      configs.extend([gl_prefix, gl_prefix + 'dft', gl_prefix + 'srgb'])
+      if sample_count is not '':
+        configs.append(gl_prefix + 'msaa' + sample_count)
 
     # The NP produces a long error stream when we run with MSAA. The Tegra3 just
     # doesn't support it.
@@ -156,15 +159,6 @@ def dm_flags(api, bot):
     # The NP produces different images for dft on every run.
     if 'NexusPlayer' in bot:
       configs = [x for x in configs if 'dft' not in x]
-
-    if '-TSAN' not in bot and sample_count is not '':
-      if ('TegraK1'    in bot or
-          'TegraX1'    in bot or
-          'GTX550Ti'   in bot or
-          'GTX660'     in bot or
-          'QuadroP400' in bot or
-          ('GT610' in bot and 'Ubuntu17' not in bot)):
-        configs.append(gl_prefix + 'nvprdit' + sample_count)
 
     # We want to test both the OpenGL config and the GLES config on Linux Intel:
     # GL is used by Chrome, GLES is used by ChromeOS.
@@ -519,8 +513,9 @@ def dm_flags(api, bot):
     # https://crbug.com/697030
     match.append('~HalfFloatAlphaTextureTest')
 
-  if 'AndroidOne' in bot:  # skia:4711
-    match.append('~WritePixels')
+  if 'AndroidOne' in bot:
+    match.append('~WritePixels')  # skia:4711
+    match.append('~PremulAlphaRoundTrip_Gpu')  # skia:7501
 
   if 'Chromecast' in bot:
     if 'GPU' in bot:
@@ -542,6 +537,7 @@ def dm_flags(api, bot):
     match.append('~bigbitmaprect_')
     match.append('~savelayer_clipmask')
     match.append('~DrawBitmapRect')
+    match.append('~drawbitmaprect')
 
   if 'GalaxyS6' in bot:
     match.append('~SpecialImage') # skia:6338
@@ -652,6 +648,7 @@ def dm_flags(api, bot):
     blacklist(['vk', 'gm', '_', 'resizeimagefilter'])
     blacklist(['vk', 'gm', '_', 'rotate_imagefilter'])
     blacklist(['vk', 'gm', '_', 'savelayer_lcdtext'])
+    blacklist(['vk', 'gm', '_', 'shadermaskfilter_image'])
     blacklist(['vk', 'gm', '_', 'srcmode'])
     blacklist(['vk', 'gm', '_', 'surfaceprops'])
     blacklist(['vk', 'gm', '_', 'textblobgeometrychange'])
@@ -667,7 +664,6 @@ def dm_flags(api, bot):
     blacklist(['vk', 'gm', '_', 'xfermodeimagefilter'])
     match.append('~ApplyGamma')
     match.append('~ComposedImageFilterBounds_Gpu')
-    match.append('~DeferredTextureImage')
     match.append('~GrMeshTest')
     match.append('~ImageFilterFailAffectsTransparentBlack_Gpu')
     match.append('~ImageFilterZeroBlurSigma_Gpu')
@@ -714,7 +710,12 @@ def dm_flags(api, bot):
     match.append('~BadImage')
 
   if 'Mac' in bot and 'IntelHD6000' in bot:
+    # skia:7574
     match.append('~^ProcessorCloneTest$')
+    match.append('~^GrMeshTest$')
+
+  if 'Mac' in bot and 'IntelHD615' in bot:
+    # skia:7603
     match.append('~^GrMeshTest$')
 
   if blacklisted:
@@ -945,9 +946,11 @@ TEST_BUILDERS = [
   'Test-Debian9-Clang-GCE-CPU-AVX2-x86_64-Release-All-TSAN',
   'Test-Debian9-GCC-GCE-CPU-AVX2-x86-Debug-All',
   'Test-Debian9-GCC-GCE-CPU-AVX2-x86_64-Debug-All',
+  'Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All',
   'Test-Mac-Clang-MacBookAir7.2-GPU-IntelHD6000-x86_64-Debug-All',
   'Test-Mac-Clang-MacMini7.1-CPU-AVX-x86_64-Release-All',
   'Test-Mac-Clang-MacMini7.1-GPU-IntelIris5100-x86_64-Debug-All-CommandBuffer',
+  'Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-NativeFonts',
   'Test-Ubuntu16-Clang-NUC5PPYH-GPU-IntelHD405-x86_64-Debug-All',
   'Test-Ubuntu16-Clang-NUC5PPYH-GPU-IntelHD405-x86_64-Release-All-Vulkan',
   'Test-Ubuntu16-Clang-NUC7i5BNK-GPU-IntelIris640-x86_64-Debug-All-Vulkan',

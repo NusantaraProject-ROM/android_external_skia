@@ -29,6 +29,7 @@
 #include "SkConvertPixels.h"
 #include "SkDeferredDisplayList.h"
 #include "SkGr.h"
+#include "SkImageInfoPriv.h"
 #include "SkJSONWriter.h"
 #include "SkMakeUnique.h"
 #include "SkTaskGroup.h"
@@ -41,7 +42,6 @@
 #ifdef SK_METAL
 #include "mtl/GrMtlTrampoline.h"
 #endif
-#include "ddl/GrDDLGpu.h"
 #ifdef SK_VULKAN
 #include "vk/GrVkGpu.h"
 #endif
@@ -239,7 +239,8 @@ bool GrContext::init(const GrContextOptions& options) {
     if (fGpu) {
         fCaps = fGpu->refCaps();
         fResourceCache = new GrResourceCache(fCaps.get(), fUniqueID);
-        fResourceProvider = new GrResourceProvider(fGpu.get(), fResourceCache, &fSingleOwner);
+        fResourceProvider = new GrResourceProvider(fGpu.get(), fResourceCache, &fSingleOwner,
+                                                   options.fExplicitlyAllocateGPUResources);
     }
 
     fProxyProvider = new GrProxyProvider(fResourceProvider, fResourceCache, fCaps, &fSingleOwner);
@@ -254,6 +255,7 @@ bool GrContext::init(const GrContextOptions& options) {
                                                         options));
 
     fDisableGpuYUVConversion = options.fDisableGpuYUVConversion;
+    fSharpenMipmappedTextures = options.fSharpenMipmappedTextures;
     fDidTestPMConversions = false;
 
     GrPathRendererChain::Options prcOptions;
@@ -282,8 +284,8 @@ bool GrContext::init(const GrContextOptions& options) {
     }
 #endif
 
-    fDrawingManager.reset(
-            new GrDrawingManager(this, prcOptions, atlasTextContextOptions, &fSingleOwner));
+    fDrawingManager.reset(new GrDrawingManager(this, prcOptions, atlasTextContextOptions,
+                                               &fSingleOwner, options.fSortRenderTargets));
 
     GrDrawOpAtlas::AllowMultitexturing allowMultitexturing;
     if (GrContextOptions::Enable::kNo == options.fAllowMultipleGlyphCacheTextures ||
@@ -297,7 +299,8 @@ bool GrContext::init(const GrContextOptions& options) {
                                              allowMultitexturing);
     this->contextPriv().addOnFlushCallbackObject(fAtlasGlyphCache);
 
-    fTextBlobCache.reset(new GrTextBlobCache(TextBlobCacheOverBudgetCB, this, this->uniqueID()));
+    fTextBlobCache.reset(new GrTextBlobCache(TextBlobCacheOverBudgetCB,
+                                             this, this->uniqueID(), SkToBool(fGpu)));
 
     if (options.fExecutor) {
         fTaskGroup = skstd::make_unique<SkTaskGroup>(*options.fExecutor);
@@ -331,6 +334,42 @@ GrContext::~GrContext() {
 
 sk_sp<GrContextThreadSafeProxy> GrContext::threadSafeProxy() {
     return fThreadSafeProxy;
+}
+
+SkSurfaceCharacterization GrContextThreadSafeProxy::createCharacterization(
+                                     size_t cacheMaxResourceBytes,
+                                     const SkImageInfo& ii, const GrBackendFormat& backendFormat,
+                                     int sampleCnt, GrSurfaceOrigin origin,
+                                     const SkSurfaceProps& surfaceProps,
+                                     bool isMipMapped) {
+    if (!backendFormat.isValid()) {
+        return SkSurfaceCharacterization(); // return an invalid characterization
+    }
+
+    // We're assuming GrFSAAType::kMixedSamples will never be specified via this code path
+    GrFSAAType FSAAType = sampleCnt > 1 ? GrFSAAType::kUnifiedMSAA : GrFSAAType::kNone;
+
+    if (!fCaps->mipMapSupport()) {
+        isMipMapped = false;
+    }
+
+    GrPixelConfig config = kUnknown_GrPixelConfig;
+    if (!fCaps->getConfigFromBackendFormat(backendFormat, ii.colorType(), &config)) {
+        return SkSurfaceCharacterization(); // return an invalid characterization
+    }
+
+    // This surface characterization factory assumes that the resulting characterization is
+    // textureable.
+    if (!fCaps->isConfigTexturable(config)) {
+        return SkSurfaceCharacterization(); // return an invalid characterization
+    }
+
+    return SkSurfaceCharacterization(sk_ref_sp<GrContextThreadSafeProxy>(this),
+                                     cacheMaxResourceBytes,
+                                     origin, ii.width(), ii.height(), config, FSAAType, sampleCnt,
+                                     SkSurfaceCharacterization::Textureable(true),
+                                     SkSurfaceCharacterization::MipMapped(isMipMapped),
+                                     ii.refColorSpace(), surfaceProps);
 }
 
 void GrContext::abandonContext() {
@@ -491,11 +530,6 @@ static bool valid_premul_config(GrPixelConfig config) {
 
 static bool valid_pixel_conversion(GrPixelConfig srcConfig, GrPixelConfig dstConfig,
                                    bool premulConversion) {
-    // We don't allow conversion between integer configs and float/fixed configs.
-    if (GrPixelConfigIsSint(srcConfig) != GrPixelConfigIsSint(dstConfig)) {
-        return false;
-    }
-
     // We only allow premul <-> unpremul conversions for some formats
     if (premulConversion && (!valid_premul_config(srcConfig) || !valid_premul_config(dstConfig))) {
         return false;
@@ -507,6 +541,63 @@ static bool valid_pixel_conversion(GrPixelConfig srcConfig, GrPixelConfig dstCon
 static bool pm_upm_must_round_trip(GrPixelConfig config, SkColorSpace* colorSpace) {
     return !colorSpace &&
            (kRGBA_8888_GrPixelConfig == config || kBGRA_8888_GrPixelConfig == config);
+}
+
+static GrSRGBConversion determine_write_pixels_srgb_conversion(
+        GrPixelConfig srcConfig,
+        const SkColorSpace* srcColorSpace,
+        GrSRGBEncoded dstSRGBEncoded,
+        const SkColorSpace* dstColorSpace) {
+    // No support for sRGB-encoded alpha.
+    if (GrPixelConfigIsAlphaOnly(srcConfig)) {
+        return GrSRGBConversion::kNone;
+    }
+    // When the destination has no color space or it has a ~sRGB gamma but isn't sRGB encoded
+    // (because of caps) then we act in "legacy" mode where no conversions are performed.
+    if (!dstColorSpace ||
+        (dstColorSpace->gammaCloseToSRGB() && GrSRGBEncoded::kNo == dstSRGBEncoded)) {
+        return GrSRGBConversion::kNone;
+    }
+    // Similarly, if the src was sRGB gamma and 8888 but we didn't choose a sRGB config we must be
+    // in legacy mode. For now, anyway.
+    if (srcColorSpace && srcColorSpace->gammaCloseToSRGB() &&
+        GrSRGBEncoded::kNo == GrPixelConfigIsSRGBEncoded(srcConfig) &&
+        GrPixelConfigIs8888Unorm(srcConfig)) {
+        return GrSRGBConversion::kNone;
+    }
+
+    bool srcColorSpaceIsSRGB = srcColorSpace && srcColorSpace->gammaCloseToSRGB();
+    bool dstColorSpaceIsSRGB = dstColorSpace->gammaCloseToSRGB();
+
+    // For now we are assuming that if color space of the dst does not have sRGB gamma then the
+    // texture format is not sRGB encoded and vice versa. Note that we already checked for "legacy"
+    // mode being forced on by caps above. This may change in the future.
+    SkASSERT(dstColorSpaceIsSRGB == (GrSRGBEncoded::kYes == dstSRGBEncoded));
+
+    // Similarly we are assuming that if the color space of the src does not have sRGB gamma then
+    // the CPU pixels don't have a sRGB pixel config. This will become moot soon as we will not
+    // be using GrPixelConfig to describe CPU pixel allocations.
+     SkASSERT(srcColorSpaceIsSRGB == GrPixelConfigIsSRGB(srcConfig));
+
+    if (srcColorSpaceIsSRGB == dstColorSpaceIsSRGB) {
+        return GrSRGBConversion::kNone;
+    }
+    return srcColorSpaceIsSRGB ? GrSRGBConversion::kSRGBToLinear : GrSRGBConversion::kLinearToSRGB;
+}
+
+static GrSRGBConversion determine_read_pixels_srgb_conversion(
+        GrSRGBEncoded srcSRGBEncoded,
+        const SkColorSpace* srcColorSpace,
+        GrPixelConfig dstConfig,
+        const SkColorSpace* dstColorSpace) {
+    // This is symmetrical with the write version.
+    switch (determine_write_pixels_srgb_conversion(dstConfig, dstColorSpace, srcSRGBEncoded,
+                                                   srcColorSpace)) {
+        case GrSRGBConversion::kNone:         return GrSRGBConversion::kNone;
+        case GrSRGBConversion::kLinearToSRGB: return GrSRGBConversion::kSRGBToLinear;
+        case GrSRGBConversion::kSRGBToLinear: return GrSRGBConversion::kLinearToSRGB;
+    }
+    return GrSRGBConversion::kNone;
 }
 
 bool GrContextPriv::writeSurfacePixels(GrSurfaceContext* dst,
@@ -557,8 +648,12 @@ bool GrContextPriv::writeSurfacePixels(GrSurfaceContext* dst,
     GrGpu::DrawPreference drawPreference = premulOnGpu ? GrGpu::kCallerPrefersDraw_DrawPreference
                                                        : GrGpu::kNoDraw_DrawPreference;
     GrGpu::WritePixelTempDrawInfo tempDrawInfo;
+    GrSRGBConversion srgbConversion = determine_write_pixels_srgb_conversion(
+            srcConfig, srcColorSpace, GrPixelConfigIsSRGBEncoded(dstProxy->config()),
+            dst->colorSpaceInfo().colorSpace());
     if (!fContext->fGpu->getWritePixelsInfo(dstSurface, dstProxy->origin(), width, height,
-                                            srcConfig, &drawPreference, &tempDrawInfo)) {
+                                            srcConfig, srgbConversion, &drawPreference,
+                                            &tempDrawInfo)) {
         return false;
     }
 
@@ -690,8 +785,12 @@ bool GrContextPriv::readSurfacePixels(GrSurfaceContext* src,
     GrGpu::DrawPreference drawPreference = unpremulOnGpu ? GrGpu::kCallerPrefersDraw_DrawPreference
                                                          : GrGpu::kNoDraw_DrawPreference;
     GrGpu::ReadPixelTempDrawInfo tempDrawInfo;
+    GrSRGBConversion srgbConversion = determine_read_pixels_srgb_conversion(
+            GrPixelConfigIsSRGBEncoded(srcProxy->config()), src->colorSpaceInfo().colorSpace(),
+            dstConfig, dstColorSpace);
     if (!fContext->fGpu->getReadPixelsInfo(srcSurface, srcProxy->origin(), width, height, rowBytes,
-                                           dstConfig, &drawPreference, &tempDrawInfo)) {
+                                           dstConfig, srgbConversion, &drawPreference,
+                                           &tempDrawInfo)) {
         return false;
     }
 
@@ -711,16 +810,22 @@ bool GrContextPriv::readSurfacePixels(GrSurfaceContext* src,
         }
         // TODO: Need to decide the semantics of this function for color spaces. Do we support
         // conversion to a passed-in color space? For now, specifying nullptr means that this
-        // path will do no conversion, so it will match the behavior of the non-draw path.
-        sk_sp<GrRenderTargetContext> tempRTC = fContext->makeDeferredRenderTargetContext(
-                                                           tempDrawInfo.fTempSurfaceFit,
-                                                           tempDrawInfo.fTempSurfaceDesc.fWidth,
-                                                           tempDrawInfo.fTempSurfaceDesc.fHeight,
-                                                           tempDrawInfo.fTempSurfaceDesc.fConfig,
-                                                           nullptr,
-                                                           tempDrawInfo.fTempSurfaceDesc.fSampleCnt,
-                                                           GrMipMapped::kNo,
-                                                           tempDrawInfo.fTempSurfaceDesc.fOrigin);
+        // path will do no conversion, so it will match the behavior of the non-draw path. For
+        // now we simply infer an sRGB color space if the config is sRGB in order to avoid an
+        // illegal combination.
+        sk_sp<SkColorSpace> colorSpace;
+        if (GrPixelConfigIsSRGB(tempDrawInfo.fTempSurfaceDesc.fConfig)) {
+            colorSpace = SkColorSpace::MakeSRGB();
+        }
+        sk_sp<GrRenderTargetContext> tempRTC =
+                fContext->makeDeferredRenderTargetContext(tempDrawInfo.fTempSurfaceFit,
+                                                          tempDrawInfo.fTempSurfaceDesc.fWidth,
+                                                          tempDrawInfo.fTempSurfaceDesc.fHeight,
+                                                          tempDrawInfo.fTempSurfaceDesc.fConfig,
+                                                          std::move(colorSpace),
+                                                          tempDrawInfo.fTempSurfaceDesc.fSampleCnt,
+                                                          GrMipMapped::kNo,
+                                                          tempDrawInfo.fTempSurfaceDesc.fOrigin);
         if (tempRTC) {
             SkMatrix textureMatrix = SkMatrix::MakeTrans(SkIntToScalar(left), SkIntToScalar(top));
             sk_sp<GrTextureProxy> proxy = src->asTextureProxyRef();
@@ -825,6 +930,12 @@ sk_sp<GrSurfaceContext> GrContextPriv::makeWrappedSurfaceContext(sk_sp<GrSurface
                                                                  const SkSurfaceProps* props) {
     ASSERT_SINGLE_OWNER_PRIV
 
+    // sRGB pixel configs may only be used with near-sRGB gamma color spaces.
+    if (GrPixelConfigIsSRGB(proxy->config())) {
+        if (!colorSpace || !colorSpace->gammaCloseToSRGB()) {
+            return nullptr;
+        }
+    }
     if (proxy->asRenderTargetProxy()) {
         return this->drawingManager()->makeRenderTargetContext(std::move(proxy),
                                                                std::move(colorSpace), props);
@@ -838,8 +949,9 @@ sk_sp<GrSurfaceContext> GrContextPriv::makeWrappedSurfaceContext(sk_sp<GrSurface
 sk_sp<GrSurfaceContext> GrContextPriv::makeDeferredSurfaceContext(const GrSurfaceDesc& dstDesc,
                                                                   GrMipMapped mipMapped,
                                                                   SkBackingFit fit,
-                                                                  SkBudgeted isDstBudgeted) {
-
+                                                                  SkBudgeted isDstBudgeted,
+                                                                  sk_sp<SkColorSpace> colorSpace,
+                                                                  const SkSurfaceProps* props) {
     sk_sp<GrTextureProxy> proxy;
     if (GrMipMapped::kNo == mipMapped) {
         proxy = this->proxyProvider()->createProxy(dstDesc, fit, isDstBudgeted);
@@ -851,7 +963,7 @@ sk_sp<GrSurfaceContext> GrContextPriv::makeDeferredSurfaceContext(const GrSurfac
         return nullptr;
     }
 
-    return this->makeWrappedSurfaceContext(std::move(proxy));
+    return this->makeWrappedSurfaceContext(std::move(proxy), std::move(colorSpace), props);
 }
 
 sk_sp<GrTextureContext> GrContextPriv::makeBackendTextureContext(const GrBackendTexture& tex,
@@ -1072,6 +1184,7 @@ bool GrContext::validPMUPMConversionExists() {
 
 //////////////////////////////////////////////////////////////////////////////
 
+// DDL TODO: remove 'maxResources'
 void GrContext::getResourceCacheLimits(int* maxResources, size_t* maxResourceBytes) const {
     ASSERT_SINGLE_OWNER
     if (maxResources) {

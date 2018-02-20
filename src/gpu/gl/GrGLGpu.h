@@ -63,16 +63,6 @@ public:
     void generateMipmaps(const GrSamplerState& params, bool allowSRGBInputs, GrGLTexture* texture,
                          GrSurfaceOrigin textureOrigin);
 
-    bool onGetReadPixelsInfo(GrSurface* srcSurface, GrSurfaceOrigin srcOrigin,
-                             int readWidth, int readHeight, size_t rowBytes,
-                             GrPixelConfig readConfig, DrawPreference*,
-                             ReadPixelTempDrawInfo*) override;
-
-    bool onGetWritePixelsInfo(GrSurface* dstSurface, GrSurfaceOrigin dstOrigin,
-                              int width, int height,
-                              GrPixelConfig srcConfig, DrawPreference*,
-                              WritePixelTempDrawInfo*) override;
-
     // These functions should be used to bind GL objects. They track the GL state and skip redundant
     // bindings. Making the equivalent glBind calls directly will confuse the state tracking.
     void bindVertexArray(GrGLuint id) {
@@ -240,6 +230,12 @@ private:
     // variations above, depending on whether the surface is a render target or not.
     bool readPixelsSupported(GrSurface* surfaceForConfig, GrPixelConfig readConfig);
 
+    bool onGetReadPixelsInfo(GrSurface*, GrSurfaceOrigin, int width, int height, size_t rowBytes,
+                             GrPixelConfig, DrawPreference*, ReadPixelTempDrawInfo*) override;
+
+    bool onGetWritePixelsInfo(GrSurface*, GrSurfaceOrigin, int width, int height, GrPixelConfig,
+                              DrawPreference*, WritePixelTempDrawInfo*) override;
+
     bool onReadPixels(GrSurface*, GrSurfaceOrigin,
                       int left, int top,
                       int width, int height,
@@ -261,7 +257,7 @@ private:
     // PIXEL_UNPACK_BUFFER is unbound.
     void unbindCpuToGpuXferBuffer();
 
-    void onResolveRenderTarget(GrRenderTarget* target, GrSurfaceOrigin) override;
+    void onResolveRenderTarget(GrRenderTarget* target) override;
 
     bool onCopySurface(GrSurface* dst, GrSurfaceOrigin dstOrigin,
                        GrSurface* src, GrSurfaceOrigin srcOrigin,
@@ -362,9 +358,14 @@ private:
     // ensures that such operations don't negatively interact with tracking bound textures.
     void setScratchTextureUnit();
 
-    // bounds is region that may be modified.
-    // nullptr means whole target. Can be an empty rect.
-    void flushRenderTarget(GrGLRenderTarget*, const SkIRect* bounds, bool disableSRGB = false);
+    // The passed bounds contains the render target's color values that will subsequently be
+    // written.
+    void flushRenderTarget(GrGLRenderTarget*, GrSurfaceOrigin, const SkIRect& bounds,
+                           bool disableSRGB = false);
+    // This version has an implicit bounds of the entire render target.
+    void flushRenderTarget(GrGLRenderTarget*, bool disableSRGB = false);
+    // This version can be used when the render target's colors will not be written.
+    void flushRenderTargetNoColorWrites(GrGLRenderTarget*, bool disableSRGB = false);
 
     // Need not be called if flushRenderTarget is used.
     void flushViewport(const GrGLIRect&);
@@ -604,13 +605,13 @@ private:
     int                                     fHWNumRasterSamples;
     ///@}
 
-    /** IDs for copy surface program. (4 sampler types) */
+    /** IDs for copy surface program. (3 sampler types) */
     struct {
         GrGLuint    fProgram = 0;
         GrGLint     fTextureUniform = 0;
         GrGLint     fTexCoordXformUniform = 0;
         GrGLint     fPosXformUniform = 0;
-    }                                       fCopyPrograms[4];
+    }                                       fCopyPrograms[3];
     sk_sp<GrGLBuffer>                       fCopyProgramArrayBuffer;
 
     /** IDs for texture mipmap program. (4 filter configurations) */

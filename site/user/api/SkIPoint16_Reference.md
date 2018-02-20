@@ -5,24 +5,26 @@ SkIPoint16 Reference
 
 ## <a name="Overview"></a> Overview
 
-## <a name="Subtopics"></a> Subtopics
+## <a name="Overview_Subtopic"></a> Overview Subtopic
 
 | name | description |
 | --- | --- |
-| <a href="#Constructors">Constructors</a> | functions that construct <a href="SkIPoint16_Reference#SkIPoint16">SkIPoint16</a> |
-| <a href="#Member_Functions">Member Functions</a> | static functions and member methods |
-| <a href="#Members">Members</a> | member values |
+| <a href="#Constructor">Constructor</a> | functions that construct <a href="#SkIPoint16">SkIPoint16</a> |
+| <a href="#Member_Function">Member Function</a> | static functions and member methods |
+| <a href="#Member">Member</a> | member values |
+| <a href="#Related_Function">Related Function</a> | similar methods grouped together |
 
 # <a name="SkIPoint16"></a> Struct SkIPoint16
 <a href="#SkIPoint16">SkIPoint16</a> holds two 16 bit integer coordinates.
 
-## <a name="Constructors"></a> Constructors
+## <a name="Related_Function"></a> Related Function
 
 | name | description |
 | --- | --- |
-| <a href="#SkIPoint16_Make">Make</a> | constructs from integer inputs |
+| <a href="#Property">Property</a> | member values |
+| <a href="#Set">Set</a> | replaces all values |
 
-## <a name="Member_Functions"></a> Member Functions
+## <a name="Member_Function"></a> Member Function
 
 | name | description |
 | --- | --- |
@@ -31,7 +33,7 @@ SkIPoint16 Reference
 | <a href="#SkIPoint16_x">x</a> | returns <a href="#SkIPoint16_fX">fX</a> |
 | <a href="#SkIPoint16_y">y</a> | returns <a href="#SkIPoint16_fY">fY</a> |
 
-## <a name="Members"></a> Members
+## <a name="Member"></a> Member
 
 | name | description |
 | --- | --- |
@@ -45,6 +47,12 @@ x-axis value used by <a href="#IPoint16">IPoint16</a>
 <a name="SkIPoint16_fY"> <code><strong>int16_t  fY</strong></code> </a>
 
 y-axis value used by <a href="#IPoint16">IPoint16</a>
+
+## <a name="Constructor"></a> Constructor
+
+| name | description |
+| --- | --- |
+| <a href="#SkIPoint16_Make">Make</a> | constructs from integer inputs |
 
 <a name="SkIPoint16_Make"></a>
 ## Make
@@ -84,9 +92,16 @@ pt1.fY == pt2.fY
 
 ### See Also
 
-<a href="#SkIPoint16_set">set</a> <a href="#SkPoint_iset">SkPoint::iset()</a><sup><a href="#SkPoint_iset_2">[2]</a></sup> <a href="#SkIPoint_Make">SkIPoint::Make</a>
+<a href="#SkIPoint16_set">set</a> <a href="SkPoint_Reference#SkPoint_iset">SkPoint::iset()</a><sup><a href="SkPoint_Reference#SkPoint_iset_2">[2]</a></sup> <a href="SkIPoint_Reference#SkIPoint_Make">SkIPoint::Make</a>
 
 ---
+
+## <a name="Property"></a> Property
+
+| name | description |
+| --- | --- |
+| <a href="#SkIPoint16_x">x</a> | returns <a href="#SkIPoint16_fX">fX</a> |
+| <a href="#SkIPoint16_y">y</a> | returns <a href="#SkIPoint16_fY">fY</a> |
 
 <a name="SkIPoint16_x"></a>
 ## x
@@ -115,7 +130,7 @@ pt1.fX == pt1.x()
 
 ### See Also
 
-<a href="#SkIPoint16_y">y</a> <a href="#SkIPoint_x">SkIPoint::x()</a>
+<a href="#SkIPoint16_y">y</a> <a href="SkIPoint_Reference#SkIPoint_x">SkIPoint::x()</a>
 
 ---
 
@@ -146,9 +161,15 @@ pt1.fY == pt1.y()
 
 ### See Also
 
-<a href="#SkIPoint16_x">x</a> <a href="#SkPoint_y">SkPoint::y()</a> <a href="#SkIPoint_y">SkIPoint::y()</a>
+<a href="#SkIPoint16_x">x</a> <a href="SkPoint_Reference#SkPoint_y">SkPoint::y()</a> <a href="SkIPoint_Reference#SkIPoint_y">SkIPoint::y()</a>
 
 ---
+
+## <a name="Set"></a> Set
+
+| name | description |
+| --- | --- |
+| <a href="#SkIPoint16_set">set</a> | sets to integer input |
 
 <a name="SkIPoint16_set"></a>
 ## set
@@ -183,7 +204,7 @@ pt1.fY == pt2.fY
 
 ### See Also
 
-<a href="#SkIPoint16_Make">Make</a> <a href="#SkPoint_set">SkPoint::set</a>
+<a href="#SkIPoint16_Make">Make</a> <a href="SkPoint_Reference#SkPoint_set">SkPoint::set</a>
 
 ---
 

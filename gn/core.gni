@@ -178,6 +178,7 @@ skia_core_sources = [
   "$_src/core/SkMD5.h",
   "$_src/core/SkMallocPixelRef.cpp",
   "$_src/core/SkMask.cpp",
+  "$_src/core/SkMask.h",
   "$_src/core/SkMaskBlurFilter.h",
   "$_src/core/SkMaskBlurFilter.cpp",
   "$_src/core/SkMaskCache.cpp",
@@ -312,6 +313,10 @@ skia_core_sources = [
   "$_src/core/SkTextToPathIter.h",
   "$_src/core/SkTime.cpp",
   "$_src/core/SkTDPQueue.h",
+
+  # The Clang's false positive thread warnings have been resolved in SkTaskGroup2D.cpp
+  "$_src/core/SkThreadedBMPDevice.cpp",
+  "$_src/core/SkThreadedBMPDevice.h",
   "$_src/core/SkThreadID.cpp",
   "$_src/core/SkTLList.h",
   "$_src/core/SkTLS.cpp",
@@ -396,7 +401,6 @@ skia_core_sources = [
   "$_include/core/SkImageFilter.h",
   "$_include/core/SkImageInfo.h",
   "$_include/core/SkMallocPixelRef.h",
-  "$_include/core/SkMask.h",
   "$_include/core/SkMaskFilter.h",
   "$_include/core/SkMath.h",
   "$_include/core/SkMatrix.h",

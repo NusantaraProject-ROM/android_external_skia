@@ -290,9 +290,6 @@ public:
     /// Is there support for Vertex Array Objects?
     bool vertexArrayObjectSupport() const { return fVertexArrayObjectSupport; }
 
-    /// Is there support for GL_EXT_direct_state_access?
-    bool directStateAccessSupport() const { return fDirectStateAccessSupport; }
-
     /// Is there support for GL_KHR_debug?
     bool debugSupport() const { return fDebugSupport; }
 
@@ -410,6 +407,9 @@ public:
     bool validateBackendRenderTarget(const GrBackendRenderTarget&, SkColorType,
                                      GrPixelConfig*) const override;
 
+    bool getConfigFromBackendFormat(const GrBackendFormat&, SkColorType,
+                                    GrPixelConfig*) const override;
+
 private:
     enum ExternalFormatUsage {
         kTexImage_ExternalFormatUsage,
@@ -458,7 +458,6 @@ private:
     bool fAlpha8IsRenderable: 1;
     bool fImagingSupport  : 1;
     bool fVertexArrayObjectSupport : 1;
-    bool fDirectStateAccessSupport : 1;
     bool fDebugSupport : 1;
     bool fES2CompatibilitySupport : 1;
     bool fDrawInstancedSupport : 1;

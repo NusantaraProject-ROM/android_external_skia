@@ -2,12 +2,12 @@
 #Alias Image_Info_Reference
 
 #Subtopic Overview
-    #Subtopic Subtopics
+    #Subtopic Subtopic
     #Populate
     ##
 ##
 
-#Subtopic Constants
+#Subtopic Constant
 #Populate
 ##
 
@@ -59,10 +59,14 @@ generate this on output.
 # ------------------------------------------------------------------------------
 #Subtopic Color_Type
 #Line # incomplete ##
-#Alias Native_Color_Type
-#Substitute native SkColorType
 #Alias Color_Type
 #Alias Color_Types
+
+#Subtopic Native
+#Alias Native_Color_Type
+#Substitute native SkColorType
+##
+
 #Enum SkColorType
 #Line # incomplete ##
 
@@ -73,7 +77,10 @@ generate this on output.
         kRGB_565_SkColorType,
         kARGB_4444_SkColorType,
         kRGBA_8888_SkColorType,
+        kRGB_888x_SkColorType,
         kBGRA_8888_SkColorType,
+        kRGBA_1010102_SkColorType,
+        kRGB_101010x_SkColorType,
         kGray_8_SkColorType,
         kRGBA_F16_SkColorType,
         kLastEnum_SkColorType = kRGBA_F16_SkColorType,
@@ -83,9 +90,11 @@ generate this on output.
 ##
 
 Describes how to interpret the components of a pixel.
-kN32_SkColorType is an alias for whichever 32 bit Color_ARGB format is the "native"
-form for skia's blitters. Use this if you don't have a swizzle preference
-for 32 bit pixels.
+
+kN32_SkColorType selects the native 32-bit Color_ARGB format. On Little_Endian
+processors, pixels containing 8-bit Color_ARGB components pack into 32-bit
+kBGRA_8888_SkColorType. On Big_Endian processors, pixels pack into 32-bit
+kRGBA_8888_SkColorType.
 
 #Const kUnknown_SkColorType 0
 ##
@@ -123,6 +132,8 @@ for 32 bit pixels.
 #Subtopic Color_Type ##
 
 # ------------------------------------------------------------------------------
+#Subtopic YUV_ColorSpace
+#Alias YUV_ColorSpace
 #Enum SkYUVColorSpace
 #Line # incomplete ##
 
@@ -156,6 +167,7 @@ range. See http://en.wikipedia.org/wiki/Rec._709 for details.
 #SeeAlso incomplete
 
 #Enum SkYUVColorSpace ##
+#Subtopic YUV_ColorSpace ##
 
 # ------------------------------------------------------------------------------
 #EnumClass SkDestinationSurfaceColorMode
@@ -185,26 +197,26 @@ range. See http://en.wikipedia.org/wiki/Rec._709 for details.
 
 #Struct SkImageInfo
 
-Describe an image's dimensions and pixel type.
-Used for both src images and render-targets (surfaces).
+Describes Image dimensions and pixel type.
+Used for both source images and render-targets (surfaces).
 
-#Subtopic Operators
+#Subtopic Member_Function
 #Populate
 ##
 
-#Subtopic Member_Functions
-#Populate
-##
-
-#Subtopic Constructors
+#Subtopic Related_Function
 #Populate
 ##
 
 # ------------------------------------------------------------------------------
+#Subtopic Constructor
+#Populate
+##
+
 
 #Method SkImageInfo()
 
-#In Constructors
+#In Constructor
 #Line # creates with zero dimensions, kUnknown_SkColorType, kUnknown_SkAlphaType ##
 #Return incomplete ##
 
@@ -220,7 +232,7 @@ Used for both src images and render-targets (surfaces).
 
 #Method static SkImageInfo Make(int width, int height, SkColorType ct, SkAlphaType at,
                             sk_sp<SkColorSpace> cs = nullptr)
-#In Constructors
+#In Constructor
 #Line # creates Image_Info from dimensions, Color_Type, Alpha_Type, Color_Space ##
 
 #Param width  incomplete ##
@@ -243,10 +255,10 @@ Used for both src images and render-targets (surfaces).
 
 #Method static SkImageInfo MakeN32(int width, int height, SkAlphaType at,
                                sk_sp<SkColorSpace> cs = nullptr)
-#In Constructors
+#In Constructor
 #Line # creates Image_Info with Native_Color_Type ##
 
-Sets colortype to kN32_SkColorType.
+Sets Color_Type to kN32_SkColorType.
 
 #Param width  incomplete ##
 #Param height  incomplete ##
@@ -267,7 +279,7 @@ Sets colortype to kN32_SkColorType.
 
 #Method static SkImageInfo MakeS32(int width, int height, SkAlphaType at)
 
-#In Constructors
+#In Constructor
 #Line # creates Image_Info with Native_Color_Type, sRGB Color_Space ##
 Creates Image_Info marked as sRGB with kN32_SkColorType swizzle.
 
@@ -289,9 +301,9 @@ Creates Image_Info marked as sRGB with kN32_SkColorType swizzle.
 
 #Method static SkImageInfo MakeN32Premul(int width, int height, sk_sp<SkColorSpace> cs = nullptr)
 
-#In Constructors
+#In Constructor
 #Line # creates Image_Info with Native_Color_Type, kPremul_SkAlphaType ##
-Sets colortype to kN32_SkColorType, and the alphatype to premul.
+Sets Color_Type to kN32_SkColorType, and the Alpha_Type to kPremul_SkAlphaType.
 
 #Param width  incomplete ##
 #Param height  incomplete ##
@@ -311,7 +323,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 
 #Method static SkImageInfo MakeN32Premul(const SkISize& size)
 
-#In Constructors
+#In Constructor
 #Param size  incomplete ##
 
 #Return incomplete ##
@@ -328,7 +340,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 
 #Method static SkImageInfo MakeA8(int width, int height)
 
-#In Constructors
+#In Constructor
 #Line # creates Image_Info with kAlpha_8_SkColorType, kPremul_SkAlphaType ##
 #Param width  incomplete ##
 #Param height  incomplete ##
@@ -347,7 +359,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 
 #Method static SkImageInfo MakeUnknown(int width, int height)
 
-#In Constructors
+#In Constructor
 #Line # creates Image_Info with kUnknown_SkColorType, kUnknown_SkAlphaType ##
 #Param width  incomplete ##
 #Param height  incomplete ##
@@ -366,7 +378,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 
 #Method static SkImageInfo MakeUnknown()
 
-#In Constructors
+#In Constructor
 #Return incomplete ##
 
 #Example
@@ -379,9 +391,13 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 
 
 # ------------------------------------------------------------------------------
+#Subtopic Property
+#Populate
+#Line # metrics and attributes ##
+##
 
 #Method int width() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -396,7 +412,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method int height() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -411,7 +427,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method SkColorType colorType() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -426,7 +442,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method SkAlphaType alphaType() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -441,7 +457,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method SkColorSpace* colorSpace() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -456,7 +472,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method sk_sp<SkColorSpace> refColorSpace() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -471,7 +487,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method bool isEmpty() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -486,7 +502,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method bool isOpaque() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -501,7 +517,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method SkISize dimensions() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -516,7 +532,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method SkIRect bounds() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -531,7 +547,7 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method bool gammaCloseToSRGB() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -546,9 +562,9 @@ Sets colortype to kN32_SkColorType, and the alphatype to premul.
 # ------------------------------------------------------------------------------
 
 #Method SkImageInfo makeWH(int newWidth, int newHeight) const
-
+#In Constructor
 #Line # creates Image_Info with changed dimensions ##
-Creates Image_Info with the same colortype and alphatype as this info,
+Creates Image_Info with the same Color_Type and Alpha_Type as this info,
 but with the specified width and height.
 
 #Param newWidth  incomplete ##
@@ -567,7 +583,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method SkImageInfo makeAlphaType(SkAlphaType newAlphaType) const
-
+#In Constructor
 #Line # creates Image_Info with changed Alpha_Type ##
 #Param newAlphaType  incomplete ##
 
@@ -584,7 +600,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method SkImageInfo makeColorType(SkColorType newColorType) const
-
+#In Constructor
 #Line # creates Image_Info with changed Color_Type ##
 #Param newColorType  incomplete ##
 
@@ -601,7 +617,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method SkImageInfo makeColorSpace(sk_sp<SkColorSpace> cs) const
-
+#In Constructor
 #Line # creates Image_Info with changed Color_Space ##
 #Param cs  incomplete ##
 
@@ -618,7 +634,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method int bytesPerPixel() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -633,7 +649,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method int shiftPerPixel() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -648,7 +664,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method uint64_t minRowBytes64() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -663,7 +679,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method size_t minRowBytes() const
-
+#In Property
 #Line # incomplete ##
 #Return incomplete ##
 
@@ -678,7 +694,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method size_t computeOffset(int x, int y, size_t rowBytes) const
-
+#In Utility
 #Line # incomplete ##
 #Param x  incomplete ##
 #Param y  incomplete ##
@@ -695,6 +711,9 @@ but with the specified width and height.
 #Method ##
 
 # ------------------------------------------------------------------------------
+#Subtopic Operator
+#Populate
+##
 
 #Method bool operator==(const SkImageInfo& other)_const
 
@@ -731,7 +750,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method void unflatten(SkReadBuffer& buffer)
-
+#In Utility
 #Line # incomplete ##
 #Param buffer  incomplete ##
 
@@ -746,7 +765,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method void flatten(SkWriteBuffer& buffer) const
-
+#In Utility
 #Line # incomplete ##
 #Param buffer  incomplete ##
 
@@ -761,7 +780,7 @@ but with the specified width and height.
 # ------------------------------------------------------------------------------
 
 #Method size_t computeByteSize(size_t rowBytes) const
-
+#In Utility
 #Line # incomplete ##
 Returns the size (in bytes) of the image buffer that this info needs, given the specified
 rowBytes. The rowBytes must be >= this->minRowBytes().
@@ -787,7 +806,7 @@ If the calculation overflows this returns SK_MaxSizeT.
 # ------------------------------------------------------------------------------
 
 #Method size_t computeMinByteSize() const
-
+#In Utility
 #Line # incomplete ##
 Returns the minimum size (in bytes) of the image buffer that this info needs.
 If the calculation overflows, or if the height is 0, this returns 0.
@@ -805,7 +824,7 @@ If the calculation overflows, or if the height is 0, this returns 0.
 # ------------------------------------------------------------------------------
 
 #Method static bool ByteSizeOverflowed(size_t byteSize)
-
+#In Utility
 #Line # incomplete ##
 Returns true if the result of computeByteSize (or computeMinByteSize) overflowed
 
@@ -824,7 +843,7 @@ Returns true if the result of computeByteSize (or computeMinByteSize) overflowed
 # ------------------------------------------------------------------------------
 
 #Method bool validRowBytes(size_t rowBytes) const
-
+#In Utility
 #Line # incomplete ##
 #Param rowBytes  incomplete ##
 
@@ -841,7 +860,7 @@ Returns true if the result of computeByteSize (or computeMinByteSize) overflowed
 # ------------------------------------------------------------------------------
 
 #Method void reset()
-
+#In Constructor
 #Line # incomplete ##
 #Example
 // incomplete
@@ -852,9 +871,13 @@ Returns true if the result of computeByteSize (or computeMinByteSize) overflowed
 #Method ##
 
 # ------------------------------------------------------------------------------
+#Subtopic Utility
+#Populate
+#Line # rarely called management functions ##
+##
 
 #Method void validate() const
-
+#In Utility
 #Line # incomplete ##
 #Example
 // incomplete

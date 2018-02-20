@@ -36,10 +36,11 @@ GrRenderTargetProxy::GrRenderTargetProxy(const GrCaps& caps, const GrSurfaceDesc
 
 // Lazy-callback version
 GrRenderTargetProxy::GrRenderTargetProxy(LazyInstantiateCallback&& callback,
+                                         LazyInstantiationType lazyType,
                                          const GrSurfaceDesc& desc,
                                          SkBackingFit fit, SkBudgeted budgeted,
                                          uint32_t flags)
-        : INHERITED(std::move(callback), desc, fit, budgeted, flags)
+        : INHERITED(std::move(callback), lazyType, desc, fit, budgeted, flags)
         , fSampleCnt(desc.fSampleCnt)
         , fNeedsStencil(false)
         , fRenderTargetFlags(GrRenderTargetFlags::kNone) {
@@ -67,8 +68,7 @@ bool GrRenderTargetProxy::instantiate(GrResourceProvider* resourceProvider) {
     static constexpr GrSurfaceFlags kFlags = kRenderTarget_GrSurfaceFlag;
 
     if (!this->instantiateImpl(resourceProvider, fSampleCnt, fNeedsStencil, kFlags,
-                               GrMipMapped::kNo,
-                               SkDestinationSurfaceColorMode::kLegacy, nullptr)) {
+                               GrMipMapped::kNo, nullptr)) {
         return false;
     }
     SkASSERT(fTarget->asRenderTarget());
@@ -83,8 +83,7 @@ sk_sp<GrSurface> GrRenderTargetProxy::createSurface(GrResourceProvider* resource
     static constexpr GrSurfaceFlags kFlags = kRenderTarget_GrSurfaceFlag;
 
     sk_sp<GrSurface> surface = this->createSurfaceImpl(resourceProvider, fSampleCnt, fNeedsStencil,
-                                                       kFlags, GrMipMapped::kNo,
-                                                       SkDestinationSurfaceColorMode::kLegacy);
+                                                       kFlags, GrMipMapped::kNo);
     if (!surface) {
         return nullptr;
     }

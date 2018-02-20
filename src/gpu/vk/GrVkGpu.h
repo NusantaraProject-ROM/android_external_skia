@@ -64,23 +64,6 @@ public:
         kSkip_SyncQueue
     };
 
-    bool onGetReadPixelsInfo(GrSurface* srcSurface, GrSurfaceOrigin srcOrigin,
-                             int readWidth, int readHeight, size_t rowBytes,
-                             GrPixelConfig readConfig, DrawPreference*,
-                             ReadPixelTempDrawInfo*) override;
-
-    bool onGetWritePixelsInfo(GrSurface* dstSurface, GrSurfaceOrigin dstOrigin,
-                              int width, int height,
-                              GrPixelConfig srcConfig, DrawPreference*,
-                              WritePixelTempDrawInfo*) override;
-
-    bool onCopySurface(GrSurface* dst, GrSurfaceOrigin dstOrigin,
-                       GrSurface* src, GrSurfaceOrigin srcOrigin,
-                       const SkIRect& srcRect, const SkIPoint& dstPoint) override;
-
-    void onQueryMultisampleSpecs(GrRenderTarget*, GrSurfaceOrigin, const GrStencilSettings&,
-                                 int* effectiveSampleCnt, SamplePattern*) override;
-
     void xferBarrier(GrRenderTarget*, GrXferBarrierType) override {}
 
     GrBackendTexture createTestingOnlyBackendTexture(void* pixels, int w, int h,
@@ -120,8 +103,8 @@ public:
         return fCompiler;
     }
 
-    void onResolveRenderTarget(GrRenderTarget* target, GrSurfaceOrigin origin) override {
-        this->internalResolveRenderTarget(target, origin, true);
+    void onResolveRenderTarget(GrRenderTarget* target) override {
+        this->internalResolveRenderTarget(target, true);
     }
 
     void submitSecondaryCommandBuffer(const SkTArray<GrVkSecondaryCommandBuffer*>&,
@@ -193,11 +176,14 @@ private:
     GrBuffer* onCreateBuffer(size_t size, GrBufferType type, GrAccessPattern,
                              const void* data) override;
 
-    bool onReadPixels(GrSurface* surface, GrSurfaceOrigin,
-                      int left, int top, int width, int height,
-                      GrPixelConfig,
-                      void* buffer,
-                      size_t rowBytes) override;
+    bool onGetReadPixelsInfo(GrSurface*, GrSurfaceOrigin, int width, int height, size_t rowBytes,
+                             GrPixelConfig, DrawPreference*, ReadPixelTempDrawInfo*) override;
+
+    bool onGetWritePixelsInfo(GrSurface*, GrSurfaceOrigin, int width, int height, GrPixelConfig,
+                              DrawPreference*, WritePixelTempDrawInfo*) override;
+
+    bool onReadPixels(GrSurface* surface, GrSurfaceOrigin, int left, int top, int width, int height,
+                      GrPixelConfig, void* buffer, size_t rowBytes) override;
 
     bool onWritePixels(GrSurface* surface, GrSurfaceOrigin,
                        int left, int top, int width, int height,
@@ -207,6 +193,13 @@ private:
                           int left, int top, int width, int height,
                           GrPixelConfig config, GrBuffer* transferBuffer,
                           size_t offset, size_t rowBytes) override;
+
+    bool onCopySurface(GrSurface* dst, GrSurfaceOrigin dstOrigin, GrSurface* src,
+                       GrSurfaceOrigin srcOrigin, const SkIRect& srcRect,
+                       const SkIPoint& dstPoint) override;
+
+    void onQueryMultisampleSpecs(GrRenderTarget*, GrSurfaceOrigin, const GrStencilSettings&,
+                                 int* effectiveSampleCnt, SamplePattern*) override;
 
     void onFinishFlush(bool insertedSemaphores) override;
 
@@ -218,7 +211,7 @@ private:
     // wait semaphores to the submission of this command buffer.
     void submitCommandBuffer(SyncQueue sync);
 
-    void internalResolveRenderTarget(GrRenderTarget*, GrSurfaceOrigin origin, bool requiresSubmit);
+    void internalResolveRenderTarget(GrRenderTarget*, bool requiresSubmit);
 
     void copySurfaceAsCopyImage(GrSurface* dst, GrSurfaceOrigin dstOrigin,
                                 GrSurface* src, GrSurfaceOrigin srcOrigin,
@@ -248,9 +241,8 @@ private:
                               GrPixelConfig dataConfig,
                               const GrMipLevel texels[], int mipLevelCount);
 
-    void resolveImage(GrSurface* dst, GrSurfaceOrigin dstOrigin,
-                      GrVkRenderTarget* src, GrSurfaceOrigin srcOrigin,
-                      const SkIRect& srcRect, const SkIPoint& dstPoint);
+    void resolveImage(GrSurface* dst, GrVkRenderTarget* src, const SkIRect& srcRect,
+                      const SkIPoint& dstPoint);
 
     sk_sp<const GrVkBackendContext> fBackendContext;
     sk_sp<GrVkCaps>                 fVkCaps;
