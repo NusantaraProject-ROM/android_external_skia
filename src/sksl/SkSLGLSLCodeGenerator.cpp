@@ -597,6 +597,23 @@ void GLSLCodeGenerator::writeConstructor(const Constructor& c, Precedence parent
 }
 
 void GLSLCodeGenerator::writeFragCoord() {
+    if (!fProgram.fSettings.fCaps->canUseFragCoord()) {
+        if (!fSetupFragCoordWorkaround) {
+            const char* precision = usesPrecisionModifiers() ? "highp " : "";
+            fFunctionHeader += precision;
+            fFunctionHeader += "    float sk_FragCoord_InvW = 1. / sk_FragCoord_Workaround.w;\n";
+            fFunctionHeader += precision;
+            fFunctionHeader += "    vec4 sk_FragCoord_Resolved = "
+                "vec4(sk_FragCoord_Workaround.xyz * sk_FragCoord_InvW, sk_FragCoord_InvW);\n";
+            // Ensure that we get exact .5 values for x and y.
+            fFunctionHeader += "    sk_FragCoord_Resolved.xy = floor(sk_FragCoord_Resolved.xy) + "
+                               "vec2(.5);\n";
+            fSetupFragCoordWorkaround = true;
+        }
+        this->write("sk_FragCoord_Resolved");
+        return;
+    }
+
     // We only declare "gl_FragCoord" when we're in the case where we want to use layout qualifiers
     // to reverse y. Otherwise it isn't necessary and whether the "in" qualifier appears in the
     // declaration varies in earlier GLSL specs. So it is simpler to omit it.
@@ -619,7 +636,7 @@ void GLSLCodeGenerator::writeFragCoord() {
             // The Adreno compiler seems to be very touchy about access to "gl_FragCoord".
             // Accessing glFragCoord.zw can cause a program to fail to link. Additionally,
             // depending on the surrounding code, accessing .xy with a uniform involved can
-            // do the same thing. Copying gl_FragCoord.xy into a temp float2beforehand
+            // do the same thing. Copying gl_FragCoord.xy into a temp float2 beforehand
             // (and only accessing .xy) seems to "fix" things.
             const char* precision = usesPrecisionModifiers() ? "highp " : "";
             fHeader.writeText("uniform ");
@@ -639,7 +656,6 @@ void GLSLCodeGenerator::writeFragCoord() {
         this->write("sk_FragCoord");
     }
 }
-
 
 void GLSLCodeGenerator::writeVariableReference(const VariableReference& ref) {
     switch (ref.fVariable.fModifiers.fLayout.fBuiltin) {
@@ -678,6 +694,10 @@ void GLSLCodeGenerator::writeIndexExpression(const IndexExpression& expr) {
     this->write("[");
     this->writeExpression(*expr.fIndex, kTopLevel_Precedence);
     this->write("]");
+}
+
+bool is_sk_position(const FieldAccess& f) {
+    return "sk_Position" == f.fBase->fType.fields()[f.fFieldIndex].fName;
 }
 
 void GLSLCodeGenerator::writeFieldAccess(const FieldAccess& f) {
@@ -755,11 +775,22 @@ void GLSLCodeGenerator::writeBinaryExpression(const BinaryExpression& b,
     if (precedence >= parentPrecedence) {
         this->write("(");
     }
+    bool positionWorkaround = Compiler::IsAssignment(b.fOperator) &&
+                              Expression::kFieldAccess_Kind == b.fLeft->fKind &&
+                              is_sk_position((FieldAccess&) *b.fLeft) &&
+                              !strstr(b.fRight->description().c_str(), "sk_RTAdjust") &&
+                              !fProgram.fSettings.fCaps->canUseFragCoord();
+    if (positionWorkaround) {
+        this->write("sk_FragCoord_Workaround = (");
+    }
     this->writeExpression(*b.fLeft, precedence);
     this->write(" ");
     this->write(Compiler::OperatorName(b.fOperator));
     this->write(" ");
     this->writeExpression(*b.fRight, precedence);
+    if (positionWorkaround) {
+        this->write(")");
+    }
     if (precedence >= parentPrecedence) {
         this->write(")");
     }
@@ -1186,6 +1217,25 @@ void GLSLCodeGenerator::writeHeader() {
     for (const auto& e : fProgram.fElements) {
         if (e->fKind == ProgramElement::kExtension_Kind) {
             this->writeExtension((Extension&) *e);
+        }
+    }
+    if (!fProgram.fSettings.fCaps->canUseFragCoord()) {
+        Layout layout;
+        switch (fProgram.fKind) {
+            case Program::kVertex_Kind: {
+                Modifiers modifiers(layout, Modifiers::kOut_Flag | Modifiers::kHighp_Flag);
+                this->writeModifiers(modifiers, true);
+                this->write("vec4 sk_FragCoord_Workaround;\n");
+                break;
+            }
+            case Program::kFragment_Kind: {
+                Modifiers modifiers(layout, Modifiers::kIn_Flag | Modifiers::kHighp_Flag);
+                this->writeModifiers(modifiers, true);
+                this->write("vec4 sk_FragCoord_Workaround;\n");
+                break;
+            }
+            default:
+                break;
         }
     }
 }

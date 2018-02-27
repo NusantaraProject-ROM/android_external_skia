@@ -130,9 +130,6 @@ static void fill_caps(const SKSL_CAPS_CLASS& caps,
     CAP(dropsTileOnZeroDivide);
     CAP(flatInterpolationSupport);
     CAP(noperspectiveInterpolationSupport);
-    CAP(multisampleInterpolationSupport);
-    CAP(sampleVariablesSupport);
-    CAP(sampleMaskOverrideCoverageSupport);
     CAP(externalTextureSupport);
     CAP(texelFetchSupport);
     CAP(imageLoadStoreSupport);
@@ -291,6 +288,7 @@ std::unique_ptr<VarDeclarations> IRGenerator::convertVarDeclarations(const ASTVa
             }
             value = this->coerce(std::move(value), *type);
             var->fWriteCount = 1;
+            var->fInitialValue = value.get();
         }
         if (storage == Variable::kGlobal_Storage && varDecl.fName == "sk_FragColor" &&
             (*fSymbolTable)[varDecl.fName]) {
@@ -629,7 +627,7 @@ std::unique_ptr<Statement> IRGenerator::getNormalizeSkPositionCode() {
     children.push_back(OP(OP(SWIZZLE(POS, 1), Token::STAR, SWIZZLE(ADJUST, 2)),
                           Token::PLUS,
                           OP(SWIZZLE(POS, 3), Token::STAR, SWIZZLE(ADJUST, 3))));
-    children.push_back(std::unique_ptr<Expression>(new IntLiteral(fContext, -1, 0)));
+    children.push_back(std::unique_ptr<Expression>(new FloatLiteral(fContext, -1, 0.0)));
     children.push_back(SWIZZLE(POS, 3));
     std::unique_ptr<Expression> result = OP(POS, Token::EQ,
                                  std::unique_ptr<Expression>(new Constructor(-1,
@@ -2093,6 +2091,12 @@ void IRGenerator::markWrittenTo(const Expression& expr, bool readWrite) {
         case Expression::kIndex_Kind:
             this->markWrittenTo(*((IndexExpression&) expr).fBase, readWrite);
             break;
+        case Expression::kTernary_Kind: {
+            TernaryExpression& t = (TernaryExpression&) expr;
+            this->markWrittenTo(*t.fIfTrue, readWrite);
+            this->markWrittenTo(*t.fIfFalse, readWrite);
+            break;
+        }
         default:
             fErrors.error(expr.fOffset, "cannot assign to '" + expr.description() + "'");
             break;

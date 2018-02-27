@@ -14,11 +14,10 @@
 #include "GrMemoryPool.h"
 #include "GrTextUtils.h"
 #include "SkDescriptor.h"
-#include "SkMaskFilter.h"
+#include "SkMaskFilterBase.h"
 #include "SkOpts.h"
 #include "SkPathEffect.h"
 #include "SkPoint3.h"
-#include "SkRasterizer.h"
 #include "SkRectPriv.h"
 #include "SkSurfaceProps.h"
 #include "SkTInternalLList.h"
@@ -82,7 +81,7 @@ public:
     };
 
     void setupKey(const GrAtlasTextBlob::Key& key,
-                  const SkMaskFilter::BlurRec& blurRec,
+                  const SkMaskFilterBase::BlurRec& blurRec,
                   const SkPaint& paint) {
         fKey = key;
         if (key.fHasBlur) {
@@ -164,7 +163,7 @@ public:
 
     SkGlyphCache* setupCache(int runIndex,
                              const SkSurfaceProps& props,
-                             uint32_t scalerContextFlags,
+                             SkScalerContextFlags scalerContextFlags,
                              const SkPaint& skPaint,
                              const SkMatrix* viewMatrix);
 
@@ -191,18 +190,18 @@ public:
         }
     }
 
-    bool mustRegenerate(const GrTextUtils::Paint&, const SkMaskFilter::BlurRec& blurRec,
+    bool mustRegenerate(const GrTextUtils::Paint&, const SkMaskFilterBase::BlurRec& blurRec,
                         const SkMatrix& viewMatrix, SkScalar x, SkScalar y);
 
     // flush a GrAtlasTextBlob associated with a SkTextBlob
-    void flushCached(GrContext* context, GrTextUtils::Target*, const SkTextBlob* blob,
+    void flushCached(GrAtlasGlyphCache*, GrTextUtils::Target*, const SkTextBlob* blob,
                      const SkSurfaceProps& props,
                      const GrDistanceFieldAdjustTable* distanceAdjustTable,
                      const GrTextUtils::Paint&, SkDrawFilter* drawFilter, const GrClip& clip,
                      const SkMatrix& viewMatrix, const SkIRect& clipBounds, SkScalar x, SkScalar y);
 
     // flush a throwaway GrAtlasTextBlob *not* associated with an SkTextBlob
-    void flushThrowaway(GrContext* context, GrTextUtils::Target*, const SkSurfaceProps& props,
+    void flushThrowaway(GrAtlasGlyphCache*, GrTextUtils::Target*, const SkSurfaceProps& props,
                         const GrDistanceFieldAdjustTable* distanceAdjustTable,
                         const GrTextUtils::Paint& paint, const GrClip& clip,
                         const SkMatrix& viewMatrix, const SkIRect& clipBounds, SkScalar x,
@@ -295,11 +294,11 @@ private:
                          const GrDistanceFieldAdjustTable* distanceAdjustTable,
                          GrAtlasGlyphCache* cache);
 
-    void flushBigGlyphs(GrContext* context, GrTextUtils::Target*, const GrClip& clip,
+    void flushBigGlyphs(GrTextUtils::Target*, const GrClip& clip,
                         const SkPaint& paint, const SkMatrix& viewMatrix, SkScalar x, SkScalar y,
                         const SkIRect& clipBounds);
 
-    void flushBigRun(GrContext* context, GrTextUtils::Target*, const SkSurfaceProps& props,
+    void flushBigRun(GrTextUtils::Target*, const SkSurfaceProps& props,
                      const SkTextBlobRunIterator& it, const GrClip& clip,
                      const GrTextUtils::Paint& paint, SkDrawFilter* drawFilter,
                      const SkMatrix& viewMatrix, const SkIRect& clipBounds, SkScalar x,
@@ -489,7 +488,6 @@ private:
 
         // Effects from the paint that are used to build a SkScalerContext.
         sk_sp<SkPathEffect> fPathEffect;
-        sk_sp<SkRasterizer> fRasterizer;
         sk_sp<SkMaskFilter> fMaskFilter;
 
         // Distance field text cannot draw coloremoji, and so has to fall back.  However,
@@ -538,7 +536,7 @@ private:
     GrGlyph** fGlyphs;
     Run* fRuns;
     GrMemoryPool* fPool;
-    SkMaskFilter::BlurRec fBlurRec;
+    SkMaskFilterBase::BlurRec fBlurRec;
     StrokeInfo fStrokeInfo;
     SkTArray<BigGlyph> fBigGlyphs;
     Key fKey;

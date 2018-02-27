@@ -14,7 +14,7 @@
 #include "GrPathRenderer.h"
 #include "SkTInternalLList.h"
 #include "ccpr/GrCCAtlas.h"
-#include "ccpr/GrCCCoverageOp.h"
+#include "ccpr/GrCCPathParser.h"
 #include "ccpr/GrCCPathProcessor.h"
 #include "ops/GrDrawOp.h"
 
@@ -77,7 +77,7 @@ public:
         void onPrepare(GrOpFlushState*) override {}
         void onExecute(GrOpFlushState*) override;
 
-        int setupResources(GrOnFlushResourceProvider*, GrCCCoverageOpsBuilder*,
+        int setupResources(GrOnFlushResourceProvider*,
                            GrCCPathProcessor::Instance* pathInstanceData, int pathInstanceIdx);
 
     private:
@@ -135,8 +135,9 @@ public:
         }
 
         bool isUninitialized() const { return !fAtlasLazyProxy; }
-        void init(const SkPath& deviceSpacePath, const SkIRect& accessRect, int rtWidth,
-                  int rtHeight);
+        void init(GrProxyProvider* proxyProvider,
+                  const SkPath& deviceSpacePath, const SkIRect& accessRect,
+                  int rtWidth, int rtHeight);
         void addAccess(const SkIRect& accessRect) {
             SkASSERT(!this->isUninitialized());
             fAccessRect.join(accessRect);
@@ -155,7 +156,7 @@ public:
             return fPathDevIBounds;
         }
         void placePathInAtlas(GrCoverageCountingPathRenderer*, GrOnFlushResourceProvider*,
-                              GrCCCoverageOpsBuilder*);
+                              GrCCPathParser*);
 
         const SkVector& atlasScale() const {
             SkASSERT(fHasAtlasTransform);
@@ -184,10 +185,10 @@ public:
 
     bool canMakeClipProcessor(const SkPath& deviceSpacePath) const;
 
-    std::unique_ptr<GrFragmentProcessor> makeClipProcessor(uint32_t oplistID,
+    std::unique_ptr<GrFragmentProcessor> makeClipProcessor(GrProxyProvider*, uint32_t oplistID,
                                                            const SkPath& deviceSpacePath,
-                                                           const SkIRect& accessRect, int rtWidth,
-                                                           int rtHeight);
+                                                           const SkIRect& accessRect,
+                                                           int rtWidth, int rtHeight);
 
     // GrOnFlushCallbackObject overrides.
     void preFlush(GrOnFlushResourceProvider*, const uint32_t* opListIDs, int numOpListIDs,
@@ -200,7 +201,7 @@ private:
 
     GrCCAtlas* placeParsedPathInAtlas(GrOnFlushResourceProvider*, const SkIRect& accessRect,
                                       const SkIRect& pathIBounds, int16_t* atlasOffsetX,
-                                      int16_t* atlasOffsetY, GrCCCoverageOpsBuilder*);
+                                      int16_t* atlasOffsetY);
 
     struct RTPendingPaths {
         ~RTPendingPaths() {
@@ -220,6 +221,7 @@ private:
     sk_sp<const GrBuffer> fPerFlushIndexBuffer;
     sk_sp<const GrBuffer> fPerFlushVertexBuffer;
     sk_sp<GrBuffer> fPerFlushInstanceBuffer;
+    sk_sp<GrCCPathParser> fPerFlushPathParser;
     GrSTAllocator<4, GrCCAtlas> fPerFlushAtlases;
     bool fPerFlushResourcesAreValid;
     SkDEBUGCODE(bool fFlushing = false);

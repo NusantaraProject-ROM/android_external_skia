@@ -1059,6 +1059,46 @@ DEF_TEST(SkSLFragCoord, r) {
          "}\n",
          &inputs);
     REPORTER_ASSERT(r, !inputs.fRTHeight);
+
+    test(r,
+         "in float4 pos; void main() { sk_Position = pos; }",
+         *SkSL::ShaderCapsFactory::CannotUseFragCoord(),
+         "#version 400\n"
+         "out vec4 sk_FragCoord_Workaround;\n"
+         "in vec4 pos;\n"
+         "void main() {\n"
+         "    sk_FragCoord_Workaround = (gl_Position = pos);\n"
+         "}\n",
+         SkSL::Program::kVertex_Kind);
+
+    test(r,
+         "in uniform float4 sk_RTAdjust; in float4 pos; void main() { sk_Position = pos; }",
+         *SkSL::ShaderCapsFactory::CannotUseFragCoord(),
+         "#version 400\n"
+         "out vec4 sk_FragCoord_Workaround;\n"
+         "in uniform vec4 sk_RTAdjust;\n"
+         "in vec4 pos;\n"
+         "void main() {\n"
+         "    sk_FragCoord_Workaround = (gl_Position = pos);\n"
+         "    gl_Position = vec4(gl_Position.x * sk_RTAdjust.x + gl_Position.w * sk_RTAdjust.y, "
+              "gl_Position.y * sk_RTAdjust.z + gl_Position.w * sk_RTAdjust.w, 0.0, "
+              "gl_Position.w);\n"
+         "}\n",
+         SkSL::Program::kVertex_Kind);
+
+    test(r,
+         "void main() { sk_FragColor.xy = sk_FragCoord.xy; }",
+         *SkSL::ShaderCapsFactory::CannotUseFragCoord(),
+         "#version 400\n"
+         "in vec4 sk_FragCoord_Workaround;\n"
+         "out vec4 sk_FragColor;\n"
+         "void main() {\n"
+         "    float sk_FragCoord_InvW = 1. / sk_FragCoord_Workaround.w;\n"
+         "    vec4 sk_FragCoord_Resolved = vec4(sk_FragCoord_Workaround.xyz * "
+              "sk_FragCoord_InvW, sk_FragCoord_InvW);\n"
+         "    sk_FragCoord_Resolved.xy = floor(sk_FragCoord_Resolved.xy) + vec2(.5);\n"
+         "    sk_FragColor.xy = sk_FragCoord_Resolved.xy;\n"
+         "}\n");
 }
 
 DEF_TEST(SkSLVertexID, r) {
@@ -1724,7 +1764,7 @@ DEF_TEST(SkSLNormalization, r) {
          "    gl_Position = vec4(1.0);\n"
          "    gl_Position = vec4(gl_Position.x * sk_RTAdjust.x + gl_Position.w * sk_RTAdjust.y, "
                                 "gl_Position.y * sk_RTAdjust.z + gl_Position.w * sk_RTAdjust.w, "
-                                "0, "
+                                "0.0, "
                                 "gl_Position.w);\n"
          "}\n",
          SkSL::Program::kVertex_Kind);
@@ -1751,19 +1791,59 @@ DEF_TEST(SkSLNormalization, r) {
          "    {\n"
          "        gl_Position = vec4(gl_Position.x * sk_RTAdjust.x + gl_Position.w * "
                                "sk_RTAdjust.y, gl_Position.y * sk_RTAdjust.z + gl_Position.w * "
-                               "sk_RTAdjust.w, 0, gl_Position.w);\n"
+                               "sk_RTAdjust.w, 0.0, gl_Position.w);\n"
          "        EmitVertex();\n"
          "    }\n"
          "    gl_Position = gl_in[0].gl_Position + vec4(0.5, 0.0, 0.0, float(gl_InvocationID));\n"
          "    {\n"
          "        gl_Position = vec4(gl_Position.x * sk_RTAdjust.x + gl_Position.w * "
                                "sk_RTAdjust.y, gl_Position.y * sk_RTAdjust.z + gl_Position.w * "
-                               "sk_RTAdjust.w, 0, gl_Position.w);\n"
+                               "sk_RTAdjust.w, 0.0, gl_Position.w);\n"
          "        EmitVertex();\n"
          "    }\n"
          "    EndPrimitive();\n"
          "}\n",
          SkSL::Program::kGeometry_Kind);
+}
+
+DEF_TEST(SkSLTernaryLValue, r) {
+    test(r,
+         "void main() { half r, g; (true ? r : g) = 1; (false ? r : g) = 0; "
+         "sk_FragColor = half4(r, g, 1, 1); }",
+         *SkSL::ShaderCapsFactory::Default(),
+         "#version 400\n"
+         "out vec4 sk_FragColor;\n"
+         "void main() {\n"
+         "    sk_FragColor = vec4(1.0, 0.0, 1.0, 1.0);\n"
+         "}\n");
+    test(r,
+         "void main() { half r, g; (true ? r : g) = sqrt(1); (false ? r : g) = sqrt(0); "
+         "sk_FragColor = half4(r, g, 1, 1); }",
+         *SkSL::ShaderCapsFactory::Default(),
+         "#version 400\n"
+         "out vec4 sk_FragColor;\n"
+         "void main() {\n"
+         "    float r, g;\n"
+         "    r = sqrt(1.0);\n"
+         "    g = sqrt(0.0);\n"
+         "    sk_FragColor = vec4(r, g, 1.0, 1.0);\n"
+         "}\n");
+    test(r,
+         "void main() {"
+         "half r, g;"
+         "(sqrt(1) > 0 ? r : g) = sqrt(1);"
+         "(sqrt(0) > 0 ? r : g) = sqrt(0);"
+         "sk_FragColor = half4(r, g, 1, 1);"
+         "}",
+         *SkSL::ShaderCapsFactory::Default(),
+         "#version 400\n"
+         "out vec4 sk_FragColor;\n"
+         "void main() {\n"
+         "    float r, g;\n"
+         "    sqrt(1.0) > 0.0 ? r : g = sqrt(1.0);\n"
+         "    sqrt(0.0) > 0.0 ? r : g = sqrt(0.0);\n"
+         "    sk_FragColor = vec4(r, g, 1.0, 1.0);\n"
+         "}\n");
 }
 
 #endif

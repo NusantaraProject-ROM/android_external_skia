@@ -44,8 +44,6 @@ SkPictureData::SkPictureData(const SkPictureRecord& record,
 
     fOpData = record.opData();
 
-    fContentInfo.set(record.fContentInfo);
-
     fPaints  = record.fPaints;
 
     fPaths.reset(record.fPaths.count());
@@ -117,6 +115,8 @@ void SkPictureData::init() {
     fVerticesCount = 0;
     fImageRefs = nullptr;
     fImageCount = 0;
+    fBitmapImageCount = 0;
+    fBitmapImageRefs = nullptr;
     fFactoryPlayback = nullptr;
 }
 
@@ -505,7 +505,9 @@ bool SkPictureData::parseBufferTag(SkReadBuffer& buffer, uint32_t tag, uint32_t 
             const int count = SkToInt(size);
             fPaints.reset(count);
             for (int i = 0; i < count; ++i) {
-                buffer.readPaint(&fPaints[i]);
+                if (!buffer.readPaint(&fPaints[i])) {
+                    return false;
+                }
             }
         } break;
         case SK_PICT_PATH_BUFFER_TAG:
@@ -622,29 +624,3 @@ bool SkPictureData::parseBuffer(SkReadBuffer& buffer) {
     }
     return true;
 }
-
-///////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////
-
-#if SK_SUPPORT_GPU
-bool SkPictureData::suitableForGpuRasterization(GrContext* context, const char **reason,
-                                                int sampleCount) const {
-    return fContentInfo.suitableForGpuRasterization(context, reason, sampleCount);
-}
-
-bool SkPictureData::suitableForGpuRasterization(GrContext* context, const char **reason,
-                                                GrPixelConfig config, SkScalar dpi) const {
-
-    if (context != nullptr) {
-        return this->suitableForGpuRasterization(context, reason,
-                                                 context->getRecommendedSampleCount(config, dpi));
-    } else {
-        return this->suitableForGpuRasterization(nullptr, reason);
-    }
-}
-
-bool SkPictureData::suitableForLayerOptimization() const {
-    return fContentInfo.numLayers() > 0;
-}
-#endif
-///////////////////////////////////////////////////////////////////////////////

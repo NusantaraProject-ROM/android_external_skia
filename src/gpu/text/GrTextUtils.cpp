@@ -74,11 +74,11 @@ uint32_t GrTextUtils::FilterTextFlags(const SkSurfaceProps& surfaceProps, const 
 }
 
 bool GrTextUtils::ShouldDisableLCD(const SkPaint& paint) {
-    return paint.getMaskFilter() || paint.getRasterizer() || paint.getPathEffect() ||
+    return paint.getMaskFilter() || paint.getPathEffect() ||
            paint.isFakeBoldText() || paint.getStyle() != SkPaint::kFill_Style;
 }
 
-void GrTextUtils::DrawBigText(GrContext* context, GrTextUtils::Target* target,
+void GrTextUtils::DrawBigText(GrTextUtils::Target* target,
                               const GrClip& clip, const SkPaint& paint,
                               const SkMatrix& viewMatrix, const char text[], size_t byteLength,
                               SkScalar x, SkScalar y, const SkIRect& clipBounds) {
@@ -104,7 +104,7 @@ void GrTextUtils::DrawBigText(GrContext* context, GrTextUtils::Target* target,
     }
 }
 
-void GrTextUtils::DrawBigPosText(GrContext* context, GrTextUtils::Target* target,
+void GrTextUtils::DrawBigPosText(GrTextUtils::Target* target,
                                  const SkSurfaceProps& props, const GrClip& clip,
                                  const SkPaint& origPaint, const SkMatrix& viewMatrix,
                                  const char text[], size_t byteLength, const SkScalar pos[],

@@ -182,7 +182,9 @@ void SkReadBuffer::readMatrix(SkMatrix* matrix) {
     size_t size = 0;
     if (this->isValid()) {
         size = SkMatrixPriv::ReadFromMemory(matrix, fReader.peek(), fReader.available());
-        this->validate((SkAlign4(size) == size) && (0 != size));
+        if (!this->validate((SkAlign4(size) == size) && (0 != size))) {
+            matrix->reset();
+        }
     }
     (void)this->skip(size);
 }
@@ -209,7 +211,9 @@ void SkReadBuffer::readRegion(SkRegion* region) {
     size_t size = 0;
     if (!fError) {
         size = region->readFromMemory(fReader.peek(), fReader.available());
-        this->validate((SkAlign4(size) == size) && (0 != size));
+        if (!this->validate((SkAlign4(size) == size) && (0 != size))) {
+            region->setEmpty();
+        }
     }
     (void)this->skip(size);
 }
@@ -218,7 +222,9 @@ void SkReadBuffer::readPath(SkPath* path) {
     size_t size = 0;
     if (!fError) {
         size = path->readFromMemory(fReader.peek(), fReader.available());
-        this->validate((SkAlign4(size) == size) && (0 != size));
+        if (!this->validate((SkAlign4(size) == size) && (0 != size))) {
+            path->reset();
+        }
     }
     (void)this->skip(size);
 }
@@ -379,7 +385,7 @@ SkFlattenable* SkReadBuffer::readFlattenable(SkFlattenable::Type ft) {
             // Read the index.  We are guaranteed that the first byte
             // is zeroed, so we must shift down a byte.
             uint32_t index = this->readUInt() >> 8;
-            if (!this->validate(index > 0)) {
+            if (index == 0) {
                 return nullptr; // writer failed to give us the flattenable
             }
             SkString* namePtr = fFlattenableDict.find(index);

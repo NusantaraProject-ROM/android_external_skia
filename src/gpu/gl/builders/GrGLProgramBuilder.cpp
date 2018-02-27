@@ -9,6 +9,7 @@
 
 #include "GrAutoLocaleSetter.h"
 #include "GrContext.h"
+#include "GrContextPriv.h"
 #include "GrCoordTransform.h"
 #include "GrGLProgramBuilder.h"
 #include "GrProgramDesc.h"
@@ -32,7 +33,11 @@ GrGLProgram* GrGLProgramBuilder::CreateProgram(const GrPipeline& pipeline,
                                                const GrPrimitiveProcessor& primProc,
                                                GrProgramDesc* desc,
                                                GrGLGpu* gpu) {
-    SkASSERT(!pipeline.isBad() && primProc.instantiate(gpu->getContext()->resourceProvider()));
+#ifdef SK_DEBUG
+    GrResourceProvider* resourceProvider = gpu->getContext()->contextPriv().resourceProvider();
+
+    SkASSERT(!pipeline.isBad() && primProc.instantiate(resourceProvider));
+#endif
 
     ATRACE_ANDROID_FRAMEWORK("Shader Compile");
     GrAutoLocaleSetter als("C");
@@ -93,8 +98,7 @@ bool GrGLProgramBuilder::compileAndAttachShaders(const char* glsl,
     *shaderIds->append() = shaderId;
     if (inputs.fFlipY) {
         GrProgramDesc* d = this->desc();
-        d->setSurfaceOriginKey(GrGLSLFragmentShaderBuilder::KeyForSurfaceOrigin(
-                                                     this->pipeline().proxy()->origin()));
+        d->setSurfaceOriginKey(this->pipeline().proxy()->origin());
         d->finalize();
     }
 
@@ -269,10 +273,10 @@ GrGLProgram* GrGLProgramBuilder::finalize() {
             // store shader in cache
             sk_sp<SkData> key = SkData::MakeWithoutCopy(desc()->asKey(), desc()->keyLength());
             GrGLenum binaryFormat;
-            std::unique_ptr<char> binary(new char[length]);
+            std::unique_ptr<char[]> binary(new char[length]);
             GL_CALL(GetProgramBinary(programID, length, &length, &binaryFormat, binary.get()));
             size_t dataLength = sizeof(inputs) + sizeof(binaryFormat) + length;
-            std::unique_ptr<uint8_t> data((uint8_t*) malloc(dataLength));
+            std::unique_ptr<uint8_t[]> data(new uint8_t[dataLength]);
             size_t offset = 0;
             memcpy(data.get() + offset, &inputs, sizeof(inputs));
             offset += sizeof(inputs);

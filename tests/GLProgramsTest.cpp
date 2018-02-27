@@ -266,19 +266,24 @@ bool GrDrawingManager::ProgramUnitTest(GrContext* context, int maxStages, int ma
     sk_sp<GrTextureProxy> proxies[2];
 
     // setup dummy textures
-    GrSurfaceDesc dummyDesc;
-    dummyDesc.fFlags = kRenderTarget_GrSurfaceFlag;
-    dummyDesc.fOrigin = kBottomLeft_GrSurfaceOrigin;
-    dummyDesc.fWidth = 34;
-    dummyDesc.fHeight = 18;
-    dummyDesc.fConfig = kRGBA_8888_GrPixelConfig;
-    proxies[0] = GrSurfaceProxy::MakeDeferred(proxyProvider, dummyDesc, SkBudgeted::kNo, nullptr, 0);
-    dummyDesc.fFlags = kNone_GrSurfaceFlags;
-    dummyDesc.fOrigin = kTopLeft_GrSurfaceOrigin;
-    dummyDesc.fWidth = 16;
-    dummyDesc.fHeight = 22;
-    dummyDesc.fConfig = kAlpha_8_GrPixelConfig;
-    proxies[1] = GrSurfaceProxy::MakeDeferred(proxyProvider, dummyDesc, SkBudgeted::kNo, nullptr, 0);
+    {
+        GrSurfaceDesc dummyDesc;
+        dummyDesc.fFlags = kRenderTarget_GrSurfaceFlag;
+        dummyDesc.fOrigin = kBottomLeft_GrSurfaceOrigin;
+        dummyDesc.fWidth = 34;
+        dummyDesc.fHeight = 18;
+        dummyDesc.fConfig = kRGBA_8888_GrPixelConfig;
+        proxies[0] = proxyProvider->createProxy(dummyDesc, SkBackingFit::kExact, SkBudgeted::kNo);
+    }
+    {
+        GrSurfaceDesc dummyDesc;
+        dummyDesc.fFlags = kNone_GrSurfaceFlags;
+        dummyDesc.fOrigin = kTopLeft_GrSurfaceOrigin;
+        dummyDesc.fWidth = 16;
+        dummyDesc.fHeight = 22;
+        dummyDesc.fConfig = kAlpha_8_GrPixelConfig;
+        proxies[1] = proxyProvider->createProxy(dummyDesc, SkBackingFit::kExact, SkBudgeted::kNo);
+    }
 
     if (!proxies[0] || !proxies[1]) {
         SkDebugf("Could not allocate dummy textures");
@@ -343,7 +348,7 @@ bool GrDrawingManager::ProgramUnitTest(GrContext* context, int maxStages, int ma
 
 static int get_glprograms_max_stages(const sk_gpu_test::ContextInfo& ctxInfo) {
     GrContext* context = ctxInfo.grContext();
-    GrGLGpu* gpu = static_cast<GrGLGpu*>(context->getGpu());
+    GrGLGpu* gpu = static_cast<GrGLGpu*>(context->contextPriv().getGpu());
     int maxStages = 6;
     if (kGLES_GrGLStandard == gpu->glStandard()) {
     // We've had issues with driver crashes and HW limits being exceeded with many effects on

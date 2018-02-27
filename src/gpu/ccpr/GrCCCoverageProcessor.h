@@ -8,13 +8,14 @@
 #ifndef GrCCCoverageProcessor_DEFINED
 #define GrCCCoverageProcessor_DEFINED
 
+#include "GrCaps.h"
 #include "GrGeometryProcessor.h"
 #include "GrShaderCaps.h"
 #include "SkNx.h"
 #include "glsl/GrGLSLGeometryProcessor.h"
 #include "glsl/GrGLSLVarying.h"
 
-class GrGLSLPPFragmentBuilder;
+class GrGLSLFragmentBuilder;
 class GrGLSLVertexGeoBuilder;
 class GrMesh;
 
@@ -87,19 +88,21 @@ public:
     static bool RenderPassIsCubic(RenderPass);
     static const char* RenderPassName(RenderPass);
 
-    constexpr static bool DoesRenderPass(RenderPass renderPass, const GrShaderCaps& caps) {
-        return RenderPass::kTriangleEdges != renderPass || caps.geometryShaderSupport();
+    constexpr static bool DoesRenderPass(RenderPass renderPass, const GrCaps& caps) {
+        return RenderPass::kTriangleEdges != renderPass ||
+               caps.shaderCaps()->geometryShaderSupport();
     }
 
-    GrCCCoverageProcessor(GrResourceProvider* rp, RenderPass pass, const GrShaderCaps& caps)
+    GrCCCoverageProcessor(GrResourceProvider* rp, RenderPass pass, const GrCaps& caps)
             : INHERITED(kGrCCCoverageProcessor_ClassID)
             , fRenderPass(pass)
-            , fImpl(caps.geometryShaderSupport() ?  Impl::kGeometryShader : Impl::kVertexShader) {
+            , fImpl(caps.shaderCaps()->geometryShaderSupport() ? Impl::kGeometryShader
+                                                               : Impl::kVertexShader) {
         SkASSERT(DoesRenderPass(pass, caps));
         if (Impl::kGeometryShader == fImpl) {
             this->initGS();
         } else {
-            this->initVS(rp);
+            this->initVS(rp, caps);
         }
     }
 
@@ -162,7 +165,7 @@ public:
         void emitVaryings(GrGLSLVaryingHandler*, GrGLSLVarying::Scope, SkString* code,
                           const char* position, const char* coverage, const char* wind);
 
-        void emitFragmentCode(const GrCCCoverageProcessor& proc, GrGLSLPPFragmentBuilder*,
+        void emitFragmentCode(const GrCCCoverageProcessor& proc, GrGLSLFragmentBuilder*,
                               const char* skOutputColor, const char* skOutputCoverage) const;
 
         // Defines an equation ("dot(float3(pt, 1), distance_equation)") that is -1 on the outside
@@ -194,7 +197,7 @@ public:
 
         // Emits the fragment code that calculates a pixel's coverage value. If using
         // WindHandling::kHandled, this value must be signed appropriately.
-        virtual void onEmitFragmentCode(GrGLSLPPFragmentBuilder*,
+        virtual void onEmitFragmentCode(GrGLSLFragmentBuilder*,
                                         const char* outputCoverage) const = 0;
 
         // Returns the name of a Shader's internal varying at the point where where its value is
@@ -209,7 +212,7 @@ public:
         // center. Subclasses can use this for software multisampling.
         //
         // Returns the number of samples.
-        static int DefineSoftSampleLocations(GrGLSLPPFragmentBuilder* f, const char* samplesName);
+        static int DefineSoftSampleLocations(GrGLSLFragmentBuilder* f, const char* samplesName);
 
     private:
         GrGLSLVarying fWind;
@@ -232,7 +235,7 @@ private:
     };
 
     void initGS();
-    void initVS(GrResourceProvider*);
+    void initVS(GrResourceProvider*, const GrCaps&);
 
     void appendGSMesh(GrBuffer* instanceBuffer, int instanceCount, int baseInstance,
                       SkTArray<GrMesh>* out) const;
@@ -244,9 +247,13 @@ private:
 
     const RenderPass fRenderPass;
     const Impl fImpl;
-    sk_sp<const GrBuffer> fVertexBuffer; // Used by VSImpl.
-    sk_sp<const GrBuffer> fIndexBuffer; // Used by VSImpl.
     SkDEBUGCODE(float fDebugBloat = 0);
+
+    // Used by VSImpl.
+    sk_sp<const GrBuffer> fVertexBuffer;
+    sk_sp<const GrBuffer> fIndexBuffer;
+    int fNumIndicesPerInstance;
+    GrPrimitiveType fPrimitiveType;
 
     typedef GrGeometryProcessor INHERITED;
 };

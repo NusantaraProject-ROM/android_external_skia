@@ -85,6 +85,8 @@ private:
     // Friending for access to the GrPixelConfig
     friend class SkImage;
     friend class SkSurface;
+    friend class GrBackendTextureImageGenerator;
+    friend class GrProxyProvider;
     friend class GrGpu;
     friend class GrGLGpu;
     friend class GrVkGpu;

@@ -219,6 +219,7 @@ gm_sources = [
   "$_gm/nonclosedpaths.cpp",
   "$_gm/occludedrrectblur.cpp",
   "$_gm/offsetimagefilter.cpp",
+  "$_gm/orientation.cpp",
   "$_gm/ovals.cpp",
   "$_gm/overdrawcolorfilter.cpp",
   "$_gm/OverStroke.cpp",
@@ -262,6 +263,7 @@ gm_sources = [
   "$_gm/samplerstress.cpp",
   "$_gm/savelayer.cpp",
   "$_gm/scaledstrokes.cpp",
+  "$_gm/shadermaskfilter.cpp",
   "$_gm/shadertext.cpp",
   "$_gm/shadertext2.cpp",
   "$_gm/shadertext3.cpp",
@@ -333,6 +335,5 @@ gm_sources = [
   "$_gm/xfermodes.cpp",
   "$_gm/xfermodes2.cpp",
   "$_gm/xfermodes3.cpp",
-  "$_gm/xform_image_gen.cpp",
   "$_gm/yuvtorgbeffect.cpp",
 ]

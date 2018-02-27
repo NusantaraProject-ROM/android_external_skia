@@ -30,6 +30,7 @@ declare_args() {
   skia_use_zlib = true
   skia_use_metal = false
   skia_use_libheif = is_skia_dev_build
+  skia_use_skcms = is_skia_dev_build
   skia_embed_resources = false
 
   skia_android_serial = ""
@@ -503,7 +504,7 @@ if (skia_compile_processors) {
     ]
     outputs = [
       "$target_out_dir/" +
-          rebase_path("src/sksl/sksl_enums.include", target_out_dir),
+          rebase_path("src/sksl/sksl_enums.inc", target_out_dir),
     ]
     args = [
       rebase_path(sources[0]),
@@ -689,6 +690,17 @@ optional("raw") {
   ]
 }
 
+optional("skcms") {
+  enabled = skia_use_skcms
+
+  deps = [
+    "//third_party/skcms",
+  ]
+  sources = [
+    # TODO
+  ]
+}
+
 optional("typeface_freetype") {
   enabled = skia_use_freetype
 
@@ -752,6 +764,7 @@ component("skia") {
     ":pdf",
     ":png",
     ":raw",
+    ":skcms",
     ":sse2",
     ":sse41",
     ":sse42",
@@ -771,10 +784,10 @@ component("skia") {
   sources += skia_xps_sources
   sources += [
     "src/android/SkAndroidFrameworkUtils.cpp",
+    "src/android/SkAnimatedImage.cpp",
     "src/android/SkBitmapRegionCodec.cpp",
     "src/android/SkBitmapRegionDecoder.cpp",
     "src/codec/SkAndroidCodec.cpp",
-    "src/codec/SkAnimatedImage.cpp",
     "src/codec/SkBmpBaseCodec.cpp",
     "src/codec/SkBmpCodec.cpp",
     "src/codec/SkBmpMaskCodec.cpp",
@@ -1321,13 +1334,14 @@ if (skia_enable_tools) {
     ]
   }
 
-  test_lib("experimental_skotty") {
-    public_include_dirs = [ "experimental/skotty" ]
+  test_lib("experimental_skottie") {
+    public_include_dirs = [ "experimental/skottie" ]
     include_dirs = [ "tools" ]
     sources = [
-      "experimental/skotty/Skotty.cpp",
-      "experimental/skotty/SkottyAnimator.cpp",
-      "experimental/skotty/SkottyProperties.cpp",
+      "experimental/skottie/Skottie.cpp",
+      "experimental/skottie/SkottieAnimator.cpp",
+      "experimental/skottie/SkottieParser.cpp",
+      "experimental/skottie/SkottieProperties.cpp",
     ]
     deps = [
       ":experimental_sksg",
@@ -1385,9 +1399,12 @@ if (skia_enable_tools) {
       "experimental/sksg/SkSGNode.cpp",
       "experimental/sksg/SkSGPaintNode.cpp",
       "experimental/sksg/SkSGRenderNode.cpp",
+      "experimental/sksg/SkSGScene.cpp",
+      "experimental/sksg/effects/SkSGClipEffect.cpp",
       "experimental/sksg/effects/SkSGMaskEffect.cpp",
       "experimental/sksg/effects/SkSGOpacityEffect.cpp",
       "experimental/sksg/effects/SkSGTransform.cpp",
+      "experimental/sksg/geometry/SkSGGeometryTransform.cpp",
       "experimental/sksg/geometry/SkSGMerge.cpp",
       "experimental/sksg/geometry/SkSGPath.cpp",
       "experimental/sksg/geometry/SkSGRect.cpp",
@@ -1511,7 +1528,7 @@ if (skia_enable_tools) {
       include_dirs = [ "tests" ]
       deps = [
         ":common_flags",
-        ":experimental_skotty",
+        ":experimental_skottie",
         ":experimental_sksg",
         ":experimental_svg_model",
         ":flags",
@@ -1522,6 +1539,17 @@ if (skia_enable_tools) {
         ":tool_utils",
         "//third_party/jsoncpp",
         "//third_party/libpng",
+      ]
+    }
+  }
+
+  if (!is_win) {
+    test_app("remote_demo") {
+      sources = [
+        "tools/remote_demo.cpp",
+      ]
+      deps = [
+        ":skia",
       ]
     }
   }
@@ -1805,9 +1833,30 @@ if (skia_enable_tools) {
       deps = [
         ":skia",
         ":skqp_lib",
+        ":tool_utils",
       ]
       libs = [ "android" ]
     }
+  }
+
+  test_app("list_gms") {
+    sources = [
+      "tools/list_gms.cpp",
+    ]
+    deps = [
+      ":gm",
+      ":skia",
+    ]
+  }
+  test_app("list_gpu_unit_tests") {
+    sources = [
+      "dm/DMGpuTestProcs.cpp",
+      "tools/list_gpu_unit_tests.cpp",
+    ]
+    deps = [
+      ":skia",
+      ":tests",
+    ]
   }
 
   if (skia_enable_gpu) {
@@ -1913,8 +1962,8 @@ if (skia_enable_tools) {
         "tools/viewer/ImageSlide.cpp",
         "tools/viewer/SKPSlide.cpp",
         "tools/viewer/SampleSlide.cpp",
-        "tools/viewer/SkottySlide.cpp",
-        "tools/viewer/SkottySlide2.cpp",
+        "tools/viewer/SkottieSlide.cpp",
+        "tools/viewer/SkottieSlide2.cpp",
         "tools/viewer/StatsLayer.cpp",
         "tools/viewer/Viewer.cpp",
       ]
@@ -1922,7 +1971,7 @@ if (skia_enable_tools) {
 
       include_dirs = []
       deps = [
-        ":experimental_skotty",
+        ":experimental_skottie",
         ":flags",
         ":gm",
         ":gpu_tool_utils",

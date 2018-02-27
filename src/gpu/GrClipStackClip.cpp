@@ -190,6 +190,7 @@ bool GrClipStackClip::apply(GrContext* context, GrRenderTargetContext* renderTar
         return true;
     }
 
+    GrProxyProvider* proxyProvider = context->contextPriv().proxyProvider();
     const auto* caps = context->caps()->shaderCaps();
     int maxWindowRectangles = renderTargetContext->priv().maxWindowRectangles();
     int maxAnalyticFPs = context->caps()->maxClipAnalyticFPs();
@@ -230,7 +231,8 @@ bool GrClipStackClip::apply(GrContext* context, GrRenderTargetContext* renderTar
     // can cause a flush or otherwise change which opList our draw is going into.
     uint32_t opListID = renderTargetContext->getOpList()->uniqueID();
     int rtWidth = renderTargetContext->width(), rtHeight = renderTargetContext->height();
-    if (auto clipFPs = reducedClip.finishAndDetachAnalyticFPs(opListID, rtWidth, rtHeight)) {
+    if (auto clipFPs = reducedClip.finishAndDetachAnalyticFPs(proxyProvider, opListID,
+                                                              rtWidth, rtHeight)) {
         out->addCoverageFP(std::move(clipFPs));
     }
 
@@ -464,9 +466,8 @@ sk_sp<GrTextureProxy> GrClipStackClip::createSoftwareClipMask(
         desc.fConfig = kAlpha_8_GrPixelConfig;
         // MDB TODO: We're going to fill this proxy with an ASAP upload (which is out of order wrt
         // to ops), so it can't have any pending IO.
-        proxy = GrSurfaceProxy::MakeDeferred(proxyProvider, desc,
-                                             SkBackingFit::kApprox, SkBudgeted::kYes,
-                                             GrResourceProvider::kNoPendingIO_Flag);
+        proxy = proxyProvider->createProxy(desc, SkBackingFit::kApprox, SkBudgeted::kYes,
+                                           GrResourceProvider::kNoPendingIO_Flag);
 
         auto uploader = skstd::make_unique<GrTDeferredProxyUploader<ClipMaskData>>(reducedClip);
         GrTDeferredProxyUploader<ClipMaskData>* uploaderRaw = uploader.get();

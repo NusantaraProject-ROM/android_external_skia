@@ -13,6 +13,7 @@
 #include "SkColorFilter.h"
 #include "SkDrawFilter.h"
 #include "SkGlyphCache.h"
+#include "SkMaskFilterBase.h"
 #include "SkTextBlobRunIterator.h"
 #include "ops/GrAtlasTextOp.h"
 
@@ -49,7 +50,7 @@ sk_sp<GrAtlasTextBlob> GrAtlasTextBlob::Make(GrMemoryPool* pool, int glyphCount,
 
 SkGlyphCache* GrAtlasTextBlob::setupCache(int runIndex,
                                           const SkSurfaceProps& props,
-                                          uint32_t scalerContextFlags,
+                                          SkScalerContextFlags scalerContextFlags,
                                           const SkPaint& skPaint,
                                           const SkMatrix* viewMatrix) {
     GrAtlasTextBlob::Run* run = &fRuns[runIndex];
@@ -58,10 +59,10 @@ SkGlyphCache* GrAtlasTextBlob::setupCache(int runIndex,
     SkAutoDescriptor* desc = run->fOverrideDescriptor.get() ? run->fOverrideDescriptor.get() :
                                                               &run->fDescriptor;
     SkScalerContextEffects effects;
-    skPaint.getScalerContextDescriptor(&effects, desc, props, scalerContextFlags, viewMatrix);
+    SkScalerContext::CreateDescriptorAndEffectsUsingPaint(
+        skPaint, &props, scalerContextFlags, viewMatrix, desc, &effects);
     run->fTypeface.reset(SkSafeRef(skPaint.getTypeface()));
     run->fPathEffect = sk_ref_sp(effects.fPathEffect);
-    run->fRasterizer = sk_ref_sp(effects.fRasterizer);
     run->fMaskFilter = sk_ref_sp(effects.fMaskFilter);
     return SkGlyphCache::DetachCache(run->fTypeface.get(), effects, desc->getDesc());
 }
@@ -153,7 +154,7 @@ void GrAtlasTextBlob::appendBigGlyph(GrGlyph* glyph, SkGlyphCache* cache, const 
 }
 
 bool GrAtlasTextBlob::mustRegenerate(const GrTextUtils::Paint& paint,
-                                     const SkMaskFilter::BlurRec& blurRec,
+                                     const SkMaskFilterBase::BlurRec& blurRec,
                                      const SkMatrix& viewMatrix, SkScalar x, SkScalar y) {
     // If we have LCD text then our canonical color will be set to transparent, in this case we have
     // to regenerate the blob on any color change
@@ -348,7 +349,7 @@ static void calculate_translation(bool applyVM,
     }
 }
 
-void GrAtlasTextBlob::flushBigGlyphs(GrContext* context, GrTextUtils::Target* target,
+void GrAtlasTextBlob::flushBigGlyphs(GrTextUtils::Target* target,
                                      const GrClip& clip, const SkPaint& paint,
                                      const SkMatrix& viewMatrix, SkScalar x, SkScalar y,
                                      const SkIRect& clipBounds) {
@@ -367,11 +368,11 @@ void GrAtlasTextBlob::flushBigGlyphs(GrContext* context, GrTextUtils::Target* ta
     }
 }
 
-void GrAtlasTextBlob::flushBigRun(GrContext* context, GrTextUtils::Target* target,
-                                    const SkSurfaceProps& props, const SkTextBlobRunIterator& it,
-                                    const GrClip& clip, const GrTextUtils::Paint& paint,
-                                    SkDrawFilter* drawFilter, const SkMatrix& viewMatrix,
-                                    const SkIRect& clipBounds, SkScalar x, SkScalar y) {
+void GrAtlasTextBlob::flushBigRun(GrTextUtils::Target* target,
+                                  const SkSurfaceProps& props, const SkTextBlobRunIterator& it,
+                                  const GrClip& clip, const GrTextUtils::Paint& paint,
+                                  SkDrawFilter* drawFilter, const SkMatrix& viewMatrix,
+                                  const SkIRect& clipBounds, SkScalar x, SkScalar y) {
     size_t textLen = it.glyphCount() * sizeof(uint16_t);
     const SkPoint& offset = it.offset();
 
@@ -382,24 +383,24 @@ void GrAtlasTextBlob::flushBigRun(GrContext* context, GrTextUtils::Target* targe
 
     switch (it.positioning()) {
         case SkTextBlob::kDefault_Positioning:
-            GrTextUtils::DrawBigText(context, target, clip, runPaint, viewMatrix,
+            GrTextUtils::DrawBigText(target, clip, runPaint, viewMatrix,
                                      (const char*)it.glyphs(), textLen, x + offset.x(),
                                      y + offset.y(), clipBounds);
             break;
         case SkTextBlob::kHorizontal_Positioning:
-            GrTextUtils::DrawBigPosText(context, target, props, clip, runPaint, viewMatrix,
+            GrTextUtils::DrawBigPosText(target, props, clip, runPaint, viewMatrix,
                                         (const char*)it.glyphs(), textLen, it.pos(), 1,
                                         SkPoint::Make(x, y + offset.y()), clipBounds);
             break;
         case SkTextBlob::kFull_Positioning:
-            GrTextUtils::DrawBigPosText(context, target, props, clip, runPaint, viewMatrix,
+            GrTextUtils::DrawBigPosText(target, props, clip, runPaint, viewMatrix,
                                         (const char*)it.glyphs(), textLen, it.pos(), 2,
                                         SkPoint::Make(x, y), clipBounds);
             break;
     }
 }
 
-void GrAtlasTextBlob::flushCached(GrContext* context, GrTextUtils::Target* target,
+void GrAtlasTextBlob::flushCached(GrAtlasGlyphCache* atlasGlyphCache, GrTextUtils::Target* target,
                                   const SkTextBlob* blob, const SkSurfaceProps& props,
                                   const GrDistanceFieldAdjustTable* distanceAdjustTable,
                                   const GrTextUtils::Paint& paint, SkDrawFilter* drawFilter,
@@ -410,19 +411,20 @@ void GrAtlasTextBlob::flushCached(GrContext* context, GrTextUtils::Target* targe
     SkTextBlobRunIterator it(blob);
     for (int run = 0; !it.done(); it.next(), run++) {
         if (fRuns[run].fTooBigForAtlas) {
-            this->flushBigRun(context, target, props, it, clip, paint, drawFilter, viewMatrix,
+            this->flushBigRun(target, props, it, clip, paint, drawFilter, viewMatrix,
                               clipBounds, x, y);
             continue;
         }
         this->flushRun(target, clip, run, viewMatrix, x, y, paint, props, distanceAdjustTable,
-                       context->getAtlasGlyphCache());
+                       atlasGlyphCache);
     }
 
     // Now flush big glyphs
-    this->flushBigGlyphs(context, target, clip, paint, viewMatrix, x, y, clipBounds);
+    this->flushBigGlyphs(target, clip, paint, viewMatrix, x, y, clipBounds);
 }
 
-void GrAtlasTextBlob::flushThrowaway(GrContext* context, GrTextUtils::Target* target,
+void GrAtlasTextBlob::flushThrowaway(GrAtlasGlyphCache* atlasGlyphCache,
+                                     GrTextUtils::Target* target,
                                      const SkSurfaceProps& props,
                                      const GrDistanceFieldAdjustTable* distanceAdjustTable,
                                      const GrTextUtils::Paint& paint, const GrClip& clip,
@@ -430,11 +432,11 @@ void GrAtlasTextBlob::flushThrowaway(GrContext* context, GrTextUtils::Target* ta
                                      SkScalar x, SkScalar y) {
     for (int run = 0; run < fRunCount; run++) {
         this->flushRun(target, clip, run, viewMatrix, x, y, paint, props, distanceAdjustTable,
-                       context->getAtlasGlyphCache());
+                       atlasGlyphCache);
     }
 
     // Now flush big glyphs
-    this->flushBigGlyphs(context, target, clip, paint, viewMatrix, x, y, clipBounds);
+    this->flushBigGlyphs(target, clip, paint, viewMatrix, x, y, clipBounds);
 }
 
 std::unique_ptr<GrDrawOp> GrAtlasTextBlob::test_makeOp(

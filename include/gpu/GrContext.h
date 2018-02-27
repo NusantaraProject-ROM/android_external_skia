@@ -115,7 +115,7 @@ public:
     }
 
     /**
-     * Abandons all GPU resources and assumes the underlying backend 3D API context is not longer
+     * Abandons all GPU resources and assumes the underlying backend 3D API context is no longer
      * usable. Call this if you have lost the associated GPU context, and thus internal texture,
      * buffer, etc. references/IDs are now invalid. Calling this ensures that the destructors of the
      * GrContext and any of its created resource objects will not make backend 3D API calls. Content
@@ -216,19 +216,6 @@ public:
     /** Access the context capabilities */
     const GrCaps* caps() const { return fCaps.get(); }
 
-    /**
-     * Returns the recommended sample count for a render target when using this
-     * context.
-     *
-     * @param  config the configuration of the render target.
-     * @param  dpi the display density in dots per inch.
-     *
-     * @return sample count that should be perform well and have good enough
-     *         rendering quality for the display. Alternatively returns 0 if
-     *         MSAA is not supported or recommended to be used by default.
-     */
-    int getRecommendedSampleCount(GrPixelConfig config, SkScalar dpi) const;
-
     /*
      * Create a new render target context backed by a deferred-style
      * GrRenderTargetProxy. We guarantee that "asTextureProxy" will succeed for
@@ -300,14 +287,7 @@ public:
 
     ///////////////////////////////////////////////////////////////////////////
     // Functions intended for internal use only.
-    GrGpu* getGpu() { return fGpu.get(); }
-    const GrGpu* getGpu() const { return fGpu.get(); }
-    GrAtlasGlyphCache* getAtlasGlyphCache() { return fAtlasGlyphCache; }
-    GrTextBlobCache* getTextBlobCache() { return fTextBlobCache.get(); }
     bool abandoned() const;
-    GrResourceProvider* resourceProvider() { return fResourceProvider; }
-    const GrResourceProvider* resourceProvider() const { return fResourceProvider; }
-    GrResourceCache* getResourceCache() { return fResourceCache; }
 
     /** Reset GPU stats */
     void resetGpuStats() const ;
@@ -339,7 +319,7 @@ public:
     /** Get pointer to atlas texture for given mask format. Note that this wraps an
         actively mutating texture in an SkImage. This could yield unexpected results
         if it gets cached or used more generally. */
-    sk_sp<SkImage> getFontAtlasImage_ForTesting(GrMaskFormat format);
+    sk_sp<SkImage> getFontAtlasImage_ForTesting(GrMaskFormat format, uint32_t index = 0);
 
     GrAuditTrail* getAuditTrail() { return &fAuditTrail; }
 
@@ -351,6 +331,10 @@ public:
     // Provides access to functions that aren't part of the public API.
     GrContextPriv contextPriv();
     const GrContextPriv contextPriv() const;
+
+protected:
+    GrContext(GrContextThreadSafeProxy*);
+    GrContext(GrBackend);
 
 private:
     sk_sp<GrGpu>                            fGpu;
@@ -396,9 +380,7 @@ private:
     // TODO: have the GrClipStackClip use renderTargetContexts and rm this friending
     friend class GrContextPriv;
 
-    GrContext(GrBackend); // init must be called after the constructor.
-    GrContext(GrContextThreadSafeProxy*);
-    bool init(const GrContextOptions&);
+    bool init(const GrContextOptions&); // init must be called after either constructor.
 
     /**
      * These functions create premul <-> unpremul effects. If the second argument is 'true', they
