@@ -36,6 +36,7 @@ GrGpu::GrGpu(GrContext* context)
     : fResetTimestamp(kExpiredTimestamp+1)
     , fResetBits(kAll_GrBackendState)
     , fContext(context) {
+    fMultisampleSpecs.emplace_back(0, 0, nullptr); // Index 0 is an invalid unique id.
 }
 
 GrGpu::~GrGpu() {}
@@ -71,68 +72,22 @@ bool GrGpu::isACopyNeededForTextureParams(int width, int height,
     return false;
 }
 
-/**
- * Prior to creating a texture, make sure the type of texture being created is
- * supported by calling check_texture_creation_params.
- *
- * @param caps          The capabilities of the GL device.
- * @param desc          The descriptor of the texture to create.
- * @param isRT          Indicates if the texture can be a render target.
- * @param texels        The texel data for the mipmap levels
- * @param mipLevelCount The number of GrMipLevels in 'texels'
- */
-static bool check_texture_creation_params(const GrCaps& caps, const GrSurfaceDesc& desc,
-                                          bool* isRT,
-                                          const GrMipLevel texels[], int mipLevelCount) {
-    if (!caps.isConfigTexturable(desc.fConfig)) {
-        return false;
-    }
-
-    if (GrPixelConfigIsSint(desc.fConfig) && mipLevelCount > 1) {
-        return false;
-    }
-
-    *isRT = SkToBool(desc.fFlags & kRenderTarget_GrSurfaceFlag);
-    if (*isRT && !caps.isConfigRenderable(desc.fConfig, desc.fSampleCnt > 0)) {
-        return false;
-    }
-
-    // We currently do not support multisampled textures
-    if (!*isRT && desc.fSampleCnt > 0) {
-        return false;
-    }
-
-    if (*isRT) {
-        int maxRTSize = caps.maxRenderTargetSize();
-        if (desc.fWidth > maxRTSize || desc.fHeight > maxRTSize) {
-            return false;
-        }
-    } else {
-        int maxSize = caps.maxTextureSize();
-        if (desc.fWidth > maxSize || desc.fHeight > maxSize) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
 sk_sp<GrTexture> GrGpu::createTexture(const GrSurfaceDesc& origDesc, SkBudgeted budgeted,
                                       const GrMipLevel texels[], int mipLevelCount) {
     GR_CREATE_TRACE_MARKER_CONTEXT("GrGpu", "createTexture", fContext);
     GrSurfaceDesc desc = origDesc;
 
-    const GrCaps* caps = this->caps();
-    bool isRT = false;
-    bool textureCreationParamsValid = check_texture_creation_params(*caps, desc, &isRT,
-                                                                    texels, mipLevelCount);
-    if (!textureCreationParamsValid) {
+    GrMipMapped mipMapped = mipLevelCount > 1 ? GrMipMapped::kYes : GrMipMapped::kNo;
+    if (!this->caps()->validateSurfaceDesc(desc, mipMapped)) {
         return nullptr;
     }
 
-    desc.fSampleCnt = caps->getSampleCount(desc.fSampleCnt, desc.fConfig);
+    bool isRT = desc.fFlags & kRenderTarget_GrSurfaceFlag;
+    if (isRT) {
+        desc.fSampleCnt = this->caps()->getRenderTargetSampleCount(desc.fSampleCnt, desc.fConfig);
+    }
     // Attempt to catch un- or wrongly initialized sample counts.
-    SkASSERT(desc.fSampleCnt >= 0 && desc.fSampleCnt <= 64);
+    SkASSERT(desc.fSampleCnt > 0 && desc.fSampleCnt <= 64);
 
     if (mipLevelCount && (desc.fFlags & kPerformInitialClear_GrSurfaceFlag)) {
         return nullptr;
@@ -141,7 +96,7 @@ sk_sp<GrTexture> GrGpu::createTexture(const GrSurfaceDesc& origDesc, SkBudgeted 
     this->handleDirtyContext();
     sk_sp<GrTexture> tex = this->onCreateTexture(desc, budgeted, texels, mipLevelCount);
     if (tex) {
-        if (!caps->reuseScratchTextures() && !isRT) {
+        if (!this->caps()->reuseScratchTextures() && !isRT) {
             tex->resourcePriv().removeScratchKey();
         }
         fStats.incTextureCreates();
@@ -178,8 +133,11 @@ sk_sp<GrTexture> GrGpu::wrapBackendTexture(const GrBackendTexture& backendTex,
 sk_sp<GrTexture> GrGpu::wrapRenderableBackendTexture(const GrBackendTexture& backendTex,
                                                      int sampleCnt, GrWrapOwnership ownership) {
     this->handleDirtyContext();
+    if (sampleCnt < 1) {
+        return nullptr;
+    }
     if (!this->caps()->isConfigTexturable(backendTex.config()) ||
-        !this->caps()->isConfigRenderable(backendTex.config(), sampleCnt > 0)) {
+        !this->caps()->getRenderTargetSampleCount(sampleCnt, backendTex.config())) {
         return nullptr;
     }
 
@@ -196,7 +154,7 @@ sk_sp<GrTexture> GrGpu::wrapRenderableBackendTexture(const GrBackendTexture& bac
 }
 
 sk_sp<GrRenderTarget> GrGpu::wrapBackendRenderTarget(const GrBackendRenderTarget& backendRT) {
-    if (!this->caps()->isConfigRenderable(backendRT.config(), backendRT.sampleCnt() > 0)) {
+    if (0 == this->caps()->getRenderTargetSampleCount(backendRT.sampleCnt(), backendRT.config())) {
         return nullptr;
     }
     this->handleDirtyContext();
@@ -205,14 +163,14 @@ sk_sp<GrRenderTarget> GrGpu::wrapBackendRenderTarget(const GrBackendRenderTarget
 
 sk_sp<GrRenderTarget> GrGpu::wrapBackendTextureAsRenderTarget(const GrBackendTexture& tex,
                                                               int sampleCnt) {
-    this->handleDirtyContext();
-    if (!this->caps()->isConfigRenderable(tex.config(), sampleCnt > 0)) {
+    if (0 == this->caps()->getRenderTargetSampleCount(sampleCnt, tex.config())) {
         return nullptr;
     }
     int maxSize = this->caps()->maxTextureSize();
     if (tex.width() > maxSize || tex.height() > maxSize) {
         return nullptr;
     }
+    this->handleDirtyContext();
     return this->onWrapBackendTextureAsRenderTarget(tex, sampleCnt);
 }
 
@@ -261,7 +219,7 @@ bool GrGpu::getReadPixelsInfo(GrSurface* srcSurface, GrSurfaceOrigin srcOrigin,
 
     // Check to see if we're going to request that the caller draw when drawing is not possible.
     if (!srcSurface->asTexture() ||
-        !this->caps()->isConfigRenderable(tempDrawInfo->fTempSurfaceDesc.fConfig, false)) {
+        !this->caps()->isConfigRenderable(tempDrawInfo->fTempSurfaceDesc.fConfig)) {
         // If we don't have a fallback to a straight read then fail.
         if (kRequireDraw_DrawPreference == *drawPreference) {
             return false;
@@ -420,6 +378,48 @@ void GrGpu::didWriteToSurface(GrSurface* surface, const SkIRect* bounds, uint32_
             texture->texturePriv().markMipMapsDirty();
         }
     }
+}
+
+const GrGpu::MultisampleSpecs& GrGpu::queryMultisampleSpecs(const GrPipeline& pipeline) {
+    GrRenderTarget* rt = pipeline.renderTarget();
+    SkASSERT(rt->numStencilSamples() > 1);
+
+    GrStencilSettings stencil;
+    if (pipeline.isStencilEnabled()) {
+        // TODO: attach stencil and create settings during render target flush.
+        SkASSERT(rt->renderTargetPriv().getStencilAttachment());
+        stencil.reset(*pipeline.getUserStencil(), pipeline.hasStencilClip(),
+                      rt->renderTargetPriv().numStencilBits());
+    }
+
+    int effectiveSampleCnt;
+    SkSTArray<16, SkPoint, true> pattern;
+    this->onQueryMultisampleSpecs(rt, pipeline.proxy()->origin(), stencil,
+                                  &effectiveSampleCnt, &pattern);
+    SkASSERT(effectiveSampleCnt >= rt->numStencilSamples());
+
+    uint8_t id;
+    if (this->caps()->sampleLocationsSupport()) {
+        SkASSERT(pattern.count() == effectiveSampleCnt);
+        const auto& insertResult = fMultisampleSpecsIdMap.insert(
+            MultisampleSpecsIdMap::value_type(pattern, SkTMin(fMultisampleSpecs.count(), 255)));
+        id = insertResult.first->second;
+        if (insertResult.second) {
+            // This means the insert did not find the pattern in the map already, and therefore an
+            // actual insertion took place. (We don't expect to see many unique sample patterns.)
+            const SkPoint* sampleLocations = insertResult.first->first.begin();
+            SkASSERT(id == fMultisampleSpecs.count());
+            fMultisampleSpecs.emplace_back(id, effectiveSampleCnt, sampleLocations);
+        }
+    } else {
+        id = effectiveSampleCnt;
+        for (int i = fMultisampleSpecs.count(); i <= id; ++i) {
+            fMultisampleSpecs.emplace_back(i, i, nullptr);
+        }
+    }
+    SkASSERT(id > 0);
+
+    return fMultisampleSpecs[id];
 }
 
 bool GrGpu::SamplePatternComparator::operator()(const SamplePattern& a,

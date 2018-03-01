@@ -15,7 +15,7 @@
 #include "glsl/GrGLSLGeometryProcessor.h"
 #include "glsl/GrGLSLVarying.h"
 
-class GrGLSLFragmentBuilder;
+class GrGLSLPPFragmentBuilder;
 class GrGLSLVertexGeoBuilder;
 class GrMesh;
 
@@ -59,7 +59,7 @@ public:
     enum class RenderPass {
         // For a Hull, the Impl generates a "conservative raster hull" around the input points. This
         // is the geometry that causes a pixel to be rasterized if it is touched anywhere by the
-        // input polygon. The initial coverage values sent to the Shader at each vertex are either
+        // input polygon. The input coverage values sent to the Shader at each vertex are either
         // null, or +1 all around if the Impl combines this pass with kTriangleEdges. Logically,
         // the conservative raster hull is equivalent to the convex hull of pixel size boxes
         // centered on each input point.
@@ -68,7 +68,7 @@ public:
         kCubicHulls,
 
         // For Edges, the Impl generates conservative rasters around every input edge (i.e. convex
-        // hulls of two pixel-size boxes centered on both of the edge's endpoints). The initial
+        // hulls of two pixel-size boxes centered on both of the edge's endpoints). The input
         // coverage values sent to the Shader at each vertex are -1 on the outside border of the
         // edge geometry and 0 on the inside. This is the only geometry type that associates
         // coverage values with the output vertices. Interpolated, these coverage values convert
@@ -80,7 +80,7 @@ public:
 
         // For Corners, the Impl Generates the conservative rasters of corner points (i.e.
         // pixel-size boxes). It generates 3 corner boxes for triangles and 2 for curves. The Shader
-        // specifies which corners. Initial coverage values sent to the Shader will be null.
+        // specifies which corners. Input coverage values sent to the Shader will be null.
         kTriangleCorners,
         kQuadraticCorners,
         kCubicCorners
@@ -162,10 +162,14 @@ public:
                                    const char* repetitionID, const char* wind,
                                    GeometryVars*) const {}
 
-        void emitVaryings(GrGLSLVaryingHandler*, GrGLSLVarying::Scope, SkString* code,
-                          const char* position, const char* coverage, const char* wind);
+        void emitVaryings(GrGLSLVaryingHandler* varyingHandler, GrGLSLVarying::Scope scope,
+                          SkString* code, const char* position, const char* inputCoverage,
+                          const char* wind) {
+            SkASSERT(GrGLSLVarying::Scope::kVertToGeo != scope);
+            this->onEmitVaryings(varyingHandler, scope, code, position, inputCoverage, wind);
+        }
 
-        void emitFragmentCode(const GrCCCoverageProcessor& proc, GrGLSLFragmentBuilder*,
+        void emitFragmentCode(const GrCCCoverageProcessor& proc, GrGLSLPPFragmentBuilder*,
                               const char* skOutputColor, const char* skOutputCoverage) const;
 
         // Defines an equation ("dot(float3(pt, 1), distance_equation)") that is -1 on the outside
@@ -178,26 +182,17 @@ public:
         virtual ~Shader() {}
 
     protected:
-        enum class WindHandling : bool {
-            kHandled,
-            kNotHandled
-        };
-
         // Here the subclass adds its internal varyings to the handler and produces code to
-        // initialize those varyings from a given position, coverage value, and wind.
+        // initialize those varyings from a given position, input coverage value, and wind.
         //
-        // Returns whether the subclass will handle wind modulation or if this base class should
-        // take charge of multiplying the final coverage output by "wind".
-        //
-        // NOTE: the coverage parameter is only relevant for edges (see comments in RenderPass).
+        // NOTE: the coverage input is only relevant for edges (see comments in RenderPass).
         // Otherwise it is +1 all around.
-        virtual WindHandling onEmitVaryings(GrGLSLVaryingHandler*, GrGLSLVarying::Scope,
-                                            SkString* code, const char* position,
-                                            const char* coverage, const char* wind) = 0;
+        virtual void onEmitVaryings(GrGLSLVaryingHandler*, GrGLSLVarying::Scope, SkString* code,
+                                    const char* position, const char* inputCoverage,
+                                    const char* wind) = 0;
 
-        // Emits the fragment code that calculates a pixel's coverage value. If using
-        // WindHandling::kHandled, this value must be signed appropriately.
-        virtual void onEmitFragmentCode(GrGLSLFragmentBuilder*,
+        // Emits the fragment code that calculates a pixel's signed coverage value.
+        virtual void onEmitFragmentCode(GrGLSLPPFragmentBuilder*,
                                         const char* outputCoverage) const = 0;
 
         // Returns the name of a Shader's internal varying at the point where where its value is
@@ -212,10 +207,7 @@ public:
         // center. Subclasses can use this for software multisampling.
         //
         // Returns the number of samples.
-        static int DefineSoftSampleLocations(GrGLSLFragmentBuilder* f, const char* samplesName);
-
-    private:
-        GrGLSLVarying fWind;
+        static int DefineSoftSampleLocations(GrGLSLPPFragmentBuilder* f, const char* samplesName);
     };
 
     class GSImpl;

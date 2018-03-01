@@ -149,6 +149,7 @@ static void apply_premul(const SkImageInfo& info, void* pixels, size_t rowBytes)
         for (int x = 0; x < info.width(); ++x) {
             row[x] = SkPreMultiplyColor(row[x]);
         }
+        row = (SkColor*)((char*)(row) + rowBytes);
     }
 }
 
@@ -438,13 +439,8 @@ static sk_sp<SkImage> make_from_yuv_textures_copy(GrContext* ctx, SkYUVColorSpac
 
     // Needs to be a render target in order to draw to it for the yuv->rgb conversion.
     sk_sp<GrRenderTargetContext> renderTargetContext(ctx->makeDeferredRenderTargetContext(
-                                                                         SkBackingFit::kExact,
-                                                                         width, height,
-                                                                         kRGBA_8888_GrPixelConfig,
-                                                                         std::move(imageColorSpace),
-                                                                         0,
-                                                                         GrMipMapped::kNo,
-                                                                         origin));
+            SkBackingFit::kExact, width, height, kRGBA_8888_GrPixelConfig,
+            std::move(imageColorSpace), 1, GrMipMapped::kNo, origin));
     if (!renderTargetContext) {
         return nullptr;
     }

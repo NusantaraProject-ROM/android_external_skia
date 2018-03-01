@@ -3,6 +3,16 @@ SkPixmap Reference
 
 # <a name="Pixmap"></a> Pixmap
 
+## <a name="Overview"></a> Overview
+
+## <a name="Subtopics"></a> Subtopics
+
+| name | description |
+| --- | --- |
+| <a href="#Constructors">Constructors</a> | functions that construct <a href="SkPixmap_Reference#SkPixmap">SkPixmap</a> |
+| <a href="#Member_Functions">Member Functions</a> | static functions and member methods |
+| <a href="#Related_Functions">Related Functions</a> | similar methods grouped together |
+
 # <a name="SkPixmap"></a> Class SkPixmap
 <a href="#Pixmap">Pixmap</a> provides a utility to pair <a href="SkImageInfo_Reference#SkImageInfo">SkImageInfo</a> with pixels and row bytes.
 <a href="#Pixmap">Pixmap</a> is a low level class which provides convenience functions to access
@@ -15,20 +25,10 @@ pixels referenced by <a href="#Pixmap">Pixmap</a>.
 <a href="#Pixmap">Pixmap</a> does not try to manage the lifetime of the pixel memory. Use <a href="undocumented#Pixel_Ref">Pixel Ref</a>
 to manage pixel memory; <a href="undocumented#Pixel_Ref">Pixel Ref</a> is safe across threads.
 
-# <a name="Overview"></a> Overview
-
-## <a name="Subtopics"></a> Subtopics
-
-| name | description |
-| --- | ---  |
-| <a href="#Overview_Constructors">Constructors</a> | list of functions that construct <a href="SkPath_Reference#SkPath">SkPath</a> |
-| <a href="#Overview_Member_Functions">Member Functions</a> | list of static functions and member methods |
-| <a href="#Overview_Related_Functions">Related Functions</a> | similar methods grouped together |
-
 ## <a name="Related_Functions"></a> Related Functions
 
 | name | description |
-| --- | ---  |
+| --- | --- |
 | <a href="#Image_Info_Access">Image Info Access</a> | returns all or part of <a href="SkImageInfo_Reference#Image_Info">Image Info</a> |
 | <a href="#Initialization">Initialization</a> | sets fields for use |
 | <a href="#Readable_Address">Readable Address</a> | returns read only pixels |
@@ -38,15 +38,15 @@ to manage pixel memory; <a href="undocumented#Pixel_Ref">Pixel Ref</a> is safe a
 
 ## <a name="Constructors"></a> Constructors
 
-|  | description |
-| --- | ---  |
+| name | description |
+| --- | --- |
 | <a href="#SkPixmap_empty_constructor">SkPixmap()</a> | constructs with default values |
 | <a href="#SkPixmap_const_SkImageInfo_const_star">SkPixmap(const SkImageInfo& info, const void* addr, size t rowBytes)</a> | constructs from <a href="SkImageInfo_Reference#Image_Info">Image Info</a>, pixels |
 
 ## <a name="Member_Functions"></a> Member Functions
 
 | name | description |
-| --- | ---  |
+| --- | --- |
 | <a href="#SkPixmap_addr">addr</a> | returns readable pixel address as void pointer |
 | <a href="#SkPixmap_addr16">addr16</a> | returns readable pixel address as 16-bit pointer |
 | <a href="#SkPixmap_addr32">addr32</a> | returns readable pixel address as 32-bit pointer |
@@ -100,7 +100,7 @@ empty <a href="#Pixmap">Pixmap</a>
 
 ### Example
 
-<div><fiddle-embed name="7befb4876e17f4bfc89ae8c54aef8660">
+<div><fiddle-embed name="9547e74a9d37553a667b913ffd1312dd">
 
 #### Example Output
 
@@ -187,7 +187,7 @@ memory if desired.
 
 ### Example
 
-<div><fiddle-embed name="759feda9c22260f96567b9e2ccc1a118">
+<div><fiddle-embed name="d9eb583c39f4f0baea79896b89245c98">
 
 #### Example Output
 
@@ -375,7 +375,7 @@ reference to ImageInfo
 
 ### Example
 
-<div><fiddle-embed name="7294fbffeb15bf062b6ce989719b783f">
+<div><fiddle-embed name="6e0f558bf7fabc655041116288559134">
 
 #### Example Output
 
@@ -536,7 +536,8 @@ SkColorType colorType() const
 
 Returns <a href="SkImageInfo_Reference#Color_Type">Color Type</a>, one of: <a href="SkImageInfo_Reference#SkColorType">kUnknown SkColorType</a>, <a href="SkImageInfo_Reference#SkColorType">kAlpha 8 SkColorType</a>,
 <a href="SkImageInfo_Reference#SkColorType">kRGB 565 SkColorType</a>, <a href="SkImageInfo_Reference#SkColorType">kARGB 4444 SkColorType</a>, <a href="SkImageInfo_Reference#SkColorType">kRGBA 8888 SkColorType</a>,
-<a href="SkImageInfo_Reference#SkColorType">kBGRA 8888 SkColorType</a>, <a href="SkImageInfo_Reference#SkColorType">kGray 8 SkColorType</a>, <a href="SkImageInfo_Reference#SkColorType">kRGBA F16 SkColorType</a>.
+<a href="SkImageInfo_Reference#SkColorType">kRGB 888x SkColorType</a>, <a href="SkImageInfo_Reference#SkColorType">kBGRA 8888 SkColorType</a>, <a href="SkImageInfo_Reference#SkColorType">kRGBA 1010102 SkColorType</a>,
+<a href="SkImageInfo_Reference#SkColorType">kRGB 101010x SkColorType</a>, <a href="SkImageInfo_Reference#SkColorType">kGray 8 SkColorType</a>, <a href="SkImageInfo_Reference#SkColorType">kRGBA F16 SkColorType</a>.
 
 ### Return Value
 
@@ -544,12 +545,12 @@ Returns <a href="SkImageInfo_Reference#Color_Type">Color Type</a>, one of: <a hr
 
 ### Example
 
-<div><fiddle-embed name="57cebd9fc88c4dfe04b20d0ff34f77fd">
+<div><fiddle-embed name="0ab5c7af272685f2ce177cc79e6b9457">
 
 #### Example Output
 
 ~~~~
-color type: kAlpha_SkColorType
+color type: kAlpha_8_SkColorType
 ~~~~
 
 </fiddle-embed></div>
@@ -748,13 +749,13 @@ one of: 0, 1, 2, 3; left shift to convert pixels to bytes
 
 ### Example
 
-<div><fiddle-embed name="d91065811bb118dd686a2b94abe3360a">
+<div><fiddle-embed name="2e778ffd6edea51af4b07f5d322ceb6a">
 
 #### Example Output
 
 ~~~~
 color: kUnknown_SkColorType   bytesPerPixel: 0 shiftPerPixel: 0
-color: kAlpha_SkColorType     bytesPerPixel: 1 shiftPerPixel: 0
+color: kAlpha_8_SkColorType   bytesPerPixel: 1 shiftPerPixel: 0
 color: kRGB_565_SkColorType   bytesPerPixel: 2 shiftPerPixel: 1
 color: kARGB_4444_SkColorType bytesPerPixel: 2 shiftPerPixel: 1
 color: kRGBA_8888_SkColorType bytesPerPixel: 4 shiftPerPixel: 2
