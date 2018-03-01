@@ -17,9 +17,9 @@ SkottieSlide::SkottieSlide(const SkString& name, const SkString& path)
 }
 
 void SkottieSlide::load(SkScalar w, SkScalar h) {
-    fAnimation  = skottie::Animation::MakeFromFile(fPath.c_str());
-    fWinSize    = SkSize::Make(w, h);
-    fTimeBase   = 0; // force a time reset
+    fAnimation = skottie::Animation::MakeFromFile(fPath.c_str());
+    fWinSize   = SkSize::Make(w, h);
+    fTimeBase  = 0; // force a time reset
 
     if (fAnimation) {
         fAnimation->setShowInval(fShowAnimationInval);
@@ -76,4 +76,17 @@ bool SkottieSlide::onChar(SkUnichar c) {
     }
 
     return INHERITED::onChar(c);
+}
+
+bool SkottieSlide::onMouse(SkScalar x, SkScalar y, sk_app::Window::InputState state, uint32_t) {
+    switch (state) {
+    case sk_app::Window::kUp_InputState:
+        fShowAnimationInval = !fShowAnimationInval;
+        fAnimation->setShowInval(fShowAnimationInval);
+        break;
+    default:
+        break;
+    }
+
+    return false;
 }

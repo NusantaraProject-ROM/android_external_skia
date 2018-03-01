@@ -5,7 +5,6 @@
  * found in the LICENSE file.
  */
 
-#include "DMFontMgr.h"
 #include "DMJsonWriter.h"
 #include "DMSrcSink.h"
 #include "ProcStats.h"
@@ -37,6 +36,7 @@
 #include "SkPngEncoder.h"
 #include "SkScan.h"
 #include "SkSpinlock.h"
+#include "SkTestFontMgr.h"
 #include "SkTHash.h"
 #include "SkTaskGroup.h"
 #include "SkTypeface_win.h"
@@ -58,6 +58,10 @@ extern void SkPDFImageDumpStats();
 
 #ifndef SK_BUILD_FOR_WIN
     #include <unistd.h>
+#endif
+
+#if defined(SK_BUILD_FOR_ANDROID_FRAMEWORK) && defined(SK_HAS_HEIF_LIBRARY)
+#include <binder/IPCThreadState.h>
 #endif
 
 extern bool gSkForceRasterPipelineBlitter;
@@ -99,8 +103,6 @@ DEFINE_bool(ignoreSigInt, false, "ignore SIGINT signals during test execution");
 
 DEFINE_string(dont_write, "", "File extensions to skip writing to --writePath.");  // See skia:6821
 
-DEFINE_bool(nativeFonts, true, "If true, use native font manager and rendering. "
-                               "If false, fonts will draw as portably as possible.");
 DEFINE_bool(gdi, false, "On Windows, use GDI instead of DirectWrite for font rendering.");
 
 using namespace DM;
@@ -915,6 +917,7 @@ static Sink* create_sink(const GrContextOptions& grCtxOptions, const SkCommandLi
         SINK("1010102", RasterSink, kRGBA_1010102_SkColorType);
         SINK("101010x", RasterSink, kRGB_101010x_SkColorType);
         SINK("f16",     RasterSink, kRGBA_F16_SkColorType, srgbLinearColorSpace);
+        SINK("t8888",   ThreadedSink, kN32_SkColorType);
         SINK("pdf",     PDFSink, false, SK_ScalarDefaultRasterDPI);
         SINK("skp",     SKPSink);
         SINK("pipe",    PipeSink);
@@ -1313,10 +1316,13 @@ static sk_sp<SkTypeface> create_from_name(const char familyName[], SkFontStyle s
 extern sk_sp<SkTypeface> (*gCreateTypefaceDelegate)(const char [], SkFontStyle );
 
 int main(int argc, char** argv) {
+#if defined(SK_BUILD_FOR_ANDROID_FRAMEWORK) && defined(SK_HAS_HEIF_LIBRARY)
+    android::ProcessState::self()->startThreadPool();
+#endif
     SkCommandLineFlags::Parse(argc, argv);
 
     if (!FLAGS_nativeFonts) {
-        gSkFontMgr_DefaultFactory = &DM::MakeFontMgr;
+        gSkFontMgr_DefaultFactory = &sk_tool_utils::MakePortableFontMgr;
     }
 
 #if defined(SK_BUILD_FOR_WIN)

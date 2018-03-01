@@ -228,6 +228,12 @@
         "Build-Debian9-Clang-x86_64-Release-Mini"
       ]
     },
+    "Build-Debian9-Clang-x86_64-Release-NoDEPS": {
+      "priority": 0.8,
+      "tasks": [
+        "Build-Debian9-Clang-x86_64-Release-NoDEPS"
+      ]
+    },
     "Build-Debian9-Clang-x86_64-Release-ParentRevision": {
       "priority": 0.8,
       "tasks": [
@@ -4385,6 +4391,36 @@
       "isolate": "compile_skia.isolate",
       "priority": 0.8
     },
+    "Build-Debian9-Clang-x86_64-Release-NoDEPS": {
+      "cipd_packages": [
+        {
+          "name": "skia/bots/clang_linux",
+          "path": "clang_linux",
+          "version": "version:10"
+        }
+      ],
+      "dimensions": [
+        "cpu:x86-64-Haswell_GCE",
+        "gpu:none",
+        "os:Debian-9.2",
+        "pool:Skia"
+      ],
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "compile",
+        "repository=<(REPO)",
+        "buildername=Build-Debian9-Clang-x86_64-Release-NoDEPS",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "isolate": "compile_skia.isolate",
+      "priority": 0.8
+    },
     "Build-Debian9-Clang-x86_64-Release-ParentRevision": {
       "cipd_packages": [
         {
@@ -7839,7 +7875,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -7874,7 +7910,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -7909,7 +7945,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -7942,7 +7978,7 @@
         "Housekeeper-PerCommit-IsolateSKP"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -7975,7 +8011,7 @@
         "Housekeeper-PerCommit-IsolateSKP"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -8010,7 +8046,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -8043,7 +8079,7 @@
         "Housekeeper-PerCommit-IsolateSKP"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -12009,7 +12045,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12056,7 +12092,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12103,7 +12139,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12150,7 +12186,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12197,7 +12233,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12244,7 +12280,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12291,7 +12327,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12338,7 +12374,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12385,7 +12421,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12432,7 +12468,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12479,7 +12515,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12526,7 +12562,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12573,7 +12609,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12620,7 +12656,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -16848,7 +16884,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -16884,7 +16920,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -16920,7 +16956,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -16956,7 +16992,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -16992,7 +17028,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -22270,7 +22306,7 @@
       ],
       "dimensions": [
         "cpu:x86-64-i7-5557U",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22318,7 +22354,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22366,7 +22402,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22414,7 +22450,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22462,7 +22498,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22510,7 +22546,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22558,7 +22594,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22606,7 +22642,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22654,7 +22690,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22702,7 +22738,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22750,7 +22786,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22798,7 +22834,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22846,7 +22882,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22894,7 +22930,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22942,7 +22978,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22990,7 +23026,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,

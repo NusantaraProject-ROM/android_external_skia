@@ -5,8 +5,10 @@ SkQP (Skia Quality Program) is a component of the Android CTS (Compatablity
 Test Suite) that tests an Android device's GPU and OpenGLES & Vulkan drivers
 using Skia's existing unit & rendering tests.
 
-How to run the SkQP tests
--------------------------
+See https://skia.org/dev/testing/skqp for pre-build APKs.
+
+How to build and run the SkQP tests
+-----------------------------------
 
 1.  Get the dependencies:
 
@@ -20,7 +22,7 @@ How to run the SkQP tests
     -   Install the [Android NDK](https://developer.android.com/ndk/downloads/).
 
             ( cd ~; unzip ~/Downloads/android-ndk-*.zip )
-            ANDROID_NDK=$(ls ~/android-ndk-*)   # Or wherever you installed the Android NDK.
+            ANDROID_NDK=$(ls -d ~/android-ndk-*)   # Or wherever you installed the Android NDK.
 
     -   Install the [Android SDK](https://developer.android.com/studio/#command-tools).
         Set the `ANDROID_HOME` environment variable.
@@ -62,7 +64,7 @@ How to run the SkQP tests
         platform_tools/android/bin/android_build_app -C out/skqp-arm skqp
         adb install -r out/skqp-arm/skqp.apk
         adb logcat -c
-        adb shell am instrument -w org.skia.skqp/android.support.test.runner.AndroidJUnitRunner
+        adb shell am instrument -w org.skia.skqp
 
 6.  Monitor the output with:
 
@@ -78,6 +80,17 @@ How to run the SkQP tests
         OUTPUT_LOCATION="/storage/emulated/0/Android/data/org.skia.skqp/files/output"
         adb pull $OUTPUT_LOCATION /tmp/
         tools/skqp/sysopen.py /tmp/output/skqp_report/report.html
+
+Running a single test
+---------------------
+
+To run a single test, for example `gles/aarectmodes`:
+
+    adb shell am instrument -e class 'org.skia.skqp.SkQPRunner#gles/aarectmodes' -w org.skia.skqp
+
+Unit tests can be run with the `unitTest/` prefix:
+
+    adb shell am instrument -e class 'org.skia.skqp.SkQPRunner#unitTest/GrSurface -w org.skia.skqp
 
 Run as a non-APK executable
 ---------------------------

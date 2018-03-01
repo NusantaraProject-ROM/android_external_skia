@@ -7,6 +7,7 @@
 
 #include "Viewer.h"
 
+#include "BisectSlide.h"
 #include "GMSlide.h"
 #include "ImageSlide.h"
 #include "Resources.h"
@@ -19,9 +20,11 @@
 #include "SkCanvas.h"
 #include "SkColorSpacePriv.h"
 #include "SkColorSpaceXformCanvas.h"
+#include "SkCommonFlags.h"
 #include "SkCommandLineFlags.h"
 #include "SkCommonFlagsGpu.h"
 #include "SkEventTracingPriv.h"
+#include "SkFontMgrPriv.h"
 #include "SkGraphics.h"
 #include "SkImagePriv.h"
 #include "SkOSFile.h"
@@ -32,6 +35,7 @@
 #include "SkStream.h"
 #include "SkSurface.h"
 #include "SkTaskGroup.h"
+#include "SkTestFontMgr.h"
 #include "SkThreadedBMPDevice.h"
 
 #include "imgui.h"
@@ -49,16 +53,6 @@ Application* Application::Create(int argc, char** argv, void* platformData) {
     return new Viewer(argc, argv, platformData);
 }
 
-static DEFINE_string2(match, m, nullptr,
-               "[~][^]substring[$] [...] of bench name to run.\n"
-               "Multiple matches may be separated by spaces.\n"
-               "~ causes a matching bench to always be skipped\n"
-               "^ requires the start of the bench to match\n"
-               "$ requires the end of the bench to match\n"
-               "^ and $ requires an exact match\n"
-               "If a bench does not match any list entry,\n"
-               "it is skipped unless some list entry starts with ~");
-
 static DEFINE_string(slide, "", "Start on this sample.");
 static DEFINE_bool(list, false, "List samples?");
 
@@ -68,19 +62,11 @@ static DEFINE_bool(list, false, "List samples?");
 #    define BACKENDS_STR "\"sw\" and \"gl\""
 #endif
 
-#ifdef SK_BUILD_FOR_ANDROID
-static DEFINE_string(skps, "/data/local/tmp/skps", "Directory to read skps from.");
-static DEFINE_string(jpgs, "/data/local/tmp/resources", "Directory to read jpgs from.");
-static DEFINE_string(jsons, "/data/local/tmp/jsons", "Directory to read (Bodymovin) jsons from.");
-#else
-static DEFINE_string(skps, "skps", "Directory to read skps from.");
-static DEFINE_string(jpgs, "jpgs", "Directory to read jpgs from.");
-static DEFINE_string(jsons, "jsons", "Directory to read (Bodymovin) jsons from.");
-#endif
-
 static DEFINE_string2(backend, b, "sw", "Backend to use. Allowed values are " BACKENDS_STR ".");
 
 static DEFINE_int32(msaa, 1, "Number of subpixel samples. 0 for no HW antialiasing.");
+
+DEFINE_string(bisect, "", "Path to a .skp or .svg file to bisect.");
 
 DECLARE_int32(threads)
 
@@ -215,6 +201,10 @@ Viewer::Viewer(int argc, char** argv, void* platformData)
 #ifdef SK_BUILD_FOR_ANDROID
     SetResourcePath("/data/local/tmp/resources");
 #endif
+
+    if (!FLAGS_nativeFonts) {
+        gSkFontMgr_DefaultFactory = &sk_tool_utils::MakePortableFontMgr;
+    }
 
     initializeEventTracingForTools();
     static SkTaskGroup::Enabler kTaskGroupEnabler(FLAGS_threads);
@@ -478,23 +468,36 @@ Viewer::Viewer(int argc, char** argv, void* platformData)
 void Viewer::initSlides() {
     fAllSlideNames = Json::Value(Json::arrayValue);
 
+    // Bisect slide.
+    if (!FLAGS_bisect.isEmpty()) {
+        sk_sp<BisectSlide> bisect = BisectSlide::Create(FLAGS_bisect[0]);
+        if (bisect && !SkCommandLineFlags::ShouldSkip(FLAGS_match, bisect->getName().c_str())) {
+            if (FLAGS_bisect.count() >= 2) {
+                for (const char* ch = FLAGS_bisect[1]; *ch; ++ch) {
+                    bisect->onChar(*ch);
+                }
+            }
+            fSlides.push_back(std::move(bisect));
+        }
+    }
+
+    // GMs
+    int firstGM = fSlides.count();
     const skiagm::GMRegistry* gms(skiagm::GMRegistry::Head());
     while (gms) {
         std::unique_ptr<skiagm::GM> gm(gms->factory()(nullptr));
 
         if (!SkCommandLineFlags::ShouldSkip(FLAGS_match, gm->getName())) {
             sk_sp<Slide> slide(new GMSlide(gm.release()));
-            fSlides.push_back(slide);
+            fSlides.push_back(std::move(slide));
         }
 
         gms = gms->next();
     }
-
-    // reverse array
-    for (int i = 0; i < fSlides.count()/2; ++i) {
-        sk_sp<Slide> temp = fSlides[i];
-        fSlides[i] = fSlides[fSlides.count() - i - 1];
-        fSlides[fSlides.count() - i - 1] = temp;
+    // reverse gms
+    int numGMs = fSlides.count() - firstGM;
+    for (int i = 0; i < numGMs/2; ++i) {
+        std::swap(fSlides[firstGM + i], fSlides[fSlides.count() - i - 1]);
     }
 
     // samples
@@ -555,8 +558,6 @@ void Viewer::initSlides() {
 
     // JSONs
     for (const auto& json : FLAGS_jsons) {
-        fSlides.push_back(sk_make_sp<SkottieSlide2>(json));
-
         SkTArray<sk_sp<Slide>, true> dirSlides;
 
         SkOSFile::Iter it(json.c_str(), ".json");
@@ -1009,10 +1010,26 @@ void Viewer::onPaint(SkCanvas* canvas) {
     this->updateUIState();
 }
 
+SkPoint Viewer::mapEvent(float x, float y) {
+    const auto m = this->computeMatrix();
+    SkMatrix inv;
+
+    SkAssertResult(m.invert(&inv));
+
+    return inv.mapXY(x, y);
+}
+
 bool Viewer::onTouch(intptr_t owner, Window::InputState state, float x, float y) {
     if (GestureDevice::kMouse == fGestureDevice) {
         return false;
     }
+
+    const auto slidePt = this->mapEvent(x, y);
+    if (fSlides[fCurrentSlide]->onMouse(slidePt.x(), slidePt.y(), state, 0)) {
+        fWindow->inval();
+        return true;
+    }
+
     void* castedOwner = reinterpret_cast<void*>(owner);
     switch (state) {
         case Window::kUp_InputState: {
@@ -1038,15 +1055,10 @@ bool Viewer::onMouse(int x, int y, Window::InputState state, uint32_t modifiers)
         return false;
     }
 
-    const auto slideMatrix = this->computeMatrix();
-    SkMatrix slideInvMatrix;
-    if (slideMatrix.invert(&slideInvMatrix)) {
-        SkPoint slideMouse = SkPoint::Make(x, y);
-        slideInvMatrix.mapPoints(&slideMouse, 1);
-        if (fSlides[fCurrentSlide]->onMouse(slideMouse.x(), slideMouse.y(), state, modifiers)) {
-            fWindow->inval();
-            return true;
-        }
+    const auto slidePt = this->mapEvent(x, y);
+    if (fSlides[fCurrentSlide]->onMouse(slidePt.x(), slidePt.y(), state, modifiers)) {
+        fWindow->inval();
+        return true;
     }
 
     switch (state) {

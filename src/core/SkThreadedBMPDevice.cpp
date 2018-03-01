@@ -67,6 +67,7 @@ SkThreadedBMPDevice::SkThreadedBMPDevice(const SkBitmap& bitmap,
 
 void SkThreadedBMPDevice::flush() {
     fQueue.reset();
+    fAlloc.reset();
 }
 
 SkThreadedBMPDevice::DrawState::DrawState(SkThreadedBMPDevice* dev) {
@@ -156,7 +157,7 @@ void SkThreadedBMPDevice::drawPath(const SkPath& path, const SkPaint& paint,
         const SkMatrix* prePathMatrix, bool pathIsMutable) {
     SkRect drawBounds = path.isInverseFillType() ? SkRectPriv::MakeLargest()
                                                  : get_fast_bounds(path.getBounds(), paint);
-    if (path.countVerbs() < 100) { // when path is small, init-once has too much overhead
+    if (path.countVerbs() < 4) { // when path is small, init-once has too much overhead
         fQueue.push(drawBounds, [=](SkArenaAlloc*, const DrawState& ds, const SkIRect& tileBounds) {
             TileDraw(ds, tileBounds).drawPath(path, paint, prePathMatrix, false);
         });
@@ -218,8 +219,9 @@ void SkThreadedBMPDevice::drawVertices(const SkVertices* vertices, SkBlendMode b
 void SkThreadedBMPDevice::drawDevice(SkBaseDevice* device, int x, int y, const SkPaint& paint) {
     SkASSERT(!paint.getImageFilter());
     SkRect drawBounds = SkRect::MakeXYWH(x, y, device->width(), device->height());
+    // copy the bitmap because it may deleted after this call
+    SkBitmap* bitmap = fAlloc.make<SkBitmap>(static_cast<SkBitmapDevice*>(device)->fBitmap);
     fQueue.push(drawBounds, [=](SkArenaAlloc*, const DrawState& ds, const SkIRect& tileBounds){
-        TileDraw(ds, tileBounds).drawSprite(static_cast<SkBitmapDevice*>(device)->fBitmap,
-                                            x, y, paint);
+        TileDraw(ds, tileBounds).drawSprite(*bitmap, x, y, paint);
     });
 }

@@ -83,7 +83,7 @@ public:
     ~SkTable_ColorFilter() override { delete fBitmap; }
 
     bool asComponentTable(SkBitmap* table) const override;
-    sk_sp<SkColorFilter> makeComposed(sk_sp<SkColorFilter> inner) const override;
+    sk_sp<SkColorFilter> onMakeComposed(sk_sp<SkColorFilter> inner) const override;
 
 #if SK_SUPPORT_GPU
     std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(
@@ -270,7 +270,7 @@ static void combine_tables(uint8_t res[256], const uint8_t outer[256], const uin
     }
 }
 
-sk_sp<SkColorFilter> SkTable_ColorFilter::makeComposed(sk_sp<SkColorFilter> innerFilter) const {
+sk_sp<SkColorFilter> SkTable_ColorFilter::onMakeComposed(sk_sp<SkColorFilter> innerFilter) const {
     SkBitmap innerBM;
     if (!innerFilter->asComponentTable(&innerBM)) {
         return nullptr;
@@ -447,6 +447,10 @@ std::unique_ptr<GrFragmentProcessor> ColorTableEffect::Make(GrContext* context,
     // TODO: this seems a bit heavy handed (passing a GrContext as part of the desc)
     desc.fContext = context;
     desc.fConfig = SkImageInfo2GrPixelConfig(bitmap.info(), *context->caps());
+
+    if (kUnknown_GrPixelConfig == desc.fConfig) {
+        return nullptr;
+    }
 
     GrTextureStripAtlas* atlas = GrTextureStripAtlas::GetAtlas(desc);
     int row = atlas->lockRow(bitmap);

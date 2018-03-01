@@ -35,6 +35,7 @@ const (
 	ISOLATE_SKP_NAME            = "Housekeeper-PerCommit-IsolateSKP"
 	ISOLATE_SVG_NAME            = "Housekeeper-PerCommit-IsolateSVG"
 	ISOLATE_NDK_LINUX_NAME      = "Housekeeper-PerCommit-IsolateAndroidNDKLinux"
+	ISOLATE_SDK_LINUX_NAME      = "Housekeeper-PerCommit-IsolateAndroidSDKLinux"
 	ISOLATE_WIN_TOOLCHAIN_NAME  = "Housekeeper-PerCommit-IsolateWinToolchain"
 	ISOLATE_WIN_VULKAN_SDK_NAME = "Housekeeper-PerCommit-IsolateWinVulkanSDK"
 
@@ -209,6 +210,17 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 		if !ok {
 			glog.Fatalf("Entry %q not found in OS mapping.", os)
 		}
+		if os == "Win10" {
+			// Transition to new Win image by model name.
+			_, ok = map[string]bool{
+				"NUC5i7RYH":     true,
+				"NUC6i5SYK":     true,
+				"NUCD34010WYKH": true,
+			}[parts["model"]]
+			if ok {
+				d["os"] = "Windows-10-16299.248"
+			}
+		}
 	} else {
 		d["os"] = DEFAULT_OS_DEBIAN
 	}
@@ -228,10 +240,9 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 				"Nexus5x":         {"bullhead", "OPR6.170623.023"},
 				"Nexus7":          {"grouper", "LMY47V_1836172"}, // 2012 Nexus 7
 				"NexusPlayer":     {"fugu", "OPR6.170623.021"},
-				"Pixel":           {"sailfish", "OPR3.170623.008"},
+				"Pixel":           {"sailfish", "OPM1.171019.016"},
 				"Pixel2XL":        {"taimen", "OPD1.170816.023"},
 				"PixelC":          {"dragon", "OPR1.170623.034"},
-				"PixelXL":         {"marlin", "OPR3.170623.008"},
 			}[parts["model"]]
 			if !ok {
 				glog.Fatalf("Entry %q not found in Android mapping.", parts["model"])
@@ -446,6 +457,10 @@ var ISOLATE_ASSET_MAPPING = map[string]isolateAssetCfg{
 	ISOLATE_NDK_LINUX_NAME: {
 		isolateFile: "isolate_ndk_linux.isolate",
 		cipdPkg:     "android_ndk_linux",
+	},
+	ISOLATE_SDK_LINUX_NAME: {
+		isolateFile: "isolate_android_sdk_linux.isolate",
+		cipdPkg:     "android_sdk_linux",
 	},
 	ISOLATE_WIN_TOOLCHAIN_NAME: {
 		isolateFile: "isolate_win_toolchain.isolate",

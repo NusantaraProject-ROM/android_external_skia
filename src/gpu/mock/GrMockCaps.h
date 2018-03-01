@@ -20,6 +20,7 @@ public:
         fBufferMapThreshold = SK_MaxS32; // Overridable in GrContextOptions.
         fMaxTextureSize = options.fMaxTextureSize;
         fMaxRenderTargetSize = SkTMin(options.fMaxRenderTargetSize, fMaxTextureSize);
+        fMaxPreferredRenderTargetSize = fMaxRenderTargetSize;
         fMaxVertexAttributes = options.fMaxVertexAttributes;
 
         fShaderCaps.reset(new GrShaderCaps(contextOptions));
@@ -64,6 +65,10 @@ public:
                 return kMaxSampleCnt;
         }
         return 0;
+    }
+
+    bool renderTargetWritePixelsSupported(bool isAlsoTexture, int sampleCnt) const override {
+        return true;
     }
 
     bool initDescForDstCopy(const GrRenderTargetProxy* src, GrSurfaceDesc* desc,

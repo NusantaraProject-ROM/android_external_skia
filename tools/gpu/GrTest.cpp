@@ -150,8 +150,9 @@ void GrContext::printGpuStats() const {
 sk_sp<SkImage> GrContext::getFontAtlasImage_ForTesting(GrMaskFormat format, uint32_t index) {
     GrAtlasGlyphCache* cache = this->contextPriv().getAtlasGlyphCache();
 
-    const sk_sp<GrTextureProxy>* proxies = cache->getProxies(format);
-    if (index >= cache->getAtlasPageCount(format) || !proxies[index]) {
+    unsigned int numProxies;
+    const sk_sp<GrTextureProxy>* proxies = cache->getProxies(format, &numProxies);
+    if (index >= numProxies || !proxies[index]) {
         return nullptr;
     }
 
@@ -186,6 +187,9 @@ GrBackendTexture GrGpu::createTestingOnlyBackendTexture(void* pixels, int w, int
                                                         SkColorType colorType, bool isRenderTarget,
                                                         GrMipMapped mipMapped) {
     GrPixelConfig config = SkImageInfo2GrPixelConfig(colorType, nullptr, *this->caps());
+    if (kUnknown_GrPixelConfig == config) {
+        return GrBackendTexture();
+    }
     return this->createTestingOnlyBackendTexture(pixels, w, h, config, isRenderTarget, mipMapped);
 }
 
@@ -301,6 +305,16 @@ void GrDrawingManager::testingOnly_removeOnFlushCallbackObject(GrOnFlushCallback
             fOnFlushCBObjects.begin();
     SkASSERT(n < fOnFlushCBObjects.count());
     fOnFlushCBObjects.removeShuffle(n);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+GrPixelConfig GrBackendTexture::testingOnly_getPixelConfig() const {
+    return fConfig;
+}
+
+GrPixelConfig GrBackendRenderTarget::testingOnly_getPixelConfig() const {
+    return fConfig;
 }
 
 //////////////////////////////////////////////////////////////////////////////

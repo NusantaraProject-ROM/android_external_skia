@@ -51,6 +51,9 @@ public:
     VkDevice device() const { return fDevice; }
     VkQueue  queue() const { return fQueue; }
     VkCommandPool cmdPool() const { return fCmdPool; }
+    VkPhysicalDeviceProperties physicalDeviceProperties() const {
+        return fPhysDevProps;
+    }
     VkPhysicalDeviceMemoryProperties physicalDeviceMemoryProperties() const {
         return fPhysDevMemProps;
     }
@@ -177,29 +180,24 @@ private:
                              const void* data) override;
 
     bool onGetReadPixelsInfo(GrSurface*, GrSurfaceOrigin, int width, int height, size_t rowBytes,
-                             GrPixelConfig, DrawPreference*, ReadPixelTempDrawInfo*) override;
+                             GrColorType, DrawPreference*, ReadPixelTempDrawInfo*) override;
 
-    bool onGetWritePixelsInfo(GrSurface*, GrSurfaceOrigin, int width, int height, GrPixelConfig,
+    bool onGetWritePixelsInfo(GrSurface*, GrSurfaceOrigin, int width, int height, GrColorType,
                               DrawPreference*, WritePixelTempDrawInfo*) override;
 
     bool onReadPixels(GrSurface* surface, GrSurfaceOrigin, int left, int top, int width, int height,
-                      GrPixelConfig, void* buffer, size_t rowBytes) override;
+                      GrColorType, void* buffer, size_t rowBytes) override;
 
-    bool onWritePixels(GrSurface* surface, GrSurfaceOrigin,
-                       int left, int top, int width, int height,
-                       GrPixelConfig config, const GrMipLevel texels[], int mipLevelCount) override;
+    bool onWritePixels(GrSurface* surface, GrSurfaceOrigin, int left, int top, int width,
+                       int height, GrColorType, const GrMipLevel texels[],
+                       int mipLevelCount) override;
 
-    bool onTransferPixels(GrTexture*,
-                          int left, int top, int width, int height,
-                          GrPixelConfig config, GrBuffer* transferBuffer,
-                          size_t offset, size_t rowBytes) override;
+    bool onTransferPixels(GrTexture*, int left, int top, int width, int height, GrColorType,
+                          GrBuffer* transferBuffer, size_t offset, size_t rowBytes) override;
 
     bool onCopySurface(GrSurface* dst, GrSurfaceOrigin dstOrigin, GrSurface* src,
                        GrSurfaceOrigin srcOrigin, const SkIRect& srcRect,
                        const SkIPoint& dstPoint) override;
-
-    void onQueryMultisampleSpecs(GrRenderTarget*, GrSurfaceOrigin, const GrStencilSettings&,
-                                 int* effectiveSampleCnt, SamplePattern*) override;
 
     void onFinishFlush(bool insertedSemaphores) override;
 
@@ -231,14 +229,11 @@ private:
                               const SkIPoint& dstPoint);
 
     // helpers for onCreateTexture and writeTexturePixels
-    bool uploadTexDataLinear(GrVkTexture* tex, GrSurfaceOrigin texOrigin,
-                             int left, int top, int width, int height,
-                             GrPixelConfig dataConfig,
-                             const void* data,
+    bool uploadTexDataLinear(GrVkTexture* tex, GrSurfaceOrigin texOrigin, int left, int top,
+                             int width, int height, GrColorType colorType, const void* data,
                              size_t rowBytes);
-    bool uploadTexDataOptimal(GrVkTexture* tex, GrSurfaceOrigin texOrigin,
-                              int left, int top, int width, int height,
-                              GrPixelConfig dataConfig,
+    bool uploadTexDataOptimal(GrVkTexture* tex, GrSurfaceOrigin texOrigin, int left, int top,
+                              int width, int height, GrColorType colorType,
                               const GrMipLevel texels[], int mipLevelCount);
 
     void resolveImage(GrSurface* dst, GrVkRenderTarget* src, const SkIRect& srcRect,
@@ -261,6 +256,7 @@ private:
     SkSTArray<1, GrVkSemaphore::Resource*>       fSemaphoresToWaitOn;
     SkSTArray<1, GrVkSemaphore::Resource*>       fSemaphoresToSignal;
 
+    VkPhysicalDeviceProperties                   fPhysDevProps;
     VkPhysicalDeviceMemoryProperties             fPhysDevMemProps;
 
     std::unique_ptr<GrVkHeap>                    fHeaps[kHeapCount];

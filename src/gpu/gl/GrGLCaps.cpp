@@ -483,6 +483,12 @@ void GrGLCaps::init(const GrContextOptions& contextOptions,
     // Our render targets are always created with textures as the color
     // attachment, hence this min:
     fMaxRenderTargetSize = SkTMin(fMaxTextureSize, fMaxRenderTargetSize);
+    fMaxPreferredRenderTargetSize = fMaxRenderTargetSize;
+
+    if (kARM_GrGLVendor == ctxInfo.vendor()) {
+        // On Mali G71, RT's above 4k have been observed to incur a performance cost.
+        fMaxPreferredRenderTargetSize = SkTMin(4096, fMaxPreferredRenderTargetSize);
+    }
 
     fGpuTracingSupport = ctxInfo.hasExtension("GL_EXT_debug_marker");
 
@@ -718,19 +724,6 @@ void GrGLCaps::initGLSL(const GrGLContextInfo& ctxInfo, const GrGLInterface* gli
             shaderCaps->fNoPerspectiveInterpolationSupport = true;
             shaderCaps->fNoPerspectiveInterpolationExtensionString =
                 "GL_NV_shader_noperspective_interpolation";
-        }
-    }
-
-    if (kGL_GrGLStandard == standard) {
-        shaderCaps->fMultisampleInterpolationSupport =
-                ctxInfo.glslGeneration() >= k400_GrGLSLGeneration;
-    } else {
-        if (ctxInfo.glslGeneration() >= k320es_GrGLSLGeneration) {
-            shaderCaps->fMultisampleInterpolationSupport = true;
-        } else if (ctxInfo.hasExtension("GL_OES_shader_multisample_interpolation")) {
-            shaderCaps->fMultisampleInterpolationSupport = true;
-            shaderCaps->fMultisampleInterpolationExtensionString =
-                "GL_OES_shader_multisample_interpolation";
         }
     }
 
@@ -2409,6 +2402,20 @@ void GrGLCaps::onApplyOptionsOverrides(const GrContextOptions& options) {
     if (options.fDoManualMipmapping) {
         fDoManualMipmapping = true;
     }
+}
+
+bool GrGLCaps::onIsMixedSamplesSupportedForRT(const GrBackendRenderTarget& backendRT) const {
+    const GrGLFramebufferInfo* fbInfo = backendRT.getGLFramebufferInfo();
+    SkASSERT(fbInfo);
+    // Mixed samples are not supported for FBO 0;
+    return fbInfo->fFBOID != 0;
+}
+
+bool GrGLCaps::onIsWindowRectanglesSupportedForRT(const GrBackendRenderTarget& backendRT) const {
+    const GrGLFramebufferInfo* fbInfo = backendRT.getGLFramebufferInfo();
+    SkASSERT(fbInfo);
+    // Window Rectangles are not supported for FBO 0;
+    return fbInfo->fFBOID != 0;
 }
 
 int GrGLCaps::getRenderTargetSampleCount(int requestedCount, GrPixelConfig config) const {
