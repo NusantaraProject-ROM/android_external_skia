@@ -61,6 +61,34 @@ bool SkImageShader::isOpaque() const {
     return fImage->isOpaque();
 }
 
+static bool legacy_shader_can_handle(const SkMatrix& a, const SkMatrix& b) {
+    SkMatrix m = SkMatrix::Concat(a, b);
+    if (!m.isScaleTranslate()) {
+        return false;
+    }
+
+    SkMatrix inv;
+    if (!m.invert(&inv)) {
+        return false;
+    }
+
+    // legacy code uses SkFixed 32.32, so ensure the inverse doesn't map device coordinates
+    // out of range.
+    const SkScalar max_dev_coord = 32767.0f;
+    SkRect src;
+    SkAssertResult(inv.mapRect(&src, SkRect::MakeWH(max_dev_coord, max_dev_coord)));
+
+    // take 1/2 of max signed 32bits so we have room to subtract coordinates
+    const SkScalar max_fixed32dot32 = SK_MaxS32 * 0.5f;
+    if (!SkRect::MakeLTRB(-max_fixed32dot32, -max_fixed32dot32,
+                           max_fixed32dot32, max_fixed32dot32).contains(src)) {
+        return false;
+    }
+
+    // legacy shader impl should be able to handle these matrices
+    return true;
+}
+
 bool SkImageShader::IsRasterPipelineOnly(const SkMatrix& ctm, SkColorType ct, SkAlphaType at,
                                          SkShader::TileMode tx, SkShader::TileMode ty,
                                          const SkMatrix& localM) {
@@ -75,10 +103,7 @@ bool SkImageShader::IsRasterPipelineOnly(const SkMatrix& ctm, SkColorType ct, Sk
         return true;
     }
 #endif
-    if (!ctm.isScaleTranslate()) {
-        return true;
-    }
-    if (!localM.isScaleTranslate()) {
+    if (!legacy_shader_can_handle(ctm, localM)) {
         return true;
     }
     return false;
@@ -234,7 +259,7 @@ std::unique_ptr<GrFragmentProcessor> SkImageShader::asFragmentProcessor(
     if (isAlphaOnly) {
         return inner;
     }
-    return GrFragmentProcessor::MulOutputByInputAlpha(std::move(inner));
+    return GrFragmentProcessor::MulChildByInputAlpha(std::move(inner));
 }
 
 #endif
@@ -338,14 +363,22 @@ bool SkImageShader::onAppendStages(const StageRec& rec) const {
             case kMirror_TileMode: p->append(SkRasterPipeline::mirror_y, limit_y); break;
             case kRepeat_TileMode: p->append(SkRasterPipeline::repeat_y, limit_y); break;
         }
+        void* ctx = gather;
         switch (info.colorType()) {
-            case kAlpha_8_SkColorType:   p->append(SkRasterPipeline::gather_a8,   gather); break;
-            case kGray_8_SkColorType:    p->append(SkRasterPipeline::gather_g8,   gather); break;
-            case kRGB_565_SkColorType:   p->append(SkRasterPipeline::gather_565,  gather); break;
-            case kARGB_4444_SkColorType: p->append(SkRasterPipeline::gather_4444, gather); break;
-            case kBGRA_8888_SkColorType: p->append(SkRasterPipeline::gather_bgra, gather); break;
-            case kRGBA_8888_SkColorType: p->append(SkRasterPipeline::gather_8888, gather); break;
-            case kRGBA_F16_SkColorType:  p->append(SkRasterPipeline::gather_f16,  gather); break;
+            case kAlpha_8_SkColorType:      p->append(SkRasterPipeline::gather_a8,      ctx); break;
+            case kGray_8_SkColorType:       p->append(SkRasterPipeline::gather_g8,      ctx); break;
+            case kRGB_565_SkColorType:      p->append(SkRasterPipeline::gather_565,     ctx); break;
+            case kARGB_4444_SkColorType:    p->append(SkRasterPipeline::gather_4444,    ctx); break;
+            case kBGRA_8888_SkColorType:    p->append(SkRasterPipeline::gather_bgra,    ctx); break;
+            case kRGBA_8888_SkColorType:    p->append(SkRasterPipeline::gather_8888,    ctx); break;
+            case kRGBA_1010102_SkColorType: p->append(SkRasterPipeline::gather_1010102, ctx); break;
+            case kRGBA_F16_SkColorType:     p->append(SkRasterPipeline::gather_f16,     ctx); break;
+
+            case kRGB_888x_SkColorType:     p->append(SkRasterPipeline::gather_8888,    ctx);
+                                            p->append(SkRasterPipeline::force_opaque       ); break;
+            case kRGB_101010x_SkColorType:  p->append(SkRasterPipeline::gather_1010102, ctx);
+                                            p->append(SkRasterPipeline::force_opaque       ); break;
+
             default: SkASSERT(false);
         }
         if (is_srgb) {

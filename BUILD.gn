@@ -31,12 +31,12 @@ declare_args() {
   skia_use_metal = false
   skia_use_libheif = is_skia_dev_build
   skia_use_skcms = is_skia_dev_build
-  skia_embed_resources = false
 
   skia_android_serial = ""
   skia_enable_discrete_gpu = true
   skia_enable_effects = true
   skia_enable_flutter_defines = false
+  skia_enable_fontmgr_empty = false
   skia_enable_gpu = true
   skia_enable_pdf = true
   skia_enable_spirv_validation = is_skia_dev_build && is_debug
@@ -51,6 +51,9 @@ declare_args() {
   skia_jumper_clang = ""
   skia_jumper_objdump = ""
   skia_jumper_ccache = ""
+
+  skia_skqp_enable_driver_correctness_workarounds = false
+  skia_skqp_global_error_tolerance = 0
 }
 declare_args() {
   skia_use_dng_sdk = !is_fuchsia && skia_use_libjpeg_turbo && skia_use_zlib
@@ -388,6 +391,13 @@ optional("fontmgr_custom") {
     "src/ports/SkFontMgr_custom_directory_factory.cpp",
     "src/ports/SkFontMgr_custom_embedded.cpp",
     "src/ports/SkFontMgr_custom_empty.cpp",
+  ]
+}
+
+optional("fontmgr_empty") {
+  enabled = skia_enable_fontmgr_empty
+  sources = [
+    "src/ports/SkFontMgr_empty_factory.cpp",
   ]
 }
 
@@ -755,6 +765,7 @@ component("skia") {
     ":effects",
     ":fontmgr_android",
     ":fontmgr_custom",
+    ":fontmgr_empty",
     ":fontmgr_fontconfig",
     ":fontmgr_fuchsia",
     ":gpu",
@@ -928,20 +939,6 @@ if (skia_enable_tools) {
     outputs = [
       skia_h,
     ]
-  }
-
-  if (skia_embed_resources) {
-    action("binary_resources.cpp") {
-      script = "gn/generate_binary_asset.py"
-      args = [
-        rebase_path("resources"),
-        "gResources",
-        rebase_path("$target_gen_dir/binary_resources.cpp", root_build_dir),
-      ]
-      outputs = [
-        "$target_gen_dir/binary_resources.cpp",
-      ]
-    }
   }
 
   if (skia_enable_gpu && target_cpu == "x64") {
@@ -1280,11 +1277,6 @@ if (skia_enable_tools) {
     public_deps = [
       "//third_party/jsoncpp",
     ]
-    if (skia_embed_resources) {
-      defines = [ "SK_EMBED_RESOURCES" ]
-      sources += [ "$target_gen_dir/binary_resources.cpp" ]
-      deps += [ ":binary_resources.cpp" ]
-    }
   }
 
   import("gn/gm.gni")
@@ -1309,13 +1301,15 @@ if (skia_enable_tools) {
     }
     deps = [
       ":experimental_sksg",
-      ":experimental_svg_model",
       ":flags",
       ":skia",
       ":tool_utils",
       "//third_party/libpng",
       "//third_party/zlib",
     ]
+    if (skia_use_expat) {
+      deps += [ ":experimental_svg_model" ]
+    }
     public_deps = [
       ":gpu_tool_utils",  # Test.h #includes headers from this target.
     ]
@@ -1408,6 +1402,7 @@ if (skia_enable_tools) {
       "experimental/sksg/geometry/SkSGMerge.cpp",
       "experimental/sksg/geometry/SkSGPath.cpp",
       "experimental/sksg/geometry/SkSGRect.cpp",
+      "experimental/sksg/geometry/SkSGText.cpp",
       "experimental/sksg/geometry/SkSGTrimEffect.cpp",
       "experimental/sksg/paint/SkSGColor.cpp",
       "experimental/sksg/paint/SkSGGradient.cpp",
@@ -1799,6 +1794,12 @@ if (skia_enable_tools) {
   if (!is_win && skia_enable_gpu) {
     test_lib("skqp_lib") {
       public_include_dirs = [ "tools/skqp" ]
+      defines = [
+        "SK_SKQP_GLOBAL_ERROR_TOLERANCE=$skia_skqp_global_error_tolerance"
+      ]
+      if (skia_skqp_enable_driver_correctness_workarounds) {
+        defines += [ "SK_SKQP_ENABLE_DRIVER_CORRECTNESS_WORKAROUNDS" ]
+      }
       sources = [
         "dm/DMFontMgr.cpp",
         "dm/DMGpuTestProcs.cpp",
@@ -1820,6 +1821,7 @@ if (skia_enable_tools) {
       deps = [
         ":skia",
         ":skqp_lib",
+        ":tool_utils",
         "//third_party/googletest",
       ]
     }
@@ -1972,6 +1974,7 @@ if (skia_enable_tools) {
       include_dirs = []
       deps = [
         ":experimental_skottie",
+        ":experimental_sksg",
         ":flags",
         ":gm",
         ":gpu_tool_utils",
