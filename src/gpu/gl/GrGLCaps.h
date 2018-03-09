@@ -316,12 +316,7 @@ public:
     /// Use indices or vertices in CPU arrays rather than VBOs for dynamic content.
     bool useNonVBOVertexAndIndexDynamicData() const { return fUseNonVBOVertexAndIndexDynamicData; }
 
-    bool renderTargetWritePixelsSupported(bool isAlsoTexture, int sampleCnt) const override {
-        if (sampleCnt > 1 && this->usesMSAARenderBuffers()) {
-            return false;
-        }
-        return isAlsoTexture;
-    }
+    bool surfaceSupportsWritePixels(const GrSurface* surface) const override;
 
     /// Does ReadPixels support reading readConfig pixels from a FBO that is surfaceConfig?
     bool readPixelsSupported(GrPixelConfig surfaceConfig,
@@ -355,6 +350,8 @@ public:
     bool rgbaToBgraReadbackConversionsAreSlow() const {
         return fRGBAToBGRAReadbackConversionsAreSlow;
     }
+
+    bool useBufferDataNullHint() const { return fUseBufferDataNullHint; }
 
     // Certain Intel GPUs on Mac fail to clear if the glClearColor is made up of only 1s and 0s.
     bool clearToBoundaryValuesIsBroken() const { return fClearToBoundaryValuesIsBroken; }
@@ -485,6 +482,7 @@ private:
     bool fTextureSwizzleSupport : 1;
     bool fMipMapLevelAndLodControlSupport : 1;
     bool fRGBAToBGRAReadbackConversionsAreSlow : 1;
+    bool fUseBufferDataNullHint                : 1;
     bool fClearTextureSupport : 1;
     bool fProgramBinarySupport : 1;
 
