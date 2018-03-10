@@ -92,7 +92,6 @@ DEF_GPUTEST_FOR_ALL_CONTEXTS(GrSurfaceRenderability, reporter, ctxInfo) {
         kBGRA_8888_GrPixelConfig,
         kSRGBA_8888_GrPixelConfig,
         kSBGRA_8888_GrPixelConfig,
-        kRGBA_8888_sint_GrPixelConfig,
         kRGBA_float_GrPixelConfig,
         kRG_float_GrPixelConfig,
         kAlpha_half_GrPixelConfig,
@@ -104,16 +103,6 @@ DEF_GPUTEST_FOR_ALL_CONTEXTS(GrSurfaceRenderability, reporter, ctxInfo) {
     GrSurfaceDesc desc;
     desc.fWidth = 64;
     desc.fHeight = 64;
-
-    // Enough space for the first mip of our largest pixel config
-    const size_t pixelBufferSize = desc.fWidth * desc.fHeight *
-                                   GrBytesPerPixel(kRGBA_float_GrPixelConfig);
-    std::unique_ptr<char[]> pixelData(new char[pixelBufferSize]);
-    memset(pixelData.get(), 0, pixelBufferSize);
-
-    // We re-use the same mip level objects (with updated pointers and rowBytes) for each config
-    const int levelCount = SkMipMap::ComputeLevelCount(desc.fWidth, desc.fHeight) + 1;
-    std::unique_ptr<GrMipLevel[]> texels(new GrMipLevel[levelCount]);
 
     for (GrPixelConfig config : configs) {
         for (GrSurfaceOrigin origin : { kTopLeft_GrSurfaceOrigin, kBottomLeft_GrSurfaceOrigin }) {
@@ -127,19 +116,11 @@ DEF_GPUTEST_FOR_ALL_CONTEXTS(GrSurfaceRenderability, reporter, ctxInfo) {
             REPORTER_ASSERT(reporter, SkToBool(tex) == ict,
                             "config:%d, tex:%d, isConfigTexturable:%d", config, SkToBool(tex), ict);
 
-            size_t rowBytes = desc.fWidth * GrBytesPerPixel(desc.fConfig);
-            for (int i = 0; i < levelCount; ++i) {
-                texels[i].fPixels = pixelData.get();
-                texels[i].fRowBytes = rowBytes >> i;
-            }
-
             sk_sp<GrTextureProxy> proxy = proxyProvider->createMipMapProxy(
-                                                            desc, SkBudgeted::kNo,
-                                                            texels.get(), levelCount);
+                                                            desc, SkBudgeted::kNo);
             REPORTER_ASSERT(reporter, SkToBool(proxy.get()) ==
                             (caps->isConfigTexturable(desc.fConfig) &&
-                             caps->mipMapSupport() &&
-                             !GrPixelConfigIsSint(desc.fConfig)));
+                             caps->mipMapSupport()));
 
             desc.fFlags = kRenderTarget_GrSurfaceFlag;
             tex = resourceProvider->createTexture(desc, SkBudgeted::kNo);
@@ -173,6 +154,10 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(InitialTextureClear, reporter, context_info) 
 
     for (int c = 0; c <= kLast_GrPixelConfig; ++c) {
         desc.fConfig = static_cast<GrPixelConfig>(c);
+        sk_sp<SkColorSpace> colorSpace;
+        if (GrPixelConfigIsSRGB(desc.fConfig)) {
+            colorSpace = SkColorSpace::MakeSRGB();
+        }
         if (!context_info.grContext()->caps()->isConfigTexturable(desc.fConfig)) {
             continue;
         }
@@ -194,9 +179,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(InitialTextureClear, reporter, context_info) 
                         if (!proxy) {
                             continue;
                         }
-
                         auto texCtx = context->contextPriv().makeWrappedSurfaceContext(
-                                                                                std::move(proxy));
+                                std::move(proxy), colorSpace);
                         SkImageInfo info = SkImageInfo::Make(
                                 kSize, kSize, kRGBA_8888_SkColorType, kPremul_SkAlphaType);
                         memset(data.get(), 0xAB, kSize * kSize * sizeof(uint32_t));
@@ -221,7 +205,7 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(InitialTextureClear, reporter, context_info) 
                     // Try creating the texture as a deferred proxy.
                     for (int i = 0; i < 2; ++i) {
                         auto surfCtx = context->contextPriv().makeDeferredSurfaceContext(
-                                desc, GrMipMapped::kNo, fit, SkBudgeted::kYes);
+                                desc, GrMipMapped::kNo, fit, SkBudgeted::kYes, colorSpace);
                         if (!surfCtx) {
                             continue;
                         }

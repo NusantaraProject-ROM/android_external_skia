@@ -57,9 +57,6 @@ public:
      * Any OnFlushCallbackObject associated with a path renderer will need to be deleted.
      */
     virtual bool retainOnFreeGpuResources() { return false; }
-
-private:
-    typedef SkRefCnt INHERITED;
 };
 
 /*
@@ -69,15 +66,17 @@ private:
  */
 class GrOnFlushResourceProvider {
 public:
-    sk_sp<GrRenderTargetContext> makeRenderTargetContext(const GrSurfaceDesc& desc,
-                                                         sk_sp<SkColorSpace> colorSpace,
-                                                         const SkSurfaceProps* props);
+    explicit GrOnFlushResourceProvider(GrDrawingManager* drawingMgr) : fDrawingMgr(drawingMgr) {}
 
-    // TODO: we only need this entry point as long as we have to pre-allocate the atlas.
-    // Remove it ASAP.
-    sk_sp<GrRenderTargetContext> makeRenderTargetContext(sk_sp<GrSurfaceProxy> proxy,
-                                                         sk_sp<SkColorSpace> colorSpace,
-                                                         const SkSurfaceProps* props);
+    sk_sp<GrRenderTargetContext> makeRenderTargetContext(const GrSurfaceDesc&,
+                                                         sk_sp<SkColorSpace>,
+                                                         const SkSurfaceProps*);
+
+    sk_sp<GrRenderTargetContext> makeRenderTargetContext(sk_sp<GrSurfaceProxy>,
+                                                         sk_sp<SkColorSpace>,
+                                                         const SkSurfaceProps*);
+
+    bool instatiateProxy(GrSurfaceProxy*);
 
     // Creates a GPU buffer with a "dynamic" access pattern.
     sk_sp<GrBuffer> makeBuffer(GrBufferType, size_t, const void* data = nullptr);
@@ -89,13 +88,10 @@ public:
     const GrCaps* caps() const;
 
 private:
-    explicit GrOnFlushResourceProvider(GrDrawingManager* drawingMgr) : fDrawingMgr(drawingMgr) {}
     GrOnFlushResourceProvider(const GrOnFlushResourceProvider&) = delete;
     GrOnFlushResourceProvider& operator=(const GrOnFlushResourceProvider&) = delete;
 
     GrDrawingManager* fDrawingMgr;
-
-    friend class GrDrawingManager; // to construct this type.
 };
 
 #endif

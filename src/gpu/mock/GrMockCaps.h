@@ -20,6 +20,7 @@ public:
         fBufferMapThreshold = SK_MaxS32; // Overridable in GrContextOptions.
         fMaxTextureSize = options.fMaxTextureSize;
         fMaxRenderTargetSize = SkTMin(options.fMaxRenderTargetSize, fMaxTextureSize);
+        fMaxPreferredRenderTargetSize = fMaxRenderTargetSize;
         fMaxVertexAttributes = options.fMaxVertexAttributes;
 
         fShaderCaps.reset(new GrShaderCaps(contextOptions));
@@ -66,19 +67,39 @@ public:
         return 0;
     }
 
+    bool renderTargetWritePixelsSupported(bool isAlsoTexture, int sampleCnt) const override {
+        return true;
+    }
+
     bool initDescForDstCopy(const GrRenderTargetProxy* src, GrSurfaceDesc* desc,
                             bool* rectsMustMatch, bool* disallowSubrect) const override {
         return false;
     }
 
     bool validateBackendTexture(const GrBackendTexture& tex, SkColorType,
-                                GrPixelConfig*) const override {
-        return SkToBool(tex.getMockTextureInfo());
+                                GrPixelConfig* config) const override {
+        const GrMockTextureInfo* texInfo = tex.getMockTextureInfo();
+        if (!texInfo) {
+            return false;
+        }
+
+        *config = texInfo->fConfig;
+        return true;
     }
 
     bool validateBackendRenderTarget(const GrBackendRenderTarget& rt, SkColorType,
                                      GrPixelConfig*) const override {
         return false;
+    }
+
+    bool getConfigFromBackendFormat(const GrBackendFormat& format, SkColorType ct,
+                                    GrPixelConfig* config) const override {
+        const GrPixelConfig* mockFormat = format.getMockFormat();
+        if (!mockFormat) {
+            return false;
+        }
+        *config = *mockFormat;
+        return true;
     }
 
 private:

@@ -27,7 +27,6 @@ static const char* pixel_config_name(GrPixelConfig config) {
         case kBGRA_8888_GrPixelConfig: return "BGRA8888";
         case kSRGBA_8888_GrPixelConfig: return "SRGBA8888";
         case kSBGRA_8888_GrPixelConfig: return "SBGRA8888";
-        case kRGBA_8888_sint_GrPixelConfig: return "RGBA8888_sint";
         case kRGBA_float_GrPixelConfig: return "RGBAFloat";
         case kRG_float_GrPixelConfig: return "RGFloat";
         case kAlpha_half_GrPixelConfig: return "AlphaHalf";
@@ -69,6 +68,7 @@ GrCaps::GrCaps(const GrContextOptions& options) {
 
     fMaxVertexAttributes = 0;
     fMaxRenderTargetSize = 1;
+    fMaxPreferredRenderTargetSize = 1;
     fMaxTextureSize = 1;
     fMaxRasterSamples = 0;
     fMaxWindowRectangles = 0;
@@ -97,7 +97,9 @@ GrCaps::GrCaps(const GrContextOptions& options) {
 void GrCaps::applyOptionsOverrides(const GrContextOptions& options) {
     this->onApplyOptionsOverrides(options);
     if (options.fDisableDriverCorrectnessWorkarounds) {
-        SkASSERT(!fBlacklistCoverageCounting);
+        // We always blacklist coverage counting on Vulkan currently. TODO: Either stop doing that
+        // or disambiguate blacklisting from incomplete implementation.
+        // SkASSERT(!fBlacklistCoverageCounting);
         SkASSERT(!fAvoidStencilBuffers);
         SkASSERT(!fAdvBlendEqBlacklist);
     }
@@ -178,6 +180,7 @@ void GrCaps::dumpJSON(SkJSONWriter* writer) const {
     writer->appendS32("Max Vertex Attributes", fMaxVertexAttributes);
     writer->appendS32("Max Texture Size", fMaxTextureSize);
     writer->appendS32("Max Render Target Size", fMaxRenderTargetSize);
+    writer->appendS32("Max Preferred Render Target Size", fMaxPreferredRenderTargetSize);
     writer->appendS32("Max Raster Samples", fMaxRasterSamples);
     writer->appendS32("Max Window Rectangles", fMaxWindowRectangles);
     writer->appendS32("Max Clip Analytic Fragment Processors", fMaxClipAnalyticFPs);
@@ -225,10 +228,8 @@ bool GrCaps::validateSurfaceDesc(const GrSurfaceDesc& desc, GrMipMapped mipped) 
         return false;
     }
 
-    if (GrMipMapped::kYes == mipped) {
-        if (GrPixelConfigIsSint(desc.fConfig) || !this->mipMapSupport()) {
-            return false;
-        }
+    if (GrMipMapped::kYes == mipped && !this->mipMapSupport()) {
+        return false;
     }
 
     if (desc.fWidth < 1 || desc.fHeight < 1) {

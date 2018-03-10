@@ -11,21 +11,21 @@
     "code": "void draw(SkCanvas* canvas) {\n    const char* verbNames[] = { \"move\", \"line\", \"quad\", \"conic\", \"cubic\", \"close\", \"done\" };\n    const int pointCount[]  = {     1 ,     2 ,     3 ,      3 ,      4 ,      1 ,     0  };\n    SkPath path;\n    path.conicTo(20, 30, 50, 60, 1);\n    SkPath::Iter iter(path, false);\n    SkPath::Verb verb;\n    do {\n       SkPoint points[4];\n       verb = iter.next(points);\n       SkDebugf(\"%s \", verbNames[(int) verb]);\n       for (int i = 0; i < pointCount[(int) verb]; ++i) {\n            SkDebugf(\"{%g, %g}, \", points[i].fX, points[i].fY);\n       }\n       if (SkPath::kConic_Verb == verb) {\n           SkDebugf(\"weight = %g\", iter.conicWeight());\n       }\n       SkDebugf(\"\\n\");\n    } while (SkPath::kDone_Verb != verb);\n}\n",
     "hash": "2aadded3d20dfef34d1c8abe28c7bc8d",
     "file": "SkPath_Reference",
-    "name": "Weight",
+    "name": "Conic_Weight",
         "stdout": "move {0, 0}, \\nquad {0, 0}, {20, 30}, {50, 60}, \\ndone \\n"
     },
         "Path_Conic_Weight_a": {
     "code": "void draw(SkCanvas* canvas) {\n    const char* verbNames[] = { \"move\", \"line\", \"quad\", \"conic\", \"cubic\", \"close\", \"done\" };\n    const int pointCount[]  = {     1 ,     2 ,     3 ,      3 ,      4 ,      1 ,     0  };\n    SkPath path;\n    path.arcTo(20, 0, 20, 20, 20);\n    SkPath::Iter iter(path, false);\n    SkPath::Verb verb;\n    do {\n       SkPoint points[4];\n       verb = iter.next(points);\n       SkDebugf(\"%s \", verbNames[(int) verb]);\n       for (int i = 0; i < pointCount[(int) verb]; ++i) {\n            SkDebugf(\"{%g, %g}, \", points[i].fX, points[i].fY);\n       }\n       if (SkPath::kConic_Verb == verb) {\n           SkDebugf(\"weight = %g\", iter.conicWeight());\n       }\n       SkDebugf(\"\\n\");\n    } while (SkPath::kDone_Verb != verb);\n}\n",
     "hash": "e88f554efacfa9f75f270fb1c0add5b4",
     "file": "SkPath_Reference",
-    "name": "Weight_2",
+    "name": "Conic_Weight_2",
         "stdout": "move {0, 0}, \\nconic {0, 0}, {20, 0}, {20, 20}, weight = 0.707107\\ndone \\n"
     },
         "Path_Conic_Weight_b": {
     "code": "void draw(SkCanvas* canvas) {\n    const char* verbNames[] = { \"move\", \"line\", \"quad\", \"conic\", \"cubic\", \"close\", \"done\" };\n    const int pointCount[]  = {     1 ,     2 ,     3 ,      3 ,      4 ,      1 ,     0  };\n    SkPath path;\n    path.conicTo(20, 0, 20, 20, SK_ScalarInfinity);\n    SkPath::Iter iter(path, false);\n    SkPath::Verb verb;\n    do {\n       SkPoint points[4];\n       verb = iter.next(points);\n       SkDebugf(\"%s \", verbNames[(int) verb]);\n       for (int i = 0; i < pointCount[(int) verb]; ++i) {\n            SkDebugf(\"{%g, %g}, \", points[i].fX, points[i].fY);\n       }\n       if (SkPath::kConic_Verb == verb) {\n           SkDebugf(\"weight = %g\", iter.conicWeight());\n       }\n       SkDebugf(\"\\n\");\n    } while (SkPath::kDone_Verb != verb);\n}\n",
     "hash": "6fb11419e99297fe2fe666c296117fb9",
     "file": "SkPath_Reference",
-    "name": "Weight_3",
+    "name": "Conic_Weight_3",
         "stdout": "move {0, 0}, \\nline {0, 0}, {20, 0}, \\nline {20, 0}, {20, 20}, \\ndone \\n"
     },
         "SkAutoCanvasRestore_restore": {
@@ -372,8 +372,8 @@
         "stdout": "---\\n-x-\\n---\\n"
     },
         "SkCanvas_SaveLayerRec_SaveLayerRec": {
-    "code": "void draw(SkCanvas* canvas) {\n    SkCanvas::SaveLayerRec rec1;\n    rec1.fSaveLayerFlags = SkCanvas::kIsOpaque_SaveLayerFlag;\n    SkCanvas::SaveLayerRec rec2(nullptr, nullptr, SkCanvas::kIsOpaque_SaveLayerFlag);\n    SkDebugf(\"rec1 %c= rec2\\n\", rec1.fBounds == rec2.fBounds\n            && rec1.fPaint == rec2.fPaint\n            && rec1.fBackdrop == rec2.fBackdrop\n            && rec1.fSaveLayerFlags == rec2.fSaveLayerFlags ? '=' : '!');\n}",
-    "hash": "ac7c834dce2eac6ef49c15e820e94003",
+    "code": "void draw(SkCanvas* canvas) {\n    SkCanvas::SaveLayerRec rec1;\n    rec1.fSaveLayerFlags = SkCanvas::kPreserveLCDText_SaveLayerFlag;\n    SkCanvas::SaveLayerRec rec2(nullptr, nullptr, SkCanvas::kPreserveLCDText_SaveLayerFlag);\n    SkDebugf(\"rec1 %c= rec2\\n\", rec1.fBounds == rec2.fBounds\n            && rec1.fPaint == rec2.fPaint\n            && rec1.fBackdrop == rec2.fBackdrop\n            && rec1.fSaveLayerFlags == rec2.fSaveLayerFlags ? '=' : '!');\n}",
+    "hash": "b5cea1eed80a0eb04ddbab3f36dff73f",
     "file": "SkCanvas_Reference",
     "name": "SkCanvas::SaveLayerRec::SaveLayerRec",
         "stdout": "rec1 == rec2\\n"
@@ -2464,13 +2464,6 @@
     "name": "SkPixmap::reset()",
         "stdout": "width: 25  height: 35  color: kRGBA_8888_SkColorType  alpha: kOpaque_SkAlphaType\\nwidth:  0  height:  0  color: kUnknown_SkColorType  alpha: kUnknown_SkAlphaType\\n"
     },
-        "SkPixmap_reset_3": {
-    "code": "void draw(SkCanvas* canvas) {\n    const int width = 2;\n    const int height = 2;\n    uint8_t bytes[] = { 0, 1, 2, 3, 4, 5, 6, 7 };\n    SkMask mask;\n    mask.fFormat = SkMask::kA8_Format;\n    mask.fBounds = {0, 0, width, height};\n    mask.fImage = bytes;\n    mask.fRowBytes = (width + 7) >> 3;\n    SkPixmap pixmap;\n    bool success = pixmap.reset(mask);\n    SkDebugf(\"success: %s width: %d height: %d\\n\", success ? \"true \" : \"false\",\n                pixmap.width(), pixmap.height()); \n    mask.fFormat = SkMask::kBW_Format;\n    success = pixmap.reset(mask);\n    SkDebugf(\"success: %s width: %d height: %d\\n\", success ? \"true \" : \"false\",\n                pixmap.width(), pixmap.height());\n}",
-    "hash": "379761a97bd7a116638a34eb3e80bf0d",
-    "file": "SkPixmap_Reference",
-    "name": "SkPixmap::reset_3",
-        "stdout": "success: true  width: 2 height: 2\\nsuccess: false width: 0 height: 0\\n"
-    },
         "SkPixmap_rowBytes": {
     "code": "void draw(SkCanvas* canvas) {\n    SkPixmap badPixmap = {SkImageInfo::MakeA8(4, 4), nullptr, 2};\n    SkPixmap okPixmap = {SkImageInfo::MakeA8(4, 4), nullptr, 8};\n    for (auto& pixmap : { badPixmap, okPixmap } ) {\n        SkDebugf(\"rowBytes: %d minRowBytes: %d\\n\", pixmap.rowBytes(), \n           pixmap.info().minRowBytes());\n    }\n}",
     "hash": "da5e1f7f49891d3805a5a6103a000eff",
@@ -2710,17 +2703,24 @@
         "stdout": "left: 2e+38 right: 3e+38 centerX: inf safe mid x: 2.5e+38\\n"
     },
         "SkRect_contains": {
+    "code": "void draw(SkCanvas* canvas) {\n    SkRect rect = { 30, 50, 40, 60 };\n    SkPoint tests[] = { { 30, 50 }, { 39, 49 }, { 29, 59 } };\n    for (auto contained : tests) {\n        SkDebugf(\"rect: (%g, %g, %g, %g) %s (%g, %g)\\n\",\n                 rect.left(), rect.top(), rect.right(), rect.bottom(),\n                 rect.contains(contained.x(), contained.y()) ? \"contains\" : \"does not contain\",\n                 contained.x(), contained.y());\n    }\n}",
+    "hash": "85be528a78945a6dc4f7dccb80a80746",
+    "file": "SkRect_Reference",
+    "name": "SkRect::contains()",
+        "stdout": "rect: (30, 50, 40, 60) contains (30, 50)\\nrect: (30, 50, 40, 60) does not contain (39, 49)\\nrect: (30, 50, 40, 60) does not contain (29, 59)\\n"
+    },
+        "SkRect_contains_2": {
     "code": "void draw(SkCanvas* canvas) {\n    SkRect rect = { 30, 50, 40, 60 };\n    SkRect tests[] = { { 30, 50, 31, 51}, { 39, 49, 40, 50}, { 29, 59, 30, 60} };\n    for (auto contained : tests) {\n        SkDebugf(\"rect: (%g, %g, %g, %g) %s (%g, %g, %g, %g)\\n\",\n                 rect.left(), rect.top(), rect.right(), rect.bottom(),\n                 rect.contains(contained) ? \"contains\" : \"does not contain\",\n                 contained.left(), contained.top(), contained.right(), contained.bottom());\n    }\n}",
     "hash": "92f9e6aa5bb76791139a24cf7d8df99e",
     "file": "SkRect_Reference",
-    "name": "SkRect::contains()",
+    "name": "SkRect::contains_2",
         "stdout": "rect: (30, 50, 40, 60) contains (30, 50, 31, 51)\\nrect: (30, 50, 40, 60) does not contain (39, 49, 40, 50)\\nrect: (30, 50, 40, 60) does not contain (29, 59, 30, 60)\\n"
     },
-        "SkRect_contains_2": {
+        "SkRect_contains_3": {
     "code": "void draw(SkCanvas* canvas) {\n    SkRect rect = { 30, 50, 40, 60 };\n    SkIRect tests[] = { { 30, 50, 31, 51}, { 39, 49, 40, 50}, { 29, 59, 30, 60} };\n    for (auto contained : tests) {\n        SkDebugf(\"rect: (%g, %g, %g, %g) %s (%d, %d, %d, %d)\\n\",\n                 rect.left(), rect.top(), rect.right(), rect.bottom(),\n                 rect.contains(contained) ? \"contains\" : \"does not contain\",\n                 contained.left(), contained.top(), contained.right(), contained.bottom());\n    }\n}",
     "hash": "dd58b699551dd44026a2c6386be27d88",
     "file": "SkRect_Reference",
-    "name": "SkRect::contains_2",
+    "name": "SkRect::contains_3",
         "stdout": "rect: (30, 50, 40, 60) contains (30, 50, 31, 51)\\nrect: (30, 50, 40, 60) does not contain (39, 49, 40, 50)\\nrect: (30, 50, 40, 60) does not contain (29, 59, 30, 60)\\n"
     },
         "SkRect_dump": {
@@ -3459,7 +3459,7 @@
     "height": 64,
     "hash": "62848df605af6258653d9e16b27d8f7f",
     "file": "SkPath_Reference",
-    "name": "Zero_Length"
+    "name": "Contour_Zero_Length"
 },
     "Path_Contour_a": {
     "code": "void draw(SkCanvas* canvas) {\n    SkPaint paint;\n    paint.setAntiAlias(true);\n    paint.setStyle(SkPaint::kStroke_Style);\n    paint.setStrokeWidth(8);\n    SkPath path;\n    path.moveTo(36, 48);\n    path.quadTo(66, 88, 120, 36);\n    canvas->drawPath(path, paint);\n    path.close();\n    canvas->translate(0, 50);\n    canvas->drawPath(path, paint);\n}\n",
@@ -3636,14 +3636,6 @@
     "hash": "0c45da35172bc0a529b2faecddae62a2",
     "file": "SkBitmap_Reference",
     "name": "SkBitmap::getBounds_2"
-},
-    "SkBitmap_installMaskPixels": {
-    "code": "void draw(SkCanvas* canvas) {\n    uint8_t storage[][5] = {{ 0xCA, 0xDA, 0xCA, 0xC9, 0xA3 },\n                            { 0xAC, 0xA8, 0x89, 0x47, 0x87 },\n                            { 0x4B, 0x25, 0x25, 0x25, 0x46 },\n                            { 0x90, 0x81, 0x25, 0x41, 0x33 },\n                            { 0x75, 0x55, 0x44, 0x20, 0x00 }};\n    SkMask mask;\n    mask.fImage = storage[0];\n    mask.fBounds = SkIRect::MakeWH(5, 5);\n    mask.fRowBytes = 5;\n    mask.fFormat = SkMask::kA8_Format;\n    SkBitmap bitmap;\n    bitmap.installMaskPixels(mask);\n    canvas->scale(10, 10);\n    canvas->drawBitmap(bitmap, 0, 0);\n    storage[2][2] = 0xFF;\n    bitmap.installMaskPixels(mask);\n    canvas->drawBitmap(bitmap, 10, 0);\n}",
-    "width": 256,
-    "height": 64,
-    "hash": "b0456fc063ca467ccecf2105160a3d1d",
-    "file": "SkBitmap_Reference",
-    "name": "SkBitmap::installMaskPixels"
 },
     "SkBitmap_installPixels_2": {
     "code": "void draw(SkCanvas* canvas) {\n   SkRandom random;\n   SkBitmap bitmap;\n   const int width = 8;\n   const int height = 8;\n   uint32_t pixels[width * height];\n   for (unsigned x = 0; x < width * height; ++x) {\n       pixels[x] = random.nextU();\n   }\n   SkImageInfo info = SkImageInfo::MakeN32(width, height, kUnpremul_SkAlphaType);\n   if (bitmap.installPixels(info, pixels, info.minRowBytes())) {\n       canvas->scale(32, 32);\n       canvas->drawBitmap(bitmap, 0, 0);\n   }\n}\n",
@@ -4965,35 +4957,11 @@
     "file": "SkImageInfo_Reference",
     "name": "SkImageInfo::width()"
 },
-    "SkImage_DeferredTextureImageUsageParams": {
-    "code": "void draw(SkCanvas* canvas) {\n    // incomplete\n}",
-    "width": 256,
-    "height": 256,
-    "hash": "882e8e0103048009a25cfc20400492f7",
-    "file": "SkImage_Reference",
-    "name": "SkImage::DeferredTextureImageUsageParams"
-},
-    "SkImage_DeferredTextureImageUsageParams_DeferredTextureImageUsageParams": {
-    "code": "void draw(SkCanvas* canvas) {\n    // incomplete\n}",
-    "width": 256,
-    "height": 256,
-    "hash": "882e8e0103048009a25cfc20400492f7",
-    "file": "SkImage_Reference",
-    "name": "SkImage::DeferredTextureImageUsageParams::DeferredTextureImageUsageParams"
-},
-    "SkImage_LegacyBitmapMode": {
-    "code": "void draw(SkCanvas* canvas) {\n    // incomplete\n}",
-    "width": 256,
-    "height": 256,
-    "hash": "882e8e0103048009a25cfc20400492f7",
-    "file": "SkImage_Reference",
-    "name": "SkImage::LegacyBitmapMode"
-},
     "SkImage_MakeBackendTextureFromSkImage": {
-    "code": "void draw(SkCanvas* canvas) {\n    // incomplete\n}",
+    "code": "static sk_sp<SkImage> create_gpu_image(GrContext* grContext) {\n    const SkImageInfo info = SkImageInfo::MakeN32(20, 20, kOpaque_SkAlphaType);\n    auto surface(SkSurface::MakeRenderTarget(grContext, SkBudgeted::kNo, info));\n    SkCanvas* canvas = surface->getCanvas();\n    canvas->clear(SK_ColorWHITE);\n    SkPaint paint;\n    paint.setColor(SK_ColorBLACK);\n    canvas->drawRect(SkRect::MakeXYWH(5, 5, 10, 10), paint);\n    return surface->makeImageSnapshot();\n}\n\nvoid draw(SkCanvas* canvas) {    \n    GrContext* grContext = canvas->getGrContext();\n    if (!grContext) {\n        return;\n    }\n    sk_sp<SkImage> backEndImage = create_gpu_image(grContext);\n    canvas->drawImage(backEndImage, 0, 0);\n    GrBackendTexture texture;\n    SkImage::BackendTextureReleaseProc proc;\n    if (!SkImage::MakeBackendTextureFromSkImage(grContext, std::move(backEndImage),\n            &texture, &proc)) {\n        return;\n    }\n    sk_sp<SkImage> i2 = SkImage::MakeFromTexture(grContext, texture, kTopLeft_GrSurfaceOrigin,\n            kN32_SkColorType, kOpaque_SkAlphaType, nullptr);\n    canvas->drawImage(i2, 30, 30);\n}\n",
     "width": 256,
-    "height": 256,
-    "hash": "882e8e0103048009a25cfc20400492f7",
+    "height": 64,
+    "hash": "98e70337c2964abd2624239d28bbecd7",
     "file": "SkImage_Reference",
     "name": "SkImage::MakeBackendTextureFromSkImage"
 },
@@ -5029,14 +4997,6 @@
     "file": "SkImage_Reference",
     "name": "SkImage::MakeFromBitmap"
 },
-    "SkImage_MakeFromDeferredTextureImageData": {
-    "code": "void draw(SkCanvas* canvas) {\n    // incomplete\n}",
-    "width": 256,
-    "height": 256,
-    "hash": "882e8e0103048009a25cfc20400492f7",
-    "file": "SkImage_Reference",
-    "name": "SkImage::MakeFromDeferredTextureImageData"
-},
     "SkImage_MakeFromEncoded": {
     "code": "void draw(SkCanvas* canvas) {\n    int x = 0;\n    for (int quality : { 100, 50, 10, 1} ) {\n        sk_sp<SkData> encodedData = image->encodeToData(SkEncodedImageFormat::kJPEG, quality);\n        sk_sp<SkImage> image = SkImage::MakeFromEncoded(encodedData);\n        canvas->drawImage(image, x, 0);\n        x += 64;\n    }\n}",
     "width": 256,
@@ -5062,10 +5022,10 @@
     "name": "SkImage::MakeFromPicture"
 },
     "SkImage_MakeFromTexture_3": {
-    "code": "void draw(SkCanvas* canvas) {\n    GrContext* context = canvas->getGrContext();\n    if (!context) {\n       return;\n    }\n    canvas->scale(.25f, .25f);\n    int x = 0;\n    for (auto origin : { kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin } ) {\n        sk_sp<SkImage> image = SkImage::MakeFromTexture(context, backEndTexture,\n               origin, kOpaque_SkAlphaType, nullptr);\n        canvas->drawImage(image, x, 0);\n    x += 512;\n    }\n}",
+    "code": "void draw(SkCanvas* canvas) {\n    GrContext* context = canvas->getGrContext();\n    if (!context) {\n       return;\n    }\n    canvas->scale(.25f, .25f);\n    int x = 0;\n    for (auto origin : { kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin } ) {\n        sk_sp<SkImage> image = SkImage::MakeFromTexture(context, backEndTexture,\n               origin, kN32_SkColorType, kOpaque_SkAlphaType, nullptr);\n        canvas->drawImage(image, x, 0);\n    x += 512;\n    }\n}",
     "width": 256,
     "height": 128,
-    "hash": "d5e43961a54548f445eece91d517381c",
+    "hash": "fdc498de45b53569743ec13012bf476c",
     "file": "SkImage_Reference",
     "name": "SkImage::MakeFromTexture_3"
 },
@@ -5102,10 +5062,10 @@
     "name": "SkImage::alphaType"
 },
     "SkImage_asLegacyBitmap": {
-    "code": "void draw(SkCanvas* canvas) {\n    // incomplete\n}",
+    "code": "void draw(SkCanvas* canvas) {\n    SkBitmap bitImage;\n    if (image->asLegacyBitmap(&bitImage, SkImage::kRO_LegacyBitmapMode)) {\n        canvas->drawBitmap(bitImage, 0, 0);\n    }\n    GrContext* grContext = canvas->getGrContext();\n    if (!grContext) {\n        return;\n    }\n    sk_sp<SkImage> textureImage(SkImage::MakeFromTexture(grContext, backEndTexture,\n                                kTopLeft_GrSurfaceOrigin, kOpaque_SkAlphaType, nullptr));\n    canvas->drawImage(textureImage, 45, 45);\n    if (textureImage->asLegacyBitmap(&bitImage, SkImage::kRO_LegacyBitmapMode)) {\n        canvas->drawBitmap(bitImage, 90, 90);\n    }\n}",
     "width": 256,
     "height": 256,
-    "hash": "882e8e0103048009a25cfc20400492f7",
+    "hash": "eddfe9735342052ce2f8869ee5eb737a",
     "file": "SkImage_Reference",
     "name": "SkImage::asLegacyBitmap"
 },
@@ -5140,14 +5100,6 @@
     "hash": "30cee813f6aa476b0a9c8a24283e53a3",
     "file": "SkImage_Reference",
     "name": "SkImage::encodeToData_2"
-},
-    "SkImage_getDeferredTextureImageData": {
-    "code": "void draw(SkCanvas* canvas) {\n    GrContext* context = canvas->getGrContext();\n    if (!context) {\n        return;\n    }\n    sk_sp<GrContextThreadSafeProxy> proxy(context->threadSafeProxy());\n    auto params = SkImage::DeferredTextureImageUsageParams(SkMatrix::MakeScale(2, 2),\n                                                           kNone_SkFilterQuality, 0);\n    SkColorSpace* colorSpace = canvas->imageInfo().colorSpace();\n    size_t requiredMemoryInBytes = image->getDeferredTextureImageData(\n            *proxy, &params, 1, nullptr, colorSpace);\n    std::vector<uint8_t> memory;\n    memory.resize(requiredMemoryInBytes);\n    image->getDeferredTextureImageData(*proxy, &params, 1, memory.data(), colorSpace);\n    sk_sp<SkImage> uploadedEncodedImage = SkImage::MakeFromDeferredTextureImageData(\n            context, memory.data(), SkBudgeted::kNo);\n    canvas->scale(2, 2);\n    canvas->drawImage(uploadedEncodedImage, 10, 10);\n}",
-    "width": 256,
-    "height": 256,
-    "hash": "31d224ac4d22ba60221c565f9a12ad50",
-    "file": "SkImage_Reference",
-    "name": "SkImage::getDeferredTextureImageData"
 },
     "SkImage_getTextureHandle": {
     "code": "void draw(SkCanvas* canvas) {\n    GrContext* context = canvas->getGrContext();\n    if (!context) {\n       return;\n    }\n    SkPaint paint;\n    paint.setAntiAlias(true);\n    SkString str;\n    int y = -10;\n    for (auto origin : { kTopLeft_GrSurfaceOrigin, kBottomLeft_GrSurfaceOrigin } ) {\n        sk_sp<SkImage> srcImage(SkImage::MakeFromTexture(context,\n                backEndTexture, origin, kPremul_SkAlphaType, nullptr));\n        GrSurfaceOrigin readBackOrigin;\n        GrBackendObject readBackHandle = srcImage->getTextureHandle(false, &readBackOrigin);\n        str.printf(\"readBackHandle: 0x%x\", readBackHandle);\n        canvas->drawString(str, 5, y += 30, paint);\n        canvas->drawImage(srcImage, 80, y += 10);\n        str.printf(\"origin: k%s_GrSurfaceOrigin\", readBackOrigin ? \"BottomLeft\" : \"TopLeft\");\n        canvas->drawString(str, 5, y += srcImage->height() + 10, paint);\n    }\n}",
@@ -6406,18 +6358,18 @@
     "name": "SkPath::isConvex"
 },
     "SkPath_isOval": {
-    "code": "void draw(SkCanvas* canvas) {\n    SkPaint paint;\n    SkPath path;\n    path.addOval({20, 20, 220, 220}, SkPath::kCW_Direction, 1);\n    SkRect bounds;\n    SkPath::Direction direction;\n    unsigned start;\n    path.isOval(&bounds, &direction, &start);\n    paint.setColor(0xFF9FBFFF);\n    canvas->drawRect(bounds, paint);\n    paint.setColor(0x3f000000);\n    canvas->drawPath(path, paint);\n    paint.setColor(SK_ColorBLACK);\n    canvas->rotate(start * 90, bounds.centerX(), bounds.centerY());\n    char startText = '0' + start;\n    paint.setTextSize(20);\n    canvas->drawText(&startText, 1, bounds.centerX(), bounds.fTop + 20, paint);\n    paint.setStyle(SkPaint::kStroke_Style);\n    paint.setStrokeWidth(4);\n    path.reset();\n    path.addArc(bounds, -90, SkPath::kCW_Direction == direction ? 90 : -90);\n    path.rLineTo(20, -20); \n    canvas->drawPath(path, paint);\n}\n",
+    "code": "void draw(SkCanvas* canvas) {\n    SkPaint paint;\n    SkPath path;\n    path.addOval({20, 20, 220, 220});\n    SkRect bounds;\n    if (path.isOval(&bounds)) {\n        paint.setColor(0xFF9FBFFF);\n        canvas->drawRect(bounds, paint);\n    }\n    paint.setColor(0x3f000000);\n    canvas->drawPath(path, paint);\n}\n",
     "width": 256,
     "height": 256,
-    "hash": "4fc7b86c9b772c5e85af480524267bde",
+    "hash": "a51256952b183ee0f7004f2c87cbbf5b",
     "file": "SkPath_Reference",
     "name": "SkPath::isOval"
 },
     "SkPath_isRRect": {
-    "code": "void draw(SkCanvas* canvas) {\n    SkPaint paint;\n    SkPath path;\n    path.addRRect(SkRRect::MakeRectXY({20, 20, 220, 220}, 30, 50), SkPath::kCCW_Direction, 3);\n    SkRRect rrect;\n    SkPath::Direction direction;\n    unsigned start;\n    path.isRRect(&rrect, &direction, &start);\n    const SkRect& bounds = rrect.rect();\n    paint.setColor(0xFF9FBFFF);\n    canvas->drawRect(bounds, paint);\n    paint.setColor(0x3f000000);\n    canvas->drawPath(path, paint);\n    paint.setColor(SK_ColorBLACK);\n    canvas->rotate(start * 90, bounds.centerX(), bounds.centerY());\n    char startText = '0' + start;\n    paint.setTextSize(20);\n    canvas->drawText(&startText, 1, bounds.centerX(), bounds.fTop + 20, paint);\n    paint.setStyle(SkPaint::kStroke_Style);\n    paint.setStrokeWidth(4);\n    path.reset();\n    path.addArc(bounds, -90, SkPath::kCW_Direction == direction ? 90 : -90);\n    path.rLineTo(20, -20); \n    canvas->drawPath(path, paint);\n}\n",
+    "code": "void draw(SkCanvas* canvas) {\n    SkPaint paint;\n    SkPath path;\n    path.addRRect(SkRRect::MakeRectXY({20, 20, 220, 220}, 30, 50));\n    SkRRect rrect;\n    if (path.isRRect(&rrect)) {\n        const SkRect& bounds = rrect.rect();\n        paint.setColor(0xFF9FBFFF);\n        canvas->drawRect(bounds, paint);\n    }\n    paint.setColor(0x3f000000);\n    canvas->drawPath(path, paint);\n}\n",
     "width": 256,
     "height": 256,
-    "hash": "f2b7e57a385e6604475c99ec8daa2697",
+    "hash": "2aa939b90d96aff436b145a96305132c",
     "file": "SkPath_Reference",
     "name": "SkPath::isRRect"
 },
@@ -7052,6 +7004,22 @@
     "hash": "c9033080af68efc0f270d748f1c0e011",
     "file": "SkSurface_Reference",
     "name": "SkSurface::wait()"
+},
+    "SkSurface_writePixels": {
+    "code": "void draw(SkCanvas* canvas) {\n    // incomplete\n}",
+    "width": 256,
+    "height": 256,
+    "hash": "882e8e0103048009a25cfc20400492f7",
+    "file": "SkSurface_Reference",
+    "name": "SkSurface::writePixels"
+},
+    "SkSurface_writePixels_2": {
+    "code": "void draw(SkCanvas* canvas) {\n    // incomplete\n}",
+    "width": 256,
+    "height": 256,
+    "hash": "882e8e0103048009a25cfc20400492f7",
+    "file": "SkSurface_Reference",
+    "name": "SkSurface::writePixels_2"
 },
     "SkYUVColorSpace": {
     "code": "void draw(SkCanvas* canvas) {\n    // incomplete\n}",

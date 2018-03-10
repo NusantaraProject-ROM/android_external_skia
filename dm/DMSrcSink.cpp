@@ -26,6 +26,7 @@
 #include "SkImageGenerator.h"
 #include "SkImageGeneratorCG.h"
 #include "SkImageGeneratorWIC.h"
+#include "SkImageInfoPriv.h"
 #include "SkLiteDL.h"
 #include "SkLiteRecorder.h"
 #include "SkMallocPixelRef.h"
@@ -48,6 +49,7 @@
 #include "SkStream.h"
 #include "SkSwizzler.h"
 #include "SkTaskGroup.h"
+#include "SkThreadedBMPDevice.h"
 #include "SkTLogic.h"
 #include <cmath>
 #include <functional>
@@ -455,7 +457,7 @@ Error CodecSrc::draw(SkCanvas* canvas) const {
     }
     decodeInfo = decodeInfo.makeWH(size.width(), size.height());
 
-    const int bpp = SkColorTypeBytesPerPixel(decodeInfo.colorType());
+    const int bpp = decodeInfo.bytesPerPixel();
     const size_t rowBytes = size.width() * bpp;
     const size_t safeSize = decodeInfo.computeByteSize(rowBytes);
     SkAutoMalloc pixels(safeSize);
@@ -851,7 +853,7 @@ Error AndroidCodecSrc::draw(SkCanvas* canvas) const {
     }
     decodeInfo = decodeInfo.makeWH(size.width(), size.height());
 
-    int bpp = SkColorTypeBytesPerPixel(decodeInfo.colorType());
+    int bpp = decodeInfo.bytesPerPixel();
     size_t rowBytes = size.width() * bpp;
     SkAutoMalloc pixels(size.height() * rowBytes);
 
@@ -977,7 +979,7 @@ Error ImageGenSrc::draw(SkCanvas* canvas) const {
     options.fBehavior = canvas->imageInfo().colorSpace() ?
             SkTransferFunctionBehavior::kRespect : SkTransferFunctionBehavior::kIgnore;
 
-    int bpp = SkColorTypeBytesPerPixel(decodeInfo.colorType());
+    int bpp = decodeInfo.bytesPerPixel();
     size_t rowBytes = decodeInfo.width() * bpp;
     SkAutoMalloc pixels(decodeInfo.height() * rowBytes);
     if (!gen->getPixels(decodeInfo, pixels.get(), rowBytes, &options)) {
@@ -1855,7 +1857,7 @@ RasterSink::RasterSink(SkColorType colorType, sk_sp<SkColorSpace> colorSpace)
     : fColorType(colorType)
     , fColorSpace(std::move(colorSpace)) {}
 
-Error RasterSink::draw(const Src& src, SkBitmap* dst, SkWStream*, SkString*) const {
+void RasterSink::allocPixels(const Src& src, SkBitmap* dst) const {
     const SkISize size = src.size();
     // If there's an appropriate alpha type for this color type, use it, otherwise use premul.
     SkAlphaType alphaType = kPremul_SkAlphaType;
@@ -1864,8 +1866,40 @@ Error RasterSink::draw(const Src& src, SkBitmap* dst, SkWStream*, SkString*) con
     dst->allocPixelsFlags(SkImageInfo::Make(size.width(), size.height(),
                                             fColorType, alphaType, fColorSpace),
                           SkBitmap::kZeroPixels_AllocFlag);
+}
+
+Error RasterSink::draw(const Src& src, SkBitmap* dst, SkWStream*, SkString*) const {
+    this->allocPixels(src, dst);
     SkCanvas canvas(*dst);
     return src.draw(&canvas);
+}
+
+/*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
+
+ThreadedSink::ThreadedSink(SkColorType colorType, sk_sp<SkColorSpace> colorSpace)
+        : RasterSink(colorType, colorSpace)
+        , fExecutor(SkExecutor::MakeFIFOThreadPool(FLAGS_backendThreads)) {
+}
+
+Error ThreadedSink::draw(const Src& src, SkBitmap* dst, SkWStream* stream, SkString* str) const {
+    this->allocPixels(src, dst);
+
+    std::unique_ptr<SkThreadedBMPDevice> device(new SkThreadedBMPDevice(
+            *dst, FLAGS_backendTiles, FLAGS_backendThreads, fExecutor.get()));
+    std::unique_ptr<SkCanvas> canvas(new SkCanvas(device.get()));
+    Error result = src.draw(canvas.get());
+    canvas->flush();
+    return result;
+
+    // ??? yuqian:  why does the following give me segmentation fault while the above one works?
+    //              The seg fault occurs right in the beginning of ThreadedSink::draw with invalid
+    //              memory address (it would crash without even calling this->allocPixels).
+
+    // SkThreadedBMPDevice device(*dst, tileCnt, FLAGS_cpuThreads, fExecutor.get());
+    // SkCanvas canvas(&device);
+    // Error result = src.draw(&canvas);
+    // canvas.flush();
+    // return result;
 }
 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/

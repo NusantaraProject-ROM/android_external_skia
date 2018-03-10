@@ -123,7 +123,12 @@ def TriggerAndWait(options):
     if ret["done"]:
       print
       print
-      if ret["withpatch_success"]:
+      if not ret.get("is_master_branch", True):
+        print 'The Android Framework Compile bot only works for patches and'
+        print 'hashes from the master branch.'
+        print
+        return 0
+      elif ret["withpatch_success"]:
         print 'Your run was successfully completed.'
         print
         print 'With patch logs are here: %s' % ret["withpatch_log"]
@@ -141,12 +146,11 @@ def TriggerAndWait(options):
                ' Android tree is currently broken. Marking this bot as '
                'successful')
         print
-        print 'With patch logs are here: %s' % ret["WithPatchLog"]
-        print 'No patch logs are here: %s' % ret["NoPatchLog"]
+        print 'With patch logs are here: %s' % ret["withpatch_log"]
+        print 'No patch logs are here: %s' % ret["nopatch_log"]
         return 0
 
-    sys.stdout.write('.')
-    sys.stdout.flush()
+    print '.'
     time.sleep(POLLING_FREQUENCY_SECS)
 
 

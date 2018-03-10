@@ -25,6 +25,7 @@
 #include "SkData.h"
 #include "SkImage_Base.h"
 #include "SkImageInfoPriv.h"
+#include "SkImagePriv.h"
 #include "SkMaskFilterBase.h"
 #include "SkMessageBus.h"
 #include "SkMipMap.h"
@@ -69,32 +70,28 @@ void GrMakeKeyFromImageID(GrUniqueKey* key, uint32_t imageID, const SkIRect& ima
 sk_sp<GrTextureProxy> GrUploadBitmapToTextureProxy(GrProxyProvider* proxyProvider,
                                                    const SkBitmap& bitmap,
                                                    SkColorSpace* dstColorSpace) {
-    if (!bitmap.readyToDraw()) {
+    if (!bitmap.peekPixels(nullptr)) {
         return nullptr;
     }
-    SkPixmap pixmap;
-    if (!bitmap.peekPixels(&pixmap)) {
-        return nullptr;
-    }
-    return GrUploadPixmapToTextureProxy(proxyProvider, pixmap, SkBudgeted::kYes, dstColorSpace);
-}
 
-sk_sp<GrTextureProxy> GrUploadPixmapToTextureProxy(GrProxyProvider* proxyProvider,
-                                                   const SkPixmap& pixmap,
-                                                   SkBudgeted budgeted,
-                                                   SkColorSpace* dstColorSpace) {
     SkDestinationSurfaceColorMode colorMode = dstColorSpace
         ? SkDestinationSurfaceColorMode::kGammaAndColorSpaceAware
         : SkDestinationSurfaceColorMode::kLegacy;
 
-    if (!SkImageInfoIsValid(pixmap.info(), colorMode)) {
+    if (!SkImageInfoIsValid(bitmap.info(), colorMode)) {
         return nullptr;
     }
 
-    ATRACE_ANDROID_FRAMEWORK("Upload Texture [%ux%u]", pixmap.width(), pixmap.height());
-    GrSurfaceDesc desc = GrImageInfoToSurfaceDesc(pixmap.info(), *proxyProvider->caps());
+    // In non-ddl we will always instantiate right away. Thus we never want to copy the SkBitmap
+    // even if it's mutable. In ddl, if the bitmap is mutable then we must make a copy since the
+    // upload of the data to the gpu can happen at anytime and the bitmap may change by then.
+    SkCopyPixelsMode cpyMode = proxyProvider->mutableBitmapsNeedCopy() ? kIfMutable_SkCopyPixelsMode
+                                                                       : kNever_SkCopyPixelsMode;
+    sk_sp<SkImage> image = SkMakeImageFromRasterBitmap(bitmap, cpyMode);
 
-    return proxyProvider->createTextureProxy(desc, budgeted, pixmap.addr(), pixmap.rowBytes());
+    return proxyProvider->createTextureProxy(std::move(image), kNone_GrSurfaceFlags,
+                                             kTopLeft_GrSurfaceOrigin, 1, SkBudgeted::kYes,
+                                             SkBackingFit::kExact);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -110,50 +107,6 @@ void GrInstallBitmapUniqueKeyInvalidator(const GrUniqueKey& key, SkPixelRef* pix
     };
 
     pixelRef->addGenIDChangeListener(new Invalidator(key));
-}
-
-sk_sp<GrTextureProxy> GrGenerateMipMapsAndUploadToTextureProxy(GrProxyProvider* proxyProvider,
-                                                               const SkBitmap& bitmap,
-                                                               SkColorSpace* dstColorSpace) {
-    SkDestinationSurfaceColorMode colorMode = dstColorSpace
-        ? SkDestinationSurfaceColorMode::kGammaAndColorSpaceAware
-        : SkDestinationSurfaceColorMode::kLegacy;
-
-    if (!SkImageInfoIsValid(bitmap.info(), colorMode)) {
-        return nullptr;
-    }
-
-    SkPixmap pixmap;
-    if (!bitmap.peekPixels(&pixmap)) {
-        return nullptr;
-    }
-
-    ATRACE_ANDROID_FRAMEWORK("Upload MipMap Texture [%ux%u]", pixmap.width(), pixmap.height());
-    GrSurfaceDesc desc = GrImageInfoToSurfaceDesc(pixmap.info(), *proxyProvider->caps());
-    std::unique_ptr<SkMipMap> mipmaps(SkMipMap::Build(pixmap, colorMode, nullptr));
-    if (!mipmaps) {
-        return nullptr;
-    }
-
-    const int mipLevelCount = mipmaps->countLevels() + 1;
-    if (mipLevelCount < 1) {
-        return nullptr;
-    }
-
-    std::unique_ptr<GrMipLevel[]> texels(new GrMipLevel[mipLevelCount]);
-
-    texels[0].fPixels = pixmap.addr();
-    texels[0].fRowBytes = pixmap.rowBytes();
-
-    for (int i = 1; i < mipLevelCount; ++i) {
-        SkMipMap::Level generatedMipLevel;
-        mipmaps->getLevel(i - 1, &generatedMipLevel);
-        texels[i].fPixels = generatedMipLevel.fPixmap.addr();
-        texels[i].fRowBytes = generatedMipLevel.fPixmap.rowBytes();
-    }
-
-    return proxyProvider->createMipMapProxy(desc, SkBudgeted::kYes, texels.get(), mipLevelCount,
-                                            colorMode);
 }
 
 sk_sp<GrTextureProxy> GrCopyBaseMipMapToTextureProxy(GrContext* ctx, GrTextureProxy* baseProxy) {
@@ -178,27 +131,16 @@ sk_sp<GrTextureProxy> GrCopyBaseMipMapToTextureProxy(GrContext* ctx, GrTexturePr
     }
 
     // Copy the base layer to our proxy
-    sk_sp<GrSurfaceContext> sContext = ctx->contextPriv().makeWrappedSurfaceContext(proxy);
+    sk_sp<SkColorSpace> colorSpace;
+    if (GrPixelConfigIsSRGB(proxy->config())) {
+        colorSpace = SkColorSpace::MakeSRGB();
+    }
+    sk_sp<GrSurfaceContext> sContext =
+            ctx->contextPriv().makeWrappedSurfaceContext(proxy, std::move(colorSpace));
     SkASSERT(sContext);
     SkAssertResult(sContext->copy(baseProxy));
 
     return proxy;
-}
-
-
-sk_sp<GrTextureProxy> GrUploadMipMapToTextureProxy(GrProxyProvider* proxyProvider,
-                                                   const SkImageInfo& info,
-                                                   const GrMipLevel texels[],
-                                                   int mipLevelCount,
-                                                   SkDestinationSurfaceColorMode colorMode) {
-    if (!SkImageInfoIsValid(info, colorMode)) {
-        return nullptr;
-    }
-
-    GrSurfaceDesc desc(GrImageInfoToSurfaceDesc(info, *proxyProvider->caps()));
-
-    return proxyProvider->createMipMapProxy(desc, SkBudgeted::kYes,
-                                            texels, mipLevelCount, colorMode);
 }
 
 sk_sp<GrTextureProxy> GrRefCachedBitmapTextureProxy(GrContext* ctx,
@@ -211,33 +153,24 @@ sk_sp<GrTextureProxy> GrRefCachedBitmapTextureProxy(GrContext* ctx,
 }
 
 sk_sp<GrTextureProxy> GrMakeCachedBitmapProxy(GrProxyProvider* proxyProvider,
-                                              const SkBitmap& bitmap) {
-    GrUniqueKey originalKey;
-
-    if (!bitmap.isVolatile()) {
-        SkIPoint origin = bitmap.pixelRefOrigin();
-        SkIRect subset = SkIRect::MakeXYWH(origin.fX, origin.fY, bitmap.width(), bitmap.height());
-        GrMakeKeyFromImageID(&originalKey, bitmap.pixelRef()->getGenerationID(), subset);
+                                              const SkBitmap& bitmap,
+                                              SkBackingFit fit) {
+    if (!bitmap.peekPixels(nullptr)) {
+        return nullptr;
     }
 
-    sk_sp<GrTextureProxy> proxy;
+    // In non-ddl we will always instantiate right away. Thus we never want to copy the SkBitmap
+    // even if its mutable. In ddl, if the bitmap is mutable then we must make a copy since the
+    // upload of the data to the gpu can happen at anytime and the bitmap may change by then.
+    SkCopyPixelsMode cpyMode = proxyProvider->mutableBitmapsNeedCopy() ? kIfMutable_SkCopyPixelsMode
+                                                                       : kNever_SkCopyPixelsMode;
+    sk_sp<SkImage> image = SkMakeImageFromRasterBitmap(bitmap, cpyMode);
 
-    if (originalKey.isValid()) {
-        proxy = proxyProvider->findOrCreateProxyByUniqueKey(originalKey, kTopLeft_GrSurfaceOrigin);
-    }
-    if (!proxy) {
-        // Pass nullptr for |dstColorSpace|.  This is lenient - we allow a wider range of
-        // color spaces in legacy mode.  Unfortunately, we have to be lenient here, since
-        // we can't necessarily know the |dstColorSpace| at this time.
-        proxy = GrUploadBitmapToTextureProxy(proxyProvider, bitmap, nullptr);
-        if (proxy && originalKey.isValid()) {
-            SkASSERT(proxy->origin() == kTopLeft_GrSurfaceOrigin);
-            proxyProvider->assignUniqueKeyToProxy(originalKey, proxy.get());
-            GrInstallBitmapUniqueKeyInvalidator(originalKey, bitmap.pixelRef());
-        }
+    if (!image) {
+        return nullptr;
     }
 
-    return proxy;
+    return GrMakeCachedImageProxy(proxyProvider, std::move(image), fit);
 }
 
 static void create_unique_key_for_image(const SkImage* image, GrUniqueKey* result) {
@@ -431,6 +364,9 @@ static inline bool skpaint_to_grpaint_impl(GrContext* context,
             shaderFP = std::move(*shaderProcessor);
         } else if (const auto* shader = as_SB(skPaint.getShader())) {
             shaderFP = shader->asFragmentProcessor(fpArgs);
+            if (!shaderFP) {
+                return false;
+            }
         }
     }
 
@@ -629,6 +565,7 @@ bool SkPaintToGrPaintWithTexture(GrContext* context,
 GrSamplerState::Filter GrSkFilterQualityToGrFilterMode(SkFilterQuality paintFilterQuality,
                                                        const SkMatrix& viewM,
                                                        const SkMatrix& localM,
+                                                       bool sharpenMipmappedTextures,
                                                        bool* doBicubic) {
     *doBicubic = false;
     GrSamplerState::Filter textureFilterMode;
@@ -642,7 +579,16 @@ GrSamplerState::Filter GrSkFilterQualityToGrFilterMode(SkFilterQuality paintFilt
         case kMedium_SkFilterQuality: {
             SkMatrix matrix;
             matrix.setConcat(viewM, localM);
-            if (matrix.getMinScale() < SK_Scalar1) {
+            // With sharp mips, we bias lookups by -0.5. That means our final LOD is >= 0 until the
+            // computed LOD is >= 0.5. At what scale factor does a texture get an LOD of 0.5?
+            //
+            // Want:  0       = log2(1/s) - 0.5
+            //        0.5     = log2(1/s)
+            //        2^0.5   = 1/s
+            //        1/2^0.5 = s
+            //        2^0.5/2 = s
+            SkScalar mipScale = sharpenMipmappedTextures ? SK_ScalarRoot2Over2 : SK_Scalar1;
+            if (matrix.getMinScale() < mipScale) {
                 textureFilterMode = GrSamplerState::Filter::kMipMap;
             } else {
                 // Don't trigger MIP level generation unnecessarily.

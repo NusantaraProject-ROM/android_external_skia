@@ -118,6 +118,7 @@ void GrMtlCaps::initGrCaps(const id<MTLDevice> device) {
             }
         }
     }
+    fMaxPreferredRenderTargetSize = fMaxRenderTargetSize;
     fMaxTextureSize = fMaxRenderTargetSize;
 
     // Init sample counts. All devices support 1 (i.e. 0 in skia).
@@ -288,10 +289,6 @@ void GrMtlCaps::initConfigTable() {
     // SBGRA_8888 uses BGRA8Unorm_sRGB
     info = &fConfigTable[kSBGRA_8888_GrPixelConfig];
     info->fFlags = ConfigInfo::kAllFlags;
-
-    // RGBA_8888_sint uses RGBA8Sint
-    info = &fConfigTable[kRGBA_8888_sint_GrPixelConfig];
-    info->fFlags = ConfigInfo::kMSAA_Flag;
 
     // RGBA_float uses RGBA32Float
     info = &fConfigTable[kRGBA_float_GrPixelConfig];

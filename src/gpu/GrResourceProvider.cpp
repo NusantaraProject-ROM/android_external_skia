@@ -30,16 +30,31 @@ GR_DECLARE_STATIC_UNIQUE_KEY(gQuadIndexBufferKey);
 
 const uint32_t GrResourceProvider::kMinScratchTextureSize = 16;
 
+#ifdef SK_DISABLE_EXPLICIT_GPU_RESOURCE_ALLOCATION
+static const bool kDefaultExplicitlyAllocateGPUResources = false;
+#else
+static const bool kDefaultExplicitlyAllocateGPUResources = true;
+#endif
+
 #define ASSERT_SINGLE_OWNER \
     SkDEBUGCODE(GrSingleOwner::AutoEnforce debug_SingleOwner(fSingleOwner);)
 
-GrResourceProvider::GrResourceProvider(GrGpu* gpu, GrResourceCache* cache, GrSingleOwner* owner)
+GrResourceProvider::GrResourceProvider(GrGpu* gpu, GrResourceCache* cache, GrSingleOwner* owner,
+                                       GrContextOptions::Enable explicitlyAllocateGPUResources)
         : fCache(cache)
         , fGpu(gpu)
 #ifdef SK_DEBUG
         , fSingleOwner(owner)
 #endif
-        {
+{
+    if (GrContextOptions::Enable::kNo == explicitlyAllocateGPUResources) {
+        fExplicitlyAllocateGPUResources = false;
+    } else if (GrContextOptions::Enable::kYes == explicitlyAllocateGPUResources) {
+        fExplicitlyAllocateGPUResources = true;
+    } else {
+        fExplicitlyAllocateGPUResources = kDefaultExplicitlyAllocateGPUResources;
+    }
+
     fCaps = sk_ref_sp(fGpu->caps());
 
     GR_DEFINE_STATIC_UNIQUE_KEY(gQuadIndexBufferKey);
@@ -120,8 +135,17 @@ sk_sp<GrTexture> GrResourceProvider::createTexture(const GrSurfaceDesc& desc,
                                                                              fit,
                                                                              budgeted);
         if (proxy) {
+            // We use an ephemeral surface context to do the write pixels. Here it isn't clear what
+            // color space to tag it with. That's ok because GrSurfaceContext::writePixels doesn't
+            // do any color space conversions. Though, that is likely to change. However, if the
+            // pixel config is sRGB then the passed color space here must have sRGB gamma or
+            // GrSurfaceContext creation fails.
+            sk_sp<SkColorSpace> colorSpace;
+            if (GrPixelConfigIsSRGB(desc.fConfig)) {
+                colorSpace = SkColorSpace::MakeSRGB();
+            }
             sk_sp<GrSurfaceContext> sContext = context->contextPriv().makeWrappedSurfaceContext(
-                                                                                std::move(proxy));
+                    std::move(proxy), std::move(colorSpace));
             if (sContext) {
                 if (sContext->writePixels(srcInfo, mipLevel.fPixels, mipLevel.fRowBytes, 0, 0)) {
                     return sk_ref_sp(sContext->asTextureProxy()->priv().peekTexture());

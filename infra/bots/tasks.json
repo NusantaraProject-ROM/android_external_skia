@@ -228,6 +228,12 @@
         "Build-Debian9-Clang-x86_64-Release-Mini"
       ]
     },
+    "Build-Debian9-Clang-x86_64-Release-NoDEPS": {
+      "priority": 0.8,
+      "tasks": [
+        "Build-Debian9-Clang-x86_64-Release-NoDEPS"
+      ]
+    },
     "Build-Debian9-Clang-x86_64-Release-ParentRevision": {
       "priority": 0.8,
       "tasks": [
@@ -1173,6 +1179,25 @@
         "Upload-Perf-Debian9-GCC-GCE-CPU-AVX2-x86_64-Release-All"
       ]
     },
+    "Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All": {
+      "priority": 0.8,
+      "tasks": [
+        "Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All"
+      ]
+    },
+    "Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All": {
+      "priority": 0.8,
+      "tasks": [
+        "Upload-Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All"
+      ]
+    },
+    "Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-CommandBuffer": {
+      "priority": 0.8,
+      "tasks": [
+        "Upload-Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-CommandBuffer"
+      ],
+      "trigger": "master"
+    },
     "Perf-Mac-Clang-MacBookAir7.2-GPU-IntelHD6000-x86_64-Debug-All": {
       "priority": 0.8,
       "tasks": [
@@ -2081,6 +2106,12 @@
         "Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_ASAN_Vulkan"
       ]
     },
+    "Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NativeFonts": {
+      "priority": 0.8,
+      "tasks": [
+        "Upload-Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NativeFonts"
+      ]
+    },
     "Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NoGPUThreads": {
       "priority": 0.8,
       "tasks": [
@@ -2433,6 +2464,31 @@
       "priority": 0.8,
       "tasks": [
         "Upload-Test-Debian9-GCC-GCE-CPU-AVX2-x86_64-Release-All"
+      ]
+    },
+    "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All": {
+      "priority": 0.8,
+      "tasks": [
+        "Upload-Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All"
+      ]
+    },
+    "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All-CommandBuffer": {
+      "priority": 0.8,
+      "tasks": [
+        "Upload-Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All-CommandBuffer"
+      ],
+      "trigger": "master"
+    },
+    "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All": {
+      "priority": 0.8,
+      "tasks": [
+        "Upload-Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All"
+      ]
+    },
+    "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-NativeFonts": {
+      "priority": 0.8,
+      "tasks": [
+        "Upload-Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-NativeFonts"
       ]
     },
     "Test-Mac-Clang-MacBookAir7.2-GPU-IntelHD6000-x86_64-Debug-All": {
@@ -2838,6 +2894,12 @@
       "priority": 0.8,
       "tasks": [
         "Upload-Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-ANGLE"
+      ]
+    },
+    "Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-NativeFonts": {
+      "priority": 0.8,
+      "tasks": [
+        "Upload-Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-NativeFonts"
       ]
     },
     "Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-Vulkan": {
@@ -4329,6 +4391,36 @@
       "isolate": "compile_skia.isolate",
       "priority": 0.8
     },
+    "Build-Debian9-Clang-x86_64-Release-NoDEPS": {
+      "cipd_packages": [
+        {
+          "name": "skia/bots/clang_linux",
+          "path": "clang_linux",
+          "version": "version:10"
+        }
+      ],
+      "dimensions": [
+        "cpu:x86-64-Haswell_GCE",
+        "gpu:none",
+        "os:Debian-9.2",
+        "pool:Skia"
+      ],
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "compile",
+        "repository=<(REPO)",
+        "buildername=Build-Debian9-Clang-x86_64-Release-NoDEPS",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "isolate": "compile_skia.isolate",
+      "priority": 0.8
+    },
     "Build-Debian9-Clang-x86_64-Release-ParentRevision": {
       "cipd_packages": [
         {
@@ -4549,7 +4641,7 @@
         {
           "name": "skia/bots/emscripten_sdk",
           "path": "emscripten_sdk",
-          "version": "version:1"
+          "version": "version:2"
         }
       ],
       "dimensions": [
@@ -4950,7 +5042,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -4973,7 +5065,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -5003,7 +5095,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -5026,7 +5118,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -5049,7 +5141,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -5072,7 +5164,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -5095,7 +5187,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -5118,7 +5210,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -5141,7 +5233,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -5164,7 +5256,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -5187,7 +5279,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -5210,7 +5302,7 @@
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
         "gpu:none",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "extra_args": [
@@ -6040,7 +6132,7 @@
         {
           "name": "skia/bots/go",
           "path": "go",
-          "version": "version:3"
+          "version": "version:4"
         }
       ],
       "dependencies": [
@@ -6075,7 +6167,7 @@
         {
           "name": "skia/bots/go",
           "path": "go",
-          "version": "version:3"
+          "version": "version:4"
         }
       ],
       "dimensions": [
@@ -6130,7 +6222,7 @@
         {
           "name": "skia/bots/go",
           "path": "go",
-          "version": "version:3"
+          "version": "version:4"
         }
       ],
       "dependencies": [
@@ -6163,7 +6255,7 @@
         {
           "name": "skia/bots/go",
           "path": "go",
-          "version": "version:3"
+          "version": "version:4"
         }
       ],
       "dependencies": [
@@ -6250,7 +6342,7 @@
         {
           "name": "skia/bots/go",
           "path": "go",
-          "version": "version:3"
+          "version": "version:4"
         }
       ],
       "dimensions": [
@@ -6365,7 +6457,7 @@
         {
           "name": "skia/bots/win_vulkan_sdk",
           "path": "win_vulkan_sdk",
-          "version": "version:2"
+          "version": "version:7"
         }
       ],
       "dimensions": [
@@ -6382,7 +6474,7 @@
         {
           "name": "skia/bots/go",
           "path": "go",
-          "version": "version:3"
+          "version": "version:4"
         }
       ],
       "dimensions": [
@@ -7783,7 +7875,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -7818,7 +7910,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -7853,7 +7945,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -7886,7 +7978,7 @@
         "Housekeeper-PerCommit-IsolateSKP"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -7919,7 +8011,7 @@
         "Housekeeper-PerCommit-IsolateSKP"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -7954,7 +8046,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -7987,7 +8079,7 @@
         "Housekeeper-PerCommit-IsolateSKP"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -9512,6 +9604,147 @@
       "max_attempts": 1,
       "priority": 0.8
     },
+    "Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All": {
+      "cipd_packages": [
+        {
+          "name": "skia/bots/skimage",
+          "path": "skimage",
+          "version": "version:34"
+        },
+        {
+          "name": "skia/bots/skp",
+          "path": "skp",
+          "version": "version:113"
+        },
+        {
+          "name": "skia/bots/svg",
+          "path": "svg",
+          "version": "version:9"
+        }
+      ],
+      "dependencies": [
+        "Build-Mac-Clang-x86_64-Debug",
+        "Housekeeper-PerCommit-BundleRecipes"
+      ],
+      "dimensions": [
+        "gpu:8086:591e",
+        "os:Mac-10.13.3",
+        "pool:Skia"
+      ],
+      "execution_timeout_ns": 14400000000000,
+      "expiration_ns": 72000000000000,
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "perf",
+        "repository=<(REPO)",
+        "buildername=Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "io_timeout_ns": 2400000000000,
+      "isolate": "perf_skia_bundled_unix.isolate",
+      "max_attempts": 1,
+      "priority": 0.8
+    },
+    "Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All": {
+      "cipd_packages": [
+        {
+          "name": "skia/bots/skimage",
+          "path": "skimage",
+          "version": "version:34"
+        },
+        {
+          "name": "skia/bots/skp",
+          "path": "skp",
+          "version": "version:113"
+        },
+        {
+          "name": "skia/bots/svg",
+          "path": "svg",
+          "version": "version:9"
+        }
+      ],
+      "dependencies": [
+        "Build-Mac-Clang-x86_64-Release",
+        "Housekeeper-PerCommit-BundleRecipes"
+      ],
+      "dimensions": [
+        "gpu:8086:591e",
+        "os:Mac-10.13.3",
+        "pool:Skia"
+      ],
+      "execution_timeout_ns": 14400000000000,
+      "expiration_ns": 72000000000000,
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "perf",
+        "repository=<(REPO)",
+        "buildername=Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "io_timeout_ns": 2400000000000,
+      "isolate": "perf_skia_bundled_unix.isolate",
+      "max_attempts": 1,
+      "priority": 0.8
+    },
+    "Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-CommandBuffer": {
+      "cipd_packages": [
+        {
+          "name": "skia/bots/skimage",
+          "path": "skimage",
+          "version": "version:34"
+        },
+        {
+          "name": "skia/bots/skp",
+          "path": "skp",
+          "version": "version:113"
+        },
+        {
+          "name": "skia/bots/svg",
+          "path": "svg",
+          "version": "version:9"
+        }
+      ],
+      "dependencies": [
+        "Build-Mac-Clang-x86_64-Release-CommandBuffer",
+        "Housekeeper-PerCommit-BundleRecipes"
+      ],
+      "dimensions": [
+        "gpu:8086:591e",
+        "os:Mac-10.13.3",
+        "pool:Skia"
+      ],
+      "execution_timeout_ns": 14400000000000,
+      "expiration_ns": 72000000000000,
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "perf",
+        "repository=<(REPO)",
+        "buildername=Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-CommandBuffer",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "io_timeout_ns": 2400000000000,
+      "isolate": "perf_skia_bundled_unix.isolate",
+      "max_attempts": 1,
+      "priority": 0.8
+    },
     "Perf-Mac-Clang-MacBookAir7.2-GPU-IntelHD6000-x86_64-Debug-All": {
       "cipd_packages": [
         {
@@ -9677,7 +9910,7 @@
       ],
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -9724,7 +9957,7 @@
       ],
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -9770,8 +10003,9 @@
         "Housekeeper-PerCommit-BundleRecipes"
       ],
       "dimensions": [
+        "cpu:x86-64-i7-4578U",
         "gpu:8086:0a2e",
-        "os:Mac-10.13.1",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -9817,8 +10051,9 @@
         "Housekeeper-PerCommit-BundleRecipes"
       ],
       "dimensions": [
+        "cpu:x86-64-i7-4578U",
         "gpu:8086:0a2e",
-        "os:Mac-10.13.1",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -9864,8 +10099,9 @@
         "Housekeeper-PerCommit-BundleRecipes"
       ],
       "dimensions": [
+        "cpu:x86-64-i7-4578U",
         "gpu:8086:0a2e",
-        "os:Mac-10.13.1",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -11809,7 +12045,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -11856,7 +12092,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -11903,7 +12139,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -11950,7 +12186,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -11997,7 +12233,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12044,7 +12280,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12091,7 +12327,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12138,7 +12374,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12185,7 +12421,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12232,7 +12468,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12279,7 +12515,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12326,7 +12562,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12373,7 +12609,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -12420,7 +12656,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -16135,6 +16371,42 @@
       "max_attempts": 1,
       "priority": 0.8
     },
+    "Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NativeFonts": {
+      "dependencies": [
+        "Build-Debian9-Clang-arm64-Release-Android",
+        "Housekeeper-PerCommit-BundleRecipes",
+        "Housekeeper-PerCommit-IsolateSKP",
+        "Housekeeper-PerCommit-IsolateSVG",
+        "Housekeeper-PerCommit-IsolateSkImage"
+      ],
+      "dimensions": [
+        "device_os:OPR6.170623.023",
+        "device_type:bullhead",
+        "os:Android",
+        "pool:Skia",
+        "python:2.7.12"
+      ],
+      "execution_timeout_ns": 14400000000000,
+      "expiration_ns": 72000000000000,
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "test",
+        "repository=<(REPO)",
+        "buildbucket_build_id=<(BUILDBUCKET_BUILD_ID)",
+        "buildername=Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NativeFonts",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "io_timeout_ns": 2400000000000,
+      "isolate": "test_skia_bundled_unix.isolate",
+      "max_attempts": 1,
+      "priority": 0.8
+    },
     "Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NoGPUThreads": {
       "dependencies": [
         "Build-Debian9-Clang-arm64-Release-Android",
@@ -16612,7 +16884,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -16648,7 +16920,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -16684,7 +16956,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -16720,7 +16992,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -16756,7 +17028,7 @@
         "Housekeeper-PerCommit-IsolateSkImage"
       ],
       "dimensions": [
-        "device_os:OPR3.170623.008",
+        "device_os:OPM1.171019.016",
         "device_type:sailfish",
         "os:Android",
         "pool:Skia",
@@ -19027,6 +19299,198 @@
       "max_attempts": 1,
       "priority": 0.8
     },
+    "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All": {
+      "cipd_packages": [
+        {
+          "name": "skia/bots/skimage",
+          "path": "skimage",
+          "version": "version:34"
+        },
+        {
+          "name": "skia/bots/skp",
+          "path": "skp",
+          "version": "version:113"
+        },
+        {
+          "name": "skia/bots/svg",
+          "path": "svg",
+          "version": "version:9"
+        }
+      ],
+      "dependencies": [
+        "Build-Mac-Clang-x86_64-Debug",
+        "Housekeeper-PerCommit-BundleRecipes"
+      ],
+      "dimensions": [
+        "gpu:8086:591e",
+        "os:Mac-10.13.3",
+        "pool:Skia"
+      ],
+      "execution_timeout_ns": 14400000000000,
+      "expiration_ns": 72000000000000,
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "test",
+        "repository=<(REPO)",
+        "buildbucket_build_id=<(BUILDBUCKET_BUILD_ID)",
+        "buildername=Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "io_timeout_ns": 2400000000000,
+      "isolate": "test_skia_bundled_unix.isolate",
+      "max_attempts": 1,
+      "priority": 0.8
+    },
+    "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All-CommandBuffer": {
+      "cipd_packages": [
+        {
+          "name": "skia/bots/skimage",
+          "path": "skimage",
+          "version": "version:34"
+        },
+        {
+          "name": "skia/bots/skp",
+          "path": "skp",
+          "version": "version:113"
+        },
+        {
+          "name": "skia/bots/svg",
+          "path": "svg",
+          "version": "version:9"
+        }
+      ],
+      "dependencies": [
+        "Build-Mac-Clang-x86_64-Debug-CommandBuffer",
+        "Housekeeper-PerCommit-BundleRecipes"
+      ],
+      "dimensions": [
+        "gpu:8086:591e",
+        "os:Mac-10.13.3",
+        "pool:Skia"
+      ],
+      "execution_timeout_ns": 14400000000000,
+      "expiration_ns": 72000000000000,
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "test",
+        "repository=<(REPO)",
+        "buildbucket_build_id=<(BUILDBUCKET_BUILD_ID)",
+        "buildername=Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All-CommandBuffer",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "io_timeout_ns": 2400000000000,
+      "isolate": "test_skia_bundled_unix.isolate",
+      "max_attempts": 1,
+      "priority": 0.8
+    },
+    "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All": {
+      "cipd_packages": [
+        {
+          "name": "skia/bots/skimage",
+          "path": "skimage",
+          "version": "version:34"
+        },
+        {
+          "name": "skia/bots/skp",
+          "path": "skp",
+          "version": "version:113"
+        },
+        {
+          "name": "skia/bots/svg",
+          "path": "svg",
+          "version": "version:9"
+        }
+      ],
+      "dependencies": [
+        "Build-Mac-Clang-x86_64-Release",
+        "Housekeeper-PerCommit-BundleRecipes"
+      ],
+      "dimensions": [
+        "gpu:8086:591e",
+        "os:Mac-10.13.3",
+        "pool:Skia"
+      ],
+      "execution_timeout_ns": 14400000000000,
+      "expiration_ns": 72000000000000,
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "test",
+        "repository=<(REPO)",
+        "buildbucket_build_id=<(BUILDBUCKET_BUILD_ID)",
+        "buildername=Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "io_timeout_ns": 2400000000000,
+      "isolate": "test_skia_bundled_unix.isolate",
+      "max_attempts": 1,
+      "priority": 0.8
+    },
+    "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-NativeFonts": {
+      "cipd_packages": [
+        {
+          "name": "skia/bots/skimage",
+          "path": "skimage",
+          "version": "version:34"
+        },
+        {
+          "name": "skia/bots/skp",
+          "path": "skp",
+          "version": "version:113"
+        },
+        {
+          "name": "skia/bots/svg",
+          "path": "svg",
+          "version": "version:9"
+        }
+      ],
+      "dependencies": [
+        "Build-Mac-Clang-x86_64-Release",
+        "Housekeeper-PerCommit-BundleRecipes"
+      ],
+      "dimensions": [
+        "gpu:8086:591e",
+        "os:Mac-10.13.3",
+        "pool:Skia"
+      ],
+      "execution_timeout_ns": 14400000000000,
+      "expiration_ns": 72000000000000,
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "test",
+        "repository=<(REPO)",
+        "buildbucket_build_id=<(BUILDBUCKET_BUILD_ID)",
+        "buildername=Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-NativeFonts",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "io_timeout_ns": 2400000000000,
+      "isolate": "test_skia_bundled_unix.isolate",
+      "max_attempts": 1,
+      "priority": 0.8
+    },
     "Test-Mac-Clang-MacBookAir7.2-GPU-IntelHD6000-x86_64-Debug-All": {
       "cipd_packages": [
         {
@@ -19195,7 +19659,7 @@
       ],
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -19243,7 +19707,7 @@
       ],
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -19291,7 +19755,7 @@
       ],
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -19339,7 +19803,7 @@
       ],
       "dimensions": [
         "cpu:x86-64-E5-2697_v2",
-        "os:Mac-10.13.2",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -19386,8 +19850,9 @@
         "Housekeeper-PerCommit-BundleRecipes"
       ],
       "dimensions": [
+        "cpu:x86-64-i7-4578U",
         "gpu:8086:0a2e",
-        "os:Mac-10.13.1",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -19434,8 +19899,9 @@
         "Housekeeper-PerCommit-BundleRecipes"
       ],
       "dimensions": [
+        "cpu:x86-64-i7-4578U",
         "gpu:8086:0a2e",
-        "os:Mac-10.13.1",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -19482,8 +19948,9 @@
         "Housekeeper-PerCommit-BundleRecipes"
       ],
       "dimensions": [
+        "cpu:x86-64-i7-4578U",
         "gpu:8086:0a2e",
-        "os:Mac-10.13.1",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -19530,8 +19997,9 @@
         "Housekeeper-PerCommit-BundleRecipes"
       ],
       "dimensions": [
+        "cpu:x86-64-i7-4578U",
         "gpu:8086:0a2e",
-        "os:Mac-10.13.1",
+        "os:Mac-10.13.3",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -21838,7 +22306,7 @@
       ],
       "dimensions": [
         "cpu:x86-64-i7-5557U",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -21886,7 +22354,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -21934,7 +22402,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -21982,7 +22450,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22030,7 +22498,7 @@
       ],
       "dimensions": [
         "gpu:8086:162b-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22078,7 +22546,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22126,7 +22594,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22174,7 +22642,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22222,7 +22690,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22270,7 +22738,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22282,6 +22750,54 @@
         "repository=<(REPO)",
         "buildbucket_build_id=<(BUILDBUCKET_BUILD_ID)",
         "buildername=Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-ANGLE",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)"
+      ],
+      "io_timeout_ns": 2400000000000,
+      "isolate": "test_skia_bundled_win.isolate",
+      "max_attempts": 1,
+      "priority": 0.8
+    },
+    "Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-NativeFonts": {
+      "cipd_packages": [
+        {
+          "name": "skia/bots/skimage",
+          "path": "skimage",
+          "version": "version:34"
+        },
+        {
+          "name": "skia/bots/skp",
+          "path": "skp",
+          "version": "version:113"
+        },
+        {
+          "name": "skia/bots/svg",
+          "path": "svg",
+          "version": "version:9"
+        }
+      ],
+      "dependencies": [
+        "Build-Win-Clang-x86_64-Release",
+        "Housekeeper-PerCommit-BundleRecipes"
+      ],
+      "dimensions": [
+        "gpu:8086:1926-21.20.16.4590",
+        "os:Windows-10-16299.248",
+        "pool:Skia"
+      ],
+      "execution_timeout_ns": 14400000000000,
+      "expiration_ns": 72000000000000,
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "test",
+        "repository=<(REPO)",
+        "buildbucket_build_id=<(BUILDBUCKET_BUILD_ID)",
+        "buildername=Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-NativeFonts",
         "swarm_out_dir=${ISOLATED_OUTDIR}",
         "revision=<(REVISION)",
         "patch_repo=<(PATCH_REPO)",
@@ -22318,7 +22834,7 @@
       ],
       "dimensions": [
         "gpu:8086:1926-21.20.16.4590",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22366,7 +22882,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22414,7 +22930,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22462,7 +22978,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -22510,7 +23026,7 @@
       ],
       "dimensions": [
         "gpu:8086:0a16-20.19.15.4703",
-        "os:Windows-10-15063",
+        "os:Windows-10-16299.248",
         "pool:Skia"
       ],
       "execution_timeout_ns": 14400000000000,
@@ -26642,6 +27158,60 @@
       "isolate": "upload_nano_results.isolate",
       "priority": 0.8
     },
+    "Upload-Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All": {
+      "dependencies": [
+        "Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All"
+      ],
+      "dimensions": [
+        "cpu:x86-64-Haswell_GCE",
+        "gpu:none",
+        "os:Debian-9.2",
+        "pool:Skia"
+      ],
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "upload_nano_results",
+        "repository=<(REPO)",
+        "buildername=Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)",
+        "gs_bucket=skia-perf"
+      ],
+      "isolate": "upload_nano_results.isolate",
+      "priority": 0.8
+    },
+    "Upload-Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-CommandBuffer": {
+      "dependencies": [
+        "Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-CommandBuffer"
+      ],
+      "dimensions": [
+        "cpu:x86-64-Haswell_GCE",
+        "gpu:none",
+        "os:Debian-9.2",
+        "pool:Skia"
+      ],
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "upload_nano_results",
+        "repository=<(REPO)",
+        "buildername=Perf-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-CommandBuffer",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)",
+        "gs_bucket=skia-perf"
+      ],
+      "isolate": "upload_nano_results.isolate",
+      "priority": 0.8
+    },
     "Upload-Perf-Mac-Clang-MacBookAir7.2-GPU-IntelHD6000-x86_64-Release-All": {
       "dependencies": [
         "Perf-Mac-Clang-MacBookAir7.2-GPU-IntelHD6000-x86_64-Release-All"
@@ -28937,6 +29507,33 @@
       "isolate": "upload_dm_results.isolate",
       "priority": 0.8
     },
+    "Upload-Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NativeFonts": {
+      "dependencies": [
+        "Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NativeFonts"
+      ],
+      "dimensions": [
+        "cpu:x86-64-Haswell_GCE",
+        "gpu:none",
+        "os:Debian-9.2",
+        "pool:Skia"
+      ],
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "upload_dm_results",
+        "repository=<(REPO)",
+        "buildername=Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NativeFonts",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)",
+        "gs_bucket=skia-infra-gm"
+      ],
+      "isolate": "upload_dm_results.isolate",
+      "priority": 0.8
+    },
     "Upload-Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NoGPUThreads": {
       "dependencies": [
         "Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_NoGPUThreads"
@@ -30441,6 +31038,114 @@
       "isolate": "upload_dm_results.isolate",
       "priority": 0.8
     },
+    "Upload-Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All": {
+      "dependencies": [
+        "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All"
+      ],
+      "dimensions": [
+        "cpu:x86-64-Haswell_GCE",
+        "gpu:none",
+        "os:Debian-9.2",
+        "pool:Skia"
+      ],
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "upload_dm_results",
+        "repository=<(REPO)",
+        "buildername=Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)",
+        "gs_bucket=skia-infra-gm"
+      ],
+      "isolate": "upload_dm_results.isolate",
+      "priority": 0.8
+    },
+    "Upload-Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All-CommandBuffer": {
+      "dependencies": [
+        "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All-CommandBuffer"
+      ],
+      "dimensions": [
+        "cpu:x86-64-Haswell_GCE",
+        "gpu:none",
+        "os:Debian-9.2",
+        "pool:Skia"
+      ],
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "upload_dm_results",
+        "repository=<(REPO)",
+        "buildername=Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Debug-All-CommandBuffer",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)",
+        "gs_bucket=skia-infra-gm"
+      ],
+      "isolate": "upload_dm_results.isolate",
+      "priority": 0.8
+    },
+    "Upload-Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All": {
+      "dependencies": [
+        "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All"
+      ],
+      "dimensions": [
+        "cpu:x86-64-Haswell_GCE",
+        "gpu:none",
+        "os:Debian-9.2",
+        "pool:Skia"
+      ],
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "upload_dm_results",
+        "repository=<(REPO)",
+        "buildername=Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)",
+        "gs_bucket=skia-infra-gm"
+      ],
+      "isolate": "upload_dm_results.isolate",
+      "priority": 0.8
+    },
+    "Upload-Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-NativeFonts": {
+      "dependencies": [
+        "Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-NativeFonts"
+      ],
+      "dimensions": [
+        "cpu:x86-64-Haswell_GCE",
+        "gpu:none",
+        "os:Debian-9.2",
+        "pool:Skia"
+      ],
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "upload_dm_results",
+        "repository=<(REPO)",
+        "buildername=Test-Mac-Clang-MacBook10.1-GPU-IntelHD615-x86_64-Release-All-NativeFonts",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)",
+        "gs_bucket=skia-infra-gm"
+      ],
+      "isolate": "upload_dm_results.isolate",
+      "priority": 0.8
+    },
     "Upload-Test-Mac-Clang-MacBookAir7.2-GPU-IntelHD6000-x86_64-Debug-All": {
       "dependencies": [
         "Test-Mac-Clang-MacBookAir7.2-GPU-IntelHD6000-x86_64-Debug-All"
@@ -31904,6 +32609,33 @@
         "upload_dm_results",
         "repository=<(REPO)",
         "buildername=Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-ANGLE",
+        "swarm_out_dir=${ISOLATED_OUTDIR}",
+        "revision=<(REVISION)",
+        "patch_repo=<(PATCH_REPO)",
+        "patch_storage=<(PATCH_STORAGE)",
+        "patch_issue=<(ISSUE)",
+        "patch_set=<(PATCHSET)",
+        "gs_bucket=skia-infra-gm"
+      ],
+      "isolate": "upload_dm_results.isolate",
+      "priority": 0.8
+    },
+    "Upload-Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-NativeFonts": {
+      "dependencies": [
+        "Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-NativeFonts"
+      ],
+      "dimensions": [
+        "cpu:x86-64-Haswell_GCE",
+        "gpu:none",
+        "os:Debian-9.2",
+        "pool:Skia"
+      ],
+      "extra_args": [
+        "--workdir",
+        "../../..",
+        "upload_dm_results",
+        "repository=<(REPO)",
+        "buildername=Test-Win10-Clang-NUC6i5SYK-GPU-IntelIris540-x86_64-Release-All-NativeFonts",
         "swarm_out_dir=${ISOLATED_OUTDIR}",
         "revision=<(REVISION)",
         "patch_repo=<(PATCH_REPO)",

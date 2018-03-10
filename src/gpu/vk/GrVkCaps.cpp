@@ -23,6 +23,7 @@ GrVkCaps::GrVkCaps(const GrContextOptions& contextOptions, const GrVkInterface* 
     fMustSubmitCommandsBeforeCopyOp = false;
     fMustSleepOnTearDown  = false;
     fNewCBOnPipelineChange = false;
+    fCanUseWholeSizeOnFlushMappedMemory = true;
 
     /**************************************************************************
     * GrDrawTargetCaps fields
@@ -101,12 +102,17 @@ void GrVkCaps::init(const GrContextOptions& contextOptions, const GrVkInterface*
         fMustSubmitCommandsBeforeCopyOp = true;
     }
 
-    if (kQualcomm_VkVendor != properties.vendorID) {
+    if (kQualcomm_VkVendor != properties.vendorID &&
+        kARM_VkVendor != properties.vendorID) {
         fSupportsCopiesAsDraws = true;
     }
 
     if (fSupportsCopiesAsDraws) {
         fCrossContextTextureSupport = true;
+    }
+
+    if (kARM_VkVendor == properties.vendorID) {
+        fInstanceAttribSupport = false;
     }
 
 #if defined(SK_BUILD_FOR_WIN)
@@ -165,6 +171,9 @@ void GrVkCaps::initGrCaps(const VkPhysicalDeviceProperties& properties,
     fMaxRenderTargetSize = SkTMin(properties.limits.maxImageDimension2D, (uint32_t)INT_MAX);
     fMaxTextureSize = SkTMin(properties.limits.maxImageDimension2D, (uint32_t)INT_MAX);
 
+    // TODO: check if RT's larger than 4k incur a performance cost on ARM.
+    fMaxPreferredRenderTargetSize = fMaxRenderTargetSize;
+
     // Assuming since we will always map in the end to upload the data we might as well just map
     // from the get go. There is no hard data to suggest this is faster or slower.
     fBufferMapThreshold = 0;
@@ -178,6 +187,10 @@ void GrVkCaps::initGrCaps(const VkPhysicalDeviceProperties& properties,
     // Current workaround is to use a different secondary command buffer for each new VkPipeline.
     if (kAMD_VkVendor == properties.vendorID) {
         fNewCBOnPipelineChange = true;
+    }
+
+    if (kIntel_VkVendor == properties.vendorID) {
+        fCanUseWholeSizeOnFlushMappedMemory = false;
     }
 
 #if defined(SK_CPU_X86)
@@ -416,11 +429,7 @@ int GrVkCaps::maxRenderTargetSampleCount(GrPixelConfig config) const {
     return table[table.count() - 1];
 }
 
-bool validate_image_info(const GrVkImageInfo* imageInfo, SkColorType ct, GrPixelConfig* config) {
-    if (!imageInfo) {
-        return false;
-    }
-    VkFormat format = imageInfo->fFormat;
+bool validate_image_info(VkFormat format, SkColorType ct, GrPixelConfig* config) {
     *config = kUnknown_GrPixelConfig;
 
     switch (ct) {
@@ -478,11 +487,30 @@ bool validate_image_info(const GrVkImageInfo* imageInfo, SkColorType ct, GrPixel
 
 bool GrVkCaps::validateBackendTexture(const GrBackendTexture& tex, SkColorType ct,
                                       GrPixelConfig* config) const {
-    return validate_image_info(tex.getVkImageInfo(), ct, config);
+    const GrVkImageInfo* imageInfo = tex.getVkImageInfo();
+    if (!imageInfo) {
+        return false;
+    }
+
+    return validate_image_info(imageInfo->fFormat, ct, config);
 }
 
 bool GrVkCaps::validateBackendRenderTarget(const GrBackendRenderTarget& rt, SkColorType ct,
                                            GrPixelConfig* config) const {
-    return validate_image_info(rt.getVkImageInfo(), ct, config);
+    const GrVkImageInfo* imageInfo = rt.getVkImageInfo();
+    if (!imageInfo) {
+        return false;
+    }
+
+    return validate_image_info(imageInfo->fFormat, ct, config);
+}
+
+bool GrVkCaps::getConfigFromBackendFormat(const GrBackendFormat& format, SkColorType ct,
+                                          GrPixelConfig* config) const {
+    const VkFormat* vkFormat = format.getVkFormat();
+    if (!vkFormat) {
+        return false;
+    }
+    return validate_image_info(*vkFormat, ct, config);
 }
 

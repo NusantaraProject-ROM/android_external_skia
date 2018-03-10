@@ -9,6 +9,7 @@
 
 #include "GrContext.h"
 #include "GrContextPriv.h"
+#include "GrOnFlushResourceProvider.h"
 #include "GrOpFlushState.h"
 #include "GrRectanizer.h"
 #include "GrProxyProvider.h"
@@ -16,12 +17,29 @@
 #include "GrTexture.h"
 #include "GrTracing.h"
 
-std::unique_ptr<GrDrawOpAtlas> GrDrawOpAtlas::Make(GrContext* ctx, GrPixelConfig config, int width,
+// When proxy allocation is deferred until flush time the proxies acting as atlases require
+// special handling. This is because the usage that can be determined from the ops themselves
+// isn't sufficient. Independent of the ops there will be ASAP and inline uploads to the
+// atlases. Extending the usage interval of any op that uses an atlas to the start of the
+// flush (as is done for proxies that are used for sw-generated masks) also won't work because
+// the atlas persists even beyond the last use in an op - for a given flush. Given this, atlases
+// must explicitly manage the lifetime of their backing proxies via the onFlushCallback system
+// (which calls this method).
+void GrDrawOpAtlas::instantiate(GrOnFlushResourceProvider* onFlushResourceProvider) {
+    for (uint32_t i = 0; i < fNumActivePages; ++i) {
+        // All the atlas pages are now instantiated at flush time in the activeNewPage method.
+        SkASSERT(fProxies[i] && fProxies[i]->priv().isInstantiated());
+    }
+}
+
+std::unique_ptr<GrDrawOpAtlas> GrDrawOpAtlas::Make(GrProxyProvider* proxyProvider,
+                                                   GrPixelConfig config, int width,
                                                    int height, int numPlotsX, int numPlotsY,
                                                    AllowMultitexturing allowMultitexturing,
                                                    GrDrawOpAtlas::EvictionFunc func, void* data) {
-    std::unique_ptr<GrDrawOpAtlas> atlas(new GrDrawOpAtlas(ctx, config, width, height, numPlotsX,
-                                                           numPlotsY, allowMultitexturing));
+    std::unique_ptr<GrDrawOpAtlas> atlas(new GrDrawOpAtlas(proxyProvider, config, width, height,
+                                                           numPlotsX, numPlotsY,
+                                                           allowMultitexturing));
     if (!atlas->getProxies()[0]) {
         return nullptr;
     }
@@ -35,7 +53,6 @@ static bool gDumpAtlasData = false;
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
-
 GrDrawOpAtlas::Plot::Plot(int pageIndex, int plotIndex, uint64_t genID, int offX, int offY,
                           int width, int height, GrPixelConfig config)
         : fLastUpload(GrDeferredUploadToken::AlreadyFlushedToken())
@@ -58,6 +75,10 @@ GrDrawOpAtlas::Plot::Plot(int pageIndex, int plotIndex, uint64_t genID, int offX
         , fDirty(false)
 #endif
 {
+    // We expect the allocated dimensions to be a multiple of 4 bytes
+    SkASSERT(((width*fBytesPerPixel) & 0x3) == 0);
+    // The padding for faster uploads only works for 1, 2 and 4 byte texels
+    SkASSERT(fBytesPerPixel != 3 && fBytesPerPixel <= 4);
     fDirtyRect.setEmpty();
 }
 
@@ -118,10 +139,19 @@ void GrDrawOpAtlas::Plot::uploadToTexture(GrDeferredTextureUploadWritePixelsFn& 
     TRACE_EVENT0("skia.gpu", TRACE_FUNC);
     size_t rowBytes = fBytesPerPixel * fWidth;
     const unsigned char* dataPtr = fData;
+    // Clamp to 4-byte aligned boundaries
+    unsigned int clearBits = 0x3 / fBytesPerPixel;
+    fDirtyRect.fLeft &= ~clearBits;
+    fDirtyRect.fRight += clearBits;
+    fDirtyRect.fRight &= ~clearBits;
+    SkASSERT(fDirtyRect.fRight <= fWidth);
+    // Set up dataPtr
     dataPtr += rowBytes * fDirtyRect.fTop;
     dataPtr += fBytesPerPixel * fDirtyRect.fLeft;
+    // TODO: Make GrDrawOpAtlas store a GrColorType rather than GrPixelConfig.
+    auto colorType = GrPixelConfigToColorType(fConfig);
     writePixels(proxy, fOffset.fX + fDirtyRect.fLeft, fOffset.fY + fDirtyRect.fTop,
-                fDirtyRect.width(), fDirtyRect.height(), fConfig, dataPtr, rowBytes);
+                fDirtyRect.width(), fDirtyRect.height(), colorType, dataPtr, rowBytes);
     fDirtyRect.setEmpty();
     SkDEBUGCODE(fDirty = false;)
 }
@@ -147,25 +177,25 @@ void GrDrawOpAtlas::Plot::resetRects() {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-GrDrawOpAtlas::GrDrawOpAtlas(GrContext* context, GrPixelConfig config, int width, int height,
+GrDrawOpAtlas::GrDrawOpAtlas(GrProxyProvider* proxyProvider,
+                             GrPixelConfig config, int width, int height,
                              int numPlotsX, int numPlotsY, AllowMultitexturing allowMultitexturing)
-        : fContext(context)
-        , fPixelConfig(config)
+        : fPixelConfig(config)
         , fTextureWidth(width)
         , fTextureHeight(height)
         , fAtlasGeneration(kInvalidAtlasGeneration + 1)
         , fPrevFlushToken(GrDeferredUploadToken::AlreadyFlushedToken())
         , fAllowMultitexturing(allowMultitexturing)
-        , fNumPages(0) {
+        , fNumActivePages(0) {
     fPlotWidth = fTextureWidth / numPlotsX;
     fPlotHeight = fTextureHeight / numPlotsY;
     SkASSERT(numPlotsX * numPlotsY <= BulkUseTokenUpdater::kMaxPlots);
     SkASSERT(fPlotWidth * numPlotsX == fTextureWidth);
     SkASSERT(fPlotHeight * numPlotsY == fTextureHeight);
 
-    SkDEBUGCODE(fNumPlots = numPlotsX * numPlotsY;)
+    fNumPlots = numPlotsX * numPlotsY;
 
-    this->createNewPage();
+    this->createPages(proxyProvider);
 }
 
 inline void GrDrawOpAtlas::processEviction(AtlasID id) {
@@ -186,13 +216,8 @@ inline bool GrDrawOpAtlas::updatePlot(GrDeferredUploadTarget* target, AtlasID* i
         // With c+14 we could move sk_sp into lamba to only ref once.
         sk_sp<Plot> plotsp(SkRef(plot));
 
-        // MDB TODO: this is currently fine since the atlas' proxy is always pre-instantiated.
-        // Once it is deferred more care must be taken upon instantiation failure.
-        if (!fProxies[pageIdx]->instantiate(fContext->contextPriv().resourceProvider())) {
-            return false;
-        }
-
         GrTextureProxy* proxy = fProxies[pageIdx].get();
+        SkASSERT(proxy->priv().isInstantiated());  // This is occurring at flush time
 
         GrDeferredUploadToken lastUploadToken = target->addASAPUpload(
                 [plotsp, proxy](GrDeferredTextureUploadWritePixelsFn& writePixels) {
@@ -212,8 +237,9 @@ inline bool GrDrawOpAtlas::updatePlot(GrDeferredUploadTarget* target, AtlasID* i
 // are rare; i.e., we are not continually refreshing the frame.
 static constexpr auto kRecentlyUsedCount = 256;
 
-bool GrDrawOpAtlas::addToAtlas(AtlasID* id, GrDeferredUploadTarget* target, int width, int height,
-                               const void* image, SkIPoint16* loc) {
+bool GrDrawOpAtlas::addToAtlas(GrResourceProvider* resourceProvider,
+                               AtlasID* id, GrDeferredUploadTarget* target,
+                               int width, int height, const void* image, SkIPoint16* loc) {
     if (width > fPlotWidth || height > fPlotHeight) {
         return false;
     }
@@ -221,7 +247,7 @@ bool GrDrawOpAtlas::addToAtlas(AtlasID* id, GrDeferredUploadTarget* target, int 
     // Look through each page to see if we can upload without having to flush
     // We prioritize this upload to the first pages, not the most recently used, to make it easier
     // to remove unused pages in reverse page order.
-    for (unsigned int pageIdx = 0; pageIdx < fNumPages; ++pageIdx) {
+    for (unsigned int pageIdx = 0; pageIdx < fNumActivePages; ++pageIdx) {
         SkASSERT(fProxies[pageIdx]);
         // look through all allocated plots for one we can share, in Most Recently Refed order
         PlotList::Iter plotIter;
@@ -241,10 +267,10 @@ bool GrDrawOpAtlas::addToAtlas(AtlasID* id, GrDeferredUploadTarget* target, int 
     // We wait until we've grown to the full number of pages to begin evicting already flushed
     // plots so that we can maximize the opportunity for reuse.
     // As before we prioritize this upload to the first pages, not the most recently used.
-    for (unsigned int pageIdx = 0; pageIdx < fNumPages; ++pageIdx) {
+    for (unsigned int pageIdx = 0; pageIdx < fNumActivePages; ++pageIdx) {
         Plot* plot = fPages[pageIdx].fPlotList.tail();
         SkASSERT(plot);
-        if ((fNumPages == this->maxPages() &&
+        if ((fNumActivePages == this->maxPages() &&
              plot->lastUseToken() < target->tokenTracker()->nextTokenToFlush()) ||
             plot->flushesSinceLastUsed() >= kRecentlyUsedCount) {
             this->processEvictionAndResetRects(plot);
@@ -259,9 +285,10 @@ bool GrDrawOpAtlas::addToAtlas(AtlasID* id, GrDeferredUploadTarget* target, int 
     }
 
     // If the simple cases fail, try to create a new page and add to it
-    if (this->createNewPage()) {
-        unsigned int pageIdx = fNumPages-1;
-        SkASSERT(fProxies[pageIdx]);
+    if (this->activateNewPage(resourceProvider)) {
+        unsigned int pageIdx = fNumActivePages-1;
+        SkASSERT(fProxies[pageIdx] && fProxies[pageIdx]->priv().isInstantiated());
+
         Plot* plot = fPages[pageIdx].fPlotList.head();
         SkASSERT(GrBytesPerPixel(fProxies[pageIdx]->config()) == plot->bpp());
         if (plot->addSubImage(width, height, image, loc)) {
@@ -276,7 +303,7 @@ bool GrDrawOpAtlas::addToAtlas(AtlasID* id, GrDeferredUploadTarget* target, int 
     // Try to find a plot that we can perform an inline upload to.
     // We prioritize this upload in reverse order of pages to counterbalance the order above.
     Plot* plot = nullptr;
-    for (int pageIdx = (int)(fNumPages-1); pageIdx >= 0; --pageIdx) {
+    for (int pageIdx = ((int)fNumActivePages)-1; pageIdx >= 0; --pageIdx) {
         Plot* currentPlot = fPages[pageIdx].fPlotList.tail();
         if (currentPlot->lastUseToken() != target->tokenTracker()->nextDrawToken()) {
             plot = currentPlot;
@@ -308,11 +335,8 @@ bool GrDrawOpAtlas::addToAtlas(AtlasID* id, GrDeferredUploadTarget* target, int 
     // one it displaced most likely was uploaded ASAP.
     // With c+14 we could move sk_sp into lambda to only ref once.
     sk_sp<Plot> plotsp(SkRef(newPlot.get()));
-    // MDB TODO: this is currently fine since the atlas' proxy is always pre-instantiated.
-    // Once it is deferred more care must be taken upon instantiation failure.
-    if (!fProxies[pageIdx]->instantiate(fContext->contextPriv().resourceProvider())) {
-        return false;
-    }
+
+    SkASSERT(fProxies[pageIdx]->priv().isInstantiated());
     GrTextureProxy* proxy = fProxies[pageIdx].get();
 
     GrDeferredUploadToken lastUploadToken = target->addInlineUpload(
@@ -327,7 +351,7 @@ bool GrDrawOpAtlas::addToAtlas(AtlasID* id, GrDeferredUploadTarget* target, int 
 }
 
 void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
-    if (fNumPages <= 1) {
+    if (fNumActivePages <= 1) {
         fPrevFlushToken = startTokenForNextFlush;
         return;
     }
@@ -335,7 +359,7 @@ void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
     // For all plots, reset number of flushes since used if used this frame.
     PlotList::Iter plotIter;
     bool atlasUsedThisFlush = false;
-    for (uint32_t pageIndex = 0; pageIndex < fNumPages; ++pageIndex) {
+    for (uint32_t pageIndex = 0; pageIndex < fNumActivePages; ++pageIndex) {
         plotIter.init(fPages[pageIndex].fPlotList, PlotList::Iter::kHead_IterStart);
         while (Plot* plot = plotIter.get()) {
             // Reset number of flushes since used
@@ -353,8 +377,8 @@ void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
     // a blinking cursor is drawn.
     // TODO: consider if we should also do this if it's been a long time since the last atlas use
     if (atlasUsedThisFlush) {
-        int availablePlots = 0;
-        uint32_t lastPageIndex = fNumPages - 1;
+        SkTArray<Plot*> availablePlots;
+        uint32_t lastPageIndex = fNumActivePages - 1;
 
         // For all plots but the last one, update number of flushes since used, and check to see
         // if there are any in the first pages that the last page can safely upload to.
@@ -382,7 +406,7 @@ void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
                 // Count plots we can potentially upload to in all pages except the last one
                 // (the potential compactee).
                 if (plot->flushesSinceLastUsed() > kRecentlyUsedCount) {
-                    ++availablePlots;
+                    availablePlots.push_back() = plot;
                 }
 
                 plotIter.next();
@@ -394,11 +418,11 @@ void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
 #endif
         }
 
-        // Count recently used plots in the last page and evict them if there's available space
-        // in earlier pages. Since we prioritize uploading to the first pages, this will eventually
+        // Count recently used plots in the last page and evict any that are no longer in use.
+        // Since we prioritize uploading to the first pages, this will eventually
         // clear out usage of this page unless we have a large need.
         plotIter.init(fPages[lastPageIndex].fPlotList, PlotList::Iter::kHead_IterStart);
-        int usedPlots = 0;
+        unsigned int usedPlots = 0;
 #ifdef DUMP_ATLAS_DATA
         if (gDumpAtlasData) {
             SkDebugf("page %d: ", lastPageIndex);
@@ -418,13 +442,6 @@ void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
             // If this plot was used recently
             if (plot->flushesSinceLastUsed() <= kRecentlyUsedCount) {
                 usedPlots++;
-                // see if there's room in an earlier page and if so evict.
-                // We need to be somewhat harsh here so that one plot that is consistently in use
-                // doesn't end up locking the page in memory.
-                if (availablePlots) {
-                    this->processEvictionAndResetRects(plot);
-                    --availablePlots;
-                }
             } else if (plot->lastUseToken() != GrDeferredUploadToken::AlreadyFlushedToken()) {
                 // otherwise if aged out just evict it.
                 this->processEvictionAndResetRects(plot);
@@ -436,6 +453,33 @@ void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
             SkDebugf("\n");
         }
 #endif
+
+        // If recently used plots in the last page are using less than a quarter of the page, try
+        // to evict them if there's available space in earlier pages. Since we prioritize uploading
+        // to the first pages, this will eventually clear out usage of this page unless we have a
+        // large need.
+        if (availablePlots.count() && usedPlots && usedPlots <= fNumPlots / 4) {
+            plotIter.init(fPages[lastPageIndex].fPlotList, PlotList::Iter::kHead_IterStart);
+            while (Plot* plot = plotIter.get()) {
+                // If this plot was used recently
+                if (plot->flushesSinceLastUsed() <= kRecentlyUsedCount) {
+                    // See if there's room in an earlier page and if so evict.
+                    // We need to be somewhat harsh here so that a handful of plots that are
+                    // consistently in use don't end up locking the page in memory.
+                    if (availablePlots.count() > 0) {
+                        this->processEvictionAndResetRects(plot);
+                        this->processEvictionAndResetRects(availablePlots.back());
+                        availablePlots.pop_back();
+                        --usedPlots;
+                    }
+                    if (!usedPlots || !availablePlots.count()) {
+                        break;
+                    }
+                }
+                plotIter.next();
+            }
+        }
+
         // If none of the plots in the last page have been used recently, delete it.
         if (!usedPlots) {
 #ifdef DUMP_ATLAS_DATA
@@ -443,19 +487,15 @@ void GrDrawOpAtlas::compact(GrDeferredUploadToken startTokenForNextFlush) {
                 SkDebugf("delete %d\n", fNumPages-1);
             }
 #endif
-            this->deleteLastPage();
+            this->deactivateLastPage();
         }
     }
 
     fPrevFlushToken = startTokenForNextFlush;
 }
 
-bool GrDrawOpAtlas::createNewPage() {
-    if (fNumPages == this->maxPages()) {
-        return false;
-    }
-
-    GrProxyProvider* proxyProvider = fContext->contextPriv().proxyProvider();
+bool GrDrawOpAtlas::createPages(GrProxyProvider* proxyProvider) {
+    SkASSERT(SkIsPow2(fTextureWidth) && SkIsPow2(fTextureHeight));
 
     GrSurfaceDesc desc;
     desc.fFlags = kNone_GrSurfaceFlags;
@@ -464,47 +504,83 @@ bool GrDrawOpAtlas::createNewPage() {
     desc.fHeight = fTextureHeight;
     desc.fConfig = fPixelConfig;
 
-    SkASSERT(SkIsPow2(fTextureWidth) && SkIsPow2(fTextureHeight));
-    fProxies[fNumPages] = proxyProvider->createProxy(desc, SkBackingFit::kExact, SkBudgeted::kYes,
-                                                     GrResourceProvider::kNoPendingIO_Flag);
-    if (!fProxies[fNumPages]) {
-        return false;
-    }
-
     int numPlotsX = fTextureWidth/fPlotWidth;
     int numPlotsY = fTextureHeight/fPlotHeight;
 
-    // set up allocated plots
-    fPages[fNumPages].fPlotArray.reset(new sk_sp<Plot>[ numPlotsX * numPlotsY ]);
-
-    sk_sp<Plot>* currPlot = fPages[fNumPages].fPlotArray.get();
-    for (int y = numPlotsY - 1, r = 0; y >= 0; --y, ++r) {
-        for (int x = numPlotsX - 1, c = 0; x >= 0; --x, ++c) {
-            uint32_t plotIndex = r * numPlotsX + c;
-            currPlot->reset(new Plot(fNumPages, plotIndex, 1, x, y, fPlotWidth, fPlotHeight,
-                                     fPixelConfig));
-
-            // build LRU list
-            fPages[fNumPages].fPlotList.addToHead(currPlot->get());
-            ++currPlot;
+    for (uint32_t i = 0; i < this->maxPages(); ++i) {
+        fProxies[i] = proxyProvider->createProxy(desc, SkBackingFit::kExact, SkBudgeted::kYes,
+                                                 GrResourceProvider::kNoPendingIO_Flag);
+        if (!fProxies[i]) {
+            return false;
         }
+
+        // set up allocated plots
+        fPages[i].fPlotArray.reset(new sk_sp<Plot>[ numPlotsX * numPlotsY ]);
+
+        sk_sp<Plot>* currPlot = fPages[i].fPlotArray.get();
+        for (int y = numPlotsY - 1, r = 0; y >= 0; --y, ++r) {
+            for (int x = numPlotsX - 1, c = 0; x >= 0; --x, ++c) {
+                uint32_t plotIndex = r * numPlotsX + c;
+                currPlot->reset(new Plot(i, plotIndex, 1, x, y, fPlotWidth, fPlotHeight,
+                                         fPixelConfig));
+
+                // build LRU list
+                fPages[i].fPlotList.addToHead(currPlot->get());
+                ++currPlot;
+            }
+        }
+
+    }
+
+    return true;
+}
+
+
+bool GrDrawOpAtlas::activateNewPage(GrResourceProvider* resourceProvider) {
+    if (fNumActivePages >= this->maxPages()) {
+        return false;
+    }
+
+    if (!fProxies[fNumActivePages]->instantiate(resourceProvider)) {
+        return false;
     }
 
 #ifdef DUMP_ATLAS_DATA
     if (gDumpAtlasData) {
-        SkDebugf("created %d\n", fNumPages);
+        SkDebugf("activated page#: %d\n", fNumActivePages);
     }
 #endif
-    fNumPages++;
+
+    ++fNumActivePages;
     return true;
 }
 
-inline void GrDrawOpAtlas::deleteLastPage() {
-    uint32_t lastPageIndex = fNumPages - 1;
-    // clean out the plots
+
+inline void GrDrawOpAtlas::deactivateLastPage() {
+    SkASSERT(fNumActivePages);
+
+    uint32_t lastPageIndex = fNumActivePages - 1;
+
+    int numPlotsX = fTextureWidth/fPlotWidth;
+    int numPlotsY = fTextureHeight/fPlotHeight;
+
     fPages[lastPageIndex].fPlotList.reset();
-    fPages[lastPageIndex].fPlotArray.reset(nullptr);
-    // remove ref to texture proxy
-    fProxies[lastPageIndex].reset(nullptr);
-    --fNumPages;
+    for (int r = 0; r < numPlotsY; ++r) {
+        for (int c = 0; c < numPlotsX; ++c) {
+            uint32_t plotIndex = r * numPlotsX + c;
+
+            Plot* currPlot = fPages[lastPageIndex].fPlotArray[plotIndex].get();
+            currPlot->resetRects();
+            currPlot->resetFlushesSinceLastUsed();
+
+            // rebuild the LRU list
+            SkDEBUGCODE(currPlot->fPrev = currPlot->fNext = nullptr);
+            SkDEBUGCODE(currPlot->fList = nullptr);
+            fPages[lastPageIndex].fPlotList.addToHead(currPlot);
+        }
+    }
+
+    // remove ref to the backing texture
+    fProxies[lastPageIndex]->deInstantiate();
+    --fNumActivePages;
 }
