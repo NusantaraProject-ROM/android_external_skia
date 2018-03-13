@@ -357,6 +357,7 @@ bool MdOut::buildRefFromFile(const char* name, const char* outDir) {
             this->lfAlways(1);
             FPRINTF("===");
         }
+        fPopulators.clear();
         fPopulators[kClassesAndStructs].fDescription = "embedded struct and class members";
         fPopulators[kConstants].fDescription = "enum and enum class, const values";
         fPopulators[kConstructors].fDescription = "functions that construct";
@@ -568,8 +569,9 @@ const Definition* MdOut::isDefined(const TextParser& parser, const string& ref, 
         // try with a prefix
         if ('k' == ref[0]) {
             for (auto const& iter : fBmhParser.fEnumMap) {
-                if (iter.second.find(ref, RootDefinition::AllowParens::kYes)) {
-                    return &iter.second;
+                auto def = iter.second.find(ref, RootDefinition::AllowParens::kYes);
+                if (def) {
+                    return def;
                 }
             }
             if (fEnumClass) {
@@ -649,37 +651,41 @@ string MdOut::linkName(const Definition* ref) const {
 // def should not include SkXXX_
 string MdOut::linkRef(const string& leadingSpaces, const Definition* def,
         const string& ref, BmhParser::Resolvable resolvable) const {
-	string buildup;
+    string buildup;
+    string refName;
     const string* str = &def->fFiddle;
     SkASSERT(str->length() > 0);
-    size_t under = str->find('_');
-    const Definition* curRoot = fRoot;
-    string classPart = string::npos != under ? str->substr(0, under) : *str;
-    bool classMatch = curRoot->fName == classPart;
-    while (curRoot->fParent) {
-        curRoot = curRoot->fParent;
-        classMatch |= curRoot->fName == classPart;
+    string classPart = *str;
+    bool globalEnumMember = false;
+    if (MarkType::kAlias == def->fMarkType) {
+        def = def->fParent;
+        SkASSERT(def);
+        SkASSERT(MarkType::kSubtopic == def->fMarkType ||MarkType::kTopic == def->fMarkType);
     }
-    const Definition* defRoot;
-    const Definition* temp = def;
-    do {
-        defRoot = temp;
-        if (!(temp = temp->fParent)) {
-            break;
+    if (MarkType::kSubtopic == def->fMarkType) {
+        const Definition* topic = def->topicParent();
+        SkASSERT(topic);
+        classPart = topic->fName;
+        refName = def->fName;
+    } else if (MarkType::kTopic == def->fMarkType) {
+        refName = def->fName;
+    } else {
+        if ('k' == (*str)[0] && string::npos != str->find("_Sk")) {
+            globalEnumMember = true;
+        } else {
+            SkASSERT("Sk" == str->substr(0, 2) || "SK" == str->substr(0, 2)
+                    // FIXME: kitchen sink catch below, need to do better
+                    || string::npos != def->fFileName.find("undocumented"));
+            size_t under = str->find('_');
+            classPart = string::npos != under ? str->substr(0, under) : *str;
         }
-        classMatch |= temp != defRoot && temp->fName == classPart;
-    } while (true);
-    string namePart = string::npos != under ? str->substr(under + 1, str->length()) : *str;
+        refName = def->fFiddle;
+    }
+    bool classMatch = fRoot->fFileName == def->fFileName;
     SkASSERT(fRoot);
     SkASSERT(fRoot->fFileName.length());
-    if (classMatch) {
-        buildup = "#";
-        if (*str != classPart && "Sk" == classPart.substr(0, 2)) {
-            buildup += classPart + "_";
-        }
-        buildup += namePart;
-    } else {
-        string filename = defRoot->asRoot()->fFileName;
+    if (!classMatch) {
+        string filename = def->fFileName;
         if (filename.substr(filename.length() - 4) == ".bmh") {
             filename = filename.substr(0, filename.length() - 4);
         }
@@ -687,15 +693,18 @@ string MdOut::linkRef(const string& leadingSpaces, const Definition* def,
         while (start > 0 && (isalnum(filename[start - 1]) || '_' == filename[start - 1])) {
             --start;
         }
-        buildup = filename.substr(start) + "#" + (classMatch ? namePart : *str);
+        buildup = filename.substr(start);
     }
+    buildup += "#" + refName;
     if (MarkType::kParam == def->fMarkType) {
         const Definition* parent = def->fParent;
         SkASSERT(MarkType::kMethod == parent->fMarkType);
         buildup = '#' + parent->fFiddle + '_' + ref;
     }
     string refOut(ref);
-    std::replace(refOut.begin(), refOut.end(), '_', ' ');
+    if (!globalEnumMember) {
+        std::replace(refOut.begin(), refOut.end(), '_', ' ');
+    }
     if (ref.length() > 2 && islower(ref[0]) && "()" == ref.substr(ref.length() - 2)) {
         refOut = refOut.substr(0, refOut.length() - 2);
     }
@@ -718,7 +727,6 @@ string MdOut::linkRef(const string& leadingSpaces, const Definition* def,
 					found = true;
 				}
 			}
-
 		}
 		if (!found) {
 			SkDebugf("");  // convenient place to set a breakpoint
@@ -907,7 +915,7 @@ void MdOut::markTypeOut(Definition* def) {
             } break;
         case MarkType::kMethod: {
             string method_name = def->methodName();
-            string formattedStr = def->formatFunction();
+            string formattedStr = def->formatFunction(Definition::Format::kIncludeReturn);
 
 			this->lfAlways(2);
 			FPRINTF("<a name=\"%s\"></a>", def->fFiddle.c_str());
@@ -975,9 +983,6 @@ void MdOut::markTypeOut(Definition* def) {
             if (kSubtopics == name) {
                 this->subtopicsOut();
             } else {
-                SkASSERT(kClassesAndStructs == name || kConstants == name || kConstructors == name
-                        || kMemberFunctions == name || kMembers == name || kOperators == name
-                        || kRelatedFunctions == name);
                 this->subtopicOut(this->populator(name.c_str()));
             }
             } break;
@@ -1186,18 +1191,25 @@ void MdOut::mdHeaderOutLF(int depth, int lf) {
 
 void MdOut::populateTables(const Definition* def) {
     const Definition* csParent = this->csParent();
+    if (!csParent) {
+        return;
+    }
     for (auto child : def->fChildren) {
         if (MarkType::kTopic == child->fMarkType || MarkType::kSubtopic == child->fMarkType) {
-            bool legacyTopic = fPopulators.end() != fPopulators.find(child->fName);
-            if (!legacyTopic && child->fName != kOverview) {
-                this->populator(kRelatedFunctions).push_back(child);
+            string name = child->fName;
+            bool builtInTopic = name == kClassesAndStructs || name == kConstants
+                    || name == kConstructors || name == kMemberFunctions || name == kMembers
+                    || name == kOperators || name == kOverview || name == kRelatedFunctions
+                    || name == kSubtopics;
+            if (!builtInTopic && child->fName != kOverview) {
+                this->populator(kRelatedFunctions).fMembers.push_back(child);
             }
             this->populateTables(child);
             continue;
         }
         if (child->isStructOrClass()) {
             if (fClassStack.size() > 0) {
-                this->populator(kClassesAndStructs).push_back(child);
+                this->populator(kClassesAndStructs).fMembers.push_back(child);
             }
             fClassStack.push_back(child);
             this->populateTables(child);
@@ -1205,11 +1217,11 @@ void MdOut::populateTables(const Definition* def) {
             continue;
         }
         if (MarkType::kEnum == child->fMarkType || MarkType::kEnumClass == child->fMarkType) {
-            this->populator(kConstants).push_back(child);
+            this->populator(kConstants).fMembers.push_back(child);
             continue;
         }
         if (MarkType::kMember == child->fMarkType) {
-            this->populator(kMembers).push_back(child);
+            this->populator(kMembers).fMembers.push_back(child);
             continue;
         }
         if (MarkType::kMethod != child->fMarkType) {
@@ -1220,17 +1232,26 @@ void MdOut::populateTables(const Definition* def) {
         }
         if (Definition::MethodType::kConstructor == child->fMethodType
                 || Definition::MethodType::kDestructor == child->fMethodType) {
-            this->populator(kConstructors).push_back(child);
+            this->populator(kConstructors).fMembers.push_back(child);
             continue;
         }
         if (Definition::MethodType::kOperator == child->fMethodType) {
-            this->populator(kOperators).push_back(child);
+            this->populator(kOperators).fMembers.push_back(child);
             continue;
         }
-        this->populator(kMemberFunctions).push_back(child);
+        this->populator(kMemberFunctions).fMembers.push_back(child);
         if (csParent && (0 == child->fName.find(csParent->fName + "::Make")
                 || 0 == child->fName.find(csParent->fName + "::make"))) {
-            this->populator(kConstructors).push_back(child);
+            this->populator(kConstructors).fMembers.push_back(child);
+            continue;
+        }
+        for (auto item : child->fChildren) {
+            if (MarkType::kIn == item->fMarkType) {
+                string name(item->fContentStart, item->fContentEnd - item->fContentStart);
+                fPopulators[name].fMembers.push_back(child);
+                fPopulators[name].fShowClones = true;
+                break;
+            }
         }
     }
 }
@@ -1331,7 +1352,7 @@ void MdOut::subtopicsOut() {
     this->rowOut("---", "---");
     for (auto item : { kClassesAndStructs, kConstants, kConstructors, kMemberFunctions,
             kMembers, kOperators, kRelatedFunctions } ) {
-        for (auto entry : this->populator(item)) {
+        for (auto entry : this->populator(item).fMembers) {
             if (entry->csParent() == csParent) {
                 string description = fPopulators.find(item)->second.fDescription;
                 if (kConstructors == item) {
@@ -1344,7 +1365,8 @@ void MdOut::subtopicsOut() {
     }
 }
 
-void MdOut::subtopicOut(vector<const Definition*>& data) {
+void MdOut::subtopicOut(const TableContents& tableContents) {
+    const auto& data = tableContents.fMembers;
     const Definition* csParent = this->csParent();
     SkASSERT(csParent);
     fRoot = csParent->asRoot();
@@ -1360,6 +1382,9 @@ void MdOut::subtopicOut(vector<const Definition*>& data) {
         items[name] = entry;
     }
     for (auto entry : items) {
+        if (entry.second->fDeprecated) {
+            continue;
+        }
         const Definition* oneLiner = nullptr;
         for (auto child : entry.second->fChildren) {
             if (MarkType::kLine == child->fMarkType) {
@@ -1367,8 +1392,30 @@ void MdOut::subtopicOut(vector<const Definition*>& data) {
                 break;
             }
         }
+        if (!oneLiner) {
+            SkDebugf(""); // convenient place to set a breakpoint
+        }
+        // TODO: detect this earlier? throw error here?
         SkASSERT(oneLiner);
         this->rowOut(entry.first.c_str(), string(oneLiner->fContentStart,
             oneLiner->fContentEnd - oneLiner->fContentStart));
+        if (tableContents.fShowClones && entry.second->fCloned) {
+            int cloneNo = 2;
+            string builder = entry.second->fName;
+            if ("()" == builder.substr(builder.length() - 2)) {
+                builder = builder.substr(0, builder.length() - 2);
+            }
+            builder += '_';
+            this->rowOut("",
+                    preformat(entry.second->formatFunction(Definition::Format::kOmitReturn)));
+            do {
+                string match = builder + to_string(cloneNo);
+                auto child = csParent->findClone(match);
+                if (!child) {
+                    break;
+                }
+                this->rowOut("", preformat(child->formatFunction(Definition::Format::kOmitReturn)));
+            } while (++cloneNo);
+        }
     }
 }

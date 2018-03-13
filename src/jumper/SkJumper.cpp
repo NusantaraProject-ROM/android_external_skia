@@ -244,6 +244,8 @@ extern "C" {
     NOPE(lab_to_xyz)
                     TODO(mirror_x)   TODO(repeat_x)
                     TODO(mirror_y)   TODO(repeat_y)
+                    LOWP(decal_x)    LOWP(decal_y)   LOWP(decal_x_and_y)
+    LOWP(check_decal_mask)
     TODO(bilinear_nx) TODO(bilinear_px) TODO(bilinear_ny) TODO(bilinear_py)
     TODO(bicubic_n3x) TODO(bicubic_n1x) TODO(bicubic_p1x) TODO(bicubic_p3x)
     TODO(bicubic_n3y) TODO(bicubic_n1y) TODO(bicubic_p1y) TODO(bicubic_p3y)

@@ -125,6 +125,10 @@ sk_sp<SkImage> SkSurface_Gpu::onNewImageSnapshot() {
     return image;
 }
 
+void SkSurface_Gpu::onWritePixels(const SkPixmap& src, int x, int y) {
+    fDevice->writePixels(src, x, y);
+}
+
 // Create a new render target and, if necessary, copy the contents of the old
 // render target into it. Note that this flushes the SkGpuDevice but
 // doesn't force an OpenGL flush.
@@ -170,7 +174,7 @@ bool SkSurface_Gpu::onCharacterize(SkSurfaceCharacterization* data) const {
     bool mipmapped = rtc->asTextureProxy() ? GrMipMapped::kYes == rtc->asTextureProxy()->mipMapped()
                                            : false;
 
-    data->set(ctx->threadSafeProxy(), maxResourceCount, maxResourceBytes,
+    data->set(ctx->threadSafeProxy(), maxResourceBytes,
               rtc->origin(), rtc->width(), rtc->height(),
               rtc->colorSpaceInfo().config(), rtc->fsaaType(), rtc->numStencilSamples(),
               SkSurfaceCharacterization::Textureable(SkToBool(rtc->asTextureProxy())),
@@ -184,8 +188,13 @@ bool SkSurface_Gpu::isCompatible(const SkSurfaceCharacterization& data) const {
     GrRenderTargetContext* rtc = fDevice->accessRenderTargetContext();
     GrContext* ctx = fDevice->context();
 
+    if (!data.isValid()) {
+        return false;
+    }
+
     // As long as the current state if the context allows for greater or equal resources,
     // we allow the DDL to be replayed.
+    // DDL TODO: should we just remove the resource check and ignore the cache limits on playback?
     int maxResourceCount;
     size_t maxResourceBytes;
     ctx->getResourceCacheLimits(&maxResourceCount, &maxResourceBytes);
@@ -206,7 +215,6 @@ bool SkSurface_Gpu::isCompatible(const SkSurfaceCharacterization& data) const {
     }
 
     return data.contextInfo() && data.contextInfo()->matches(ctx) &&
-           data.cacheMaxResourceCount() <= maxResourceCount &&
            data.cacheMaxResourceBytes() <= maxResourceBytes &&
            data.origin() == rtc->origin() && data.width() == rtc->width() &&
            data.height() == rtc->height() && data.config() == rtc->colorSpaceInfo().config() &&
@@ -216,7 +224,7 @@ bool SkSurface_Gpu::isCompatible(const SkSurfaceCharacterization& data) const {
 }
 
 bool SkSurface_Gpu::onDraw(const SkDeferredDisplayList* ddl) {
-    if (!this->isCompatible(ddl->characterization())) {
+    if (!ddl || !this->isCompatible(ddl->characterization())) {
         return false;
     }
 
@@ -257,10 +265,11 @@ bool SkSurface_Gpu::Valid(GrContext* context, GrPixelConfig config, SkColorSpace
             return context->caps()->srgbSupport() && colorSpace && colorSpace->gammaCloseToSRGB();
         case kRGBA_8888_GrPixelConfig:
         case kBGRA_8888_GrPixelConfig:
-            // If we don't have sRGB support, we may get here with a color space. It still needs
-            // to be sRGB-like (so that the application will work correctly on sRGB devices.)
+            // We may get here with either a linear-gamma color space or with a sRGB-gamma color
+            // space when we lack GPU sRGB support.
             return !colorSpace ||
-                (colorSpace->gammaCloseToSRGB() && !context->caps()->srgbSupport());
+                   (colorSpace->gammaCloseToSRGB() && !context->caps()->srgbSupport()) ||
+                   colorSpace->gammaIsLinear();
         default:
             return !colorSpace;
     }

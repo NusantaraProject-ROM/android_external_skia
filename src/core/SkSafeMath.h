@@ -8,6 +8,8 @@
 #ifndef SkSafeMath_DEFINED
 #define SkSafeMath_DEFINED
 
+#include "SkTypes.h"
+
 // SkSafeMath always check that a series of operations do not overflow.
 // This must be correct for all platforms, because this is a check for safety at runtime.
 
@@ -46,6 +48,13 @@ public:
     size_t alignUp(size_t x, size_t alignment) {
         SkASSERT(alignment && !(alignment & (alignment - 1)));
         return add(x, alignment - 1) & ~(alignment - 1);
+    }
+
+    template <typename T> T castTo(size_t value) {
+        if (!SkTFitsIn<T>(value)) {
+            fOK = false;
+        }
+        return static_cast<T>(value);
     }
 
     // These saturate to their results

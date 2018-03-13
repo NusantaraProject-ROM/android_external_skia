@@ -177,6 +177,12 @@ void SkBaseShadowTessellator::handleLine(const SkMatrix& m, SkPoint* p) {
 
 void SkBaseShadowTessellator::handleQuad(const SkPoint pts[3]) {
 #if SK_SUPPORT_GPU
+    // check for degeneracy
+    SkVector v0 = pts[1] - pts[0];
+    SkVector v1 = pts[2] - pts[0];
+    if (SkScalarNearlyZero(v0.cross(v1))) {
+        return;
+    }
     // TODO: Pull PathUtils out of Ganesh?
     int maxCount = GrPathUtils::quadraticPointCount(pts, kQuadTolerance);
     fPointBuffer.setReserve(maxCount);
@@ -277,7 +283,7 @@ bool SkBaseShadowTessellator::setTransformedHeightFunc(const SkMatrix& ctm) {
         };
     } else {
         SkMatrix ctmInverse;
-        if (!ctm.invert(&ctmInverse)) {
+        if (!ctm.invert(&ctmInverse) || !ctmInverse.isFinite()) {
             return false;
         }
         // multiply by transpose
@@ -384,7 +390,9 @@ SkAmbientShadowTessellator::SkAmbientShadowTessellator(const SkPath& path,
     // make sure we're not below the canvas plane
     this->setZOffset(path.getBounds(), ctm.hasPerspective());
 
-    this->setTransformedHeightFunc(ctm);
+    if (!this->setTransformedHeightFunc(ctm)) {
+        return;
+    }
 
     // Outer ring: 3*numPts
     // Middle ring: numPts
@@ -828,7 +836,9 @@ SkSpotShadowTessellator::SkSpotShadowTessellator(const SkPath& path, const SkMat
     SkMatrix fullTransform = SkMatrix::Concat(shadowTransform, ctm);
 
     // Set up our reverse mapping
-    this->setTransformedHeightFunc(fullTransform);
+    if (!this->setTransformedHeightFunc(fullTransform)) {
+        return;
+    }
 
     // TODO: calculate these reserves better
     // Penumbra ring: 3*numPts

@@ -35,12 +35,13 @@ const (
 	ISOLATE_SKP_NAME            = "Housekeeper-PerCommit-IsolateSKP"
 	ISOLATE_SVG_NAME            = "Housekeeper-PerCommit-IsolateSVG"
 	ISOLATE_NDK_LINUX_NAME      = "Housekeeper-PerCommit-IsolateAndroidNDKLinux"
+	ISOLATE_SDK_LINUX_NAME      = "Housekeeper-PerCommit-IsolateAndroidSDKLinux"
 	ISOLATE_WIN_TOOLCHAIN_NAME  = "Housekeeper-PerCommit-IsolateWinToolchain"
 	ISOLATE_WIN_VULKAN_SDK_NAME = "Housekeeper-PerCommit-IsolateWinVulkanSDK"
 
 	DEFAULT_OS_DEBIAN    = "Debian-9.1"
 	DEFAULT_OS_LINUX_GCE = "Debian-9.2"
-	DEFAULT_OS_MAC       = "Mac-10.13.2"
+	DEFAULT_OS_MAC       = "Mac-10.13.3"
 	DEFAULT_OS_UBUNTU    = "Ubuntu-14.04"
 	DEFAULT_OS_WIN       = "Windows-2016Server-14393"
 
@@ -209,6 +210,17 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 		if !ok {
 			glog.Fatalf("Entry %q not found in OS mapping.", os)
 		}
+		if os == "Win10" {
+			// Transition to new Win image by model name.
+			_, ok = map[string]bool{
+				"NUC5i7RYH":     true,
+				"NUC6i5SYK":     true,
+				"NUCD34010WYKH": true,
+			}[parts["model"]]
+			if ok {
+				d["os"] = "Windows-10-16299.248"
+			}
+		}
 	} else {
 		d["os"] = DEFAULT_OS_DEBIAN
 	}
@@ -228,10 +240,9 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 				"Nexus5x":         {"bullhead", "OPR6.170623.023"},
 				"Nexus7":          {"grouper", "LMY47V_1836172"}, // 2012 Nexus 7
 				"NexusPlayer":     {"fugu", "OPR6.170623.021"},
-				"Pixel":           {"sailfish", "OPR3.170623.008"},
+				"Pixel":           {"sailfish", "OPM1.171019.016"},
 				"Pixel2XL":        {"taimen", "OPD1.170816.023"},
 				"PixelC":          {"dragon", "OPR1.170623.034"},
-				"PixelXL":         {"marlin", "OPR3.170623.008"},
 			}[parts["model"]]
 			if !ok {
 				glog.Fatalf("Entry %q not found in Android mapping.", parts["model"])
@@ -330,17 +341,18 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 			} else if strings.Contains(parts["os"], "Mac") {
 				gpu, ok := map[string]string{
 					"IntelHD6000":   "8086:1626",
+					"IntelHD615":    "8086:591e",
 					"IntelIris5100": "8086:0a2e",
 				}[parts["cpu_or_gpu_value"]]
 				if !ok {
 					glog.Fatalf("Entry %q not found in Mac GPU mapping.", parts["cpu_or_gpu_value"])
 				}
 				d["gpu"] = gpu
-				// TODO(benjaminwagner): Mac GPU bots haven't been upgraded.
-				d["os"] = map[string]string{
-					"IntelHD6000":   "Mac-10.13.3",
-					"IntelIris5100": "Mac-10.13.1",
-				}[parts["cpu_or_gpu_value"]]
+				// Yuck. We have two different types of MacMini7,1 with the same GPU but different CPUs.
+				if parts["cpu_or_gpu_value"] == "IntelIris5100" {
+					// Run all tasks on Golo machines for now.
+					d["cpu"] = "x86-64-i7-4578U"
+				}
 			} else if strings.Contains(parts["os"], "ChromeOS") {
 				version, ok := map[string]string{
 					"MaliT604":           "9901.12.0",
@@ -445,6 +457,10 @@ var ISOLATE_ASSET_MAPPING = map[string]isolateAssetCfg{
 	ISOLATE_NDK_LINUX_NAME: {
 		isolateFile: "isolate_ndk_linux.isolate",
 		cipdPkg:     "android_ndk_linux",
+	},
+	ISOLATE_SDK_LINUX_NAME: {
+		isolateFile: "isolate_android_sdk_linux.isolate",
+		cipdPkg:     "android_sdk_linux",
 	},
 	ISOLATE_WIN_TOOLCHAIN_NAME: {
 		isolateFile: "isolate_win_toolchain.isolate",

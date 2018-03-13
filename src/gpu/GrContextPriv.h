@@ -38,7 +38,9 @@ public:
     sk_sp<GrSurfaceContext> makeDeferredSurfaceContext(const GrSurfaceDesc&,
                                                        GrMipMapped,
                                                        SkBackingFit,
-                                                       SkBudgeted);
+                                                       SkBudgeted,
+                                                       sk_sp<SkColorSpace> colorSpace = nullptr,
+                                                       const SkSurfaceProps* = nullptr);
 
     sk_sp<GrTextureContext> makeBackendTextureContext(const GrBackendTexture& tex,
                                                       GrSurfaceOrigin origin,
@@ -65,6 +67,7 @@ public:
                                                                  const SkSurfaceProps* = nullptr);
 
     bool disableGpuYUVConversion() const { return fContext->fDisableGpuYUVConversion; }
+    bool sharpenMipmappedTextures() const { return fContext->fSharpenMipmappedTextures; }
 
     /**
      * Call to ensure all drawing to the context has been issued to the
@@ -139,20 +142,21 @@ public:
      * @return true if the read succeeded, false if not. The read can fail because of an unsupported
      *         pixel configs
      */
-    bool readSurfacePixels(GrSurfaceContext* src,
-                           int left, int top, int width, int height,
-                           GrPixelConfig dstConfig, SkColorSpace* dstColorSpace, void* buffer,
-                           size_t rowBytes = 0,
-                           uint32_t pixelOpsFlags = 0);
+    bool readSurfacePixels(GrSurfaceContext* src, int left, int top, int width, int height,
+                           GrColorType dstColorType, SkColorSpace* dstColorSpace, void* buffer,
+                           size_t rowBytes = 0, uint32_t pixelOpsFlags = 0);
 
     /**
-     * Writes a rectangle of pixels to a surface.
+     * Writes a rectangle of pixels to a surface. There are currently two versions of this.
+     * writeSurfacePixels() is the older version which will be replaced by the more robust and
+     * maintainable (but perhaps slower) writeSurfacePixels2().
+     *
      * @param dst           the surface context to write to.
      * @param left          left edge of the rectangle to write (inclusive)
      * @param top           top edge of the rectangle to write (inclusive)
      * @param width         width of rectangle to write in pixels.
      * @param height        height of rectangle to write in pixels.
-     * @param srcConfig     the pixel config of the source buffer
+     * @param srcColorType  the color type of the source buffer
      * @param srcColorSpace color space of the source buffer
      * @param buffer        memory to read pixels from
      * @param rowBytes      number of bytes between consecutive rows. Zero
@@ -161,11 +165,12 @@ public:
      * @return true if the write succeeded, false if not. The write can fail because of an
      *         unsupported combination of surface and src configs.
      */
-    bool writeSurfacePixels(GrSurfaceContext* dst,
-                            int left, int top, int width, int height,
-                            GrPixelConfig srcConfig, SkColorSpace* srcColorSpace, const void* buffer,
-                            size_t rowBytes,
-                            uint32_t pixelOpsFlags = 0);
+    bool writeSurfacePixels(GrSurfaceContext* dst, int left, int top, int width, int height,
+                            GrColorType srcColorType, SkColorSpace* srcColorSpace,
+                            const void* buffer, size_t rowBytes, uint32_t pixelOpsFlags = 0);
+    bool writeSurfacePixels2(GrSurfaceContext* dst, int left, int top, int width, int height,
+                             GrColorType srcColorType, SkColorSpace* srcColorSpace,
+                             const void* buffer, size_t rowBytes, uint32_t pixelOpsFlags = 0);
 
     GrBackend getBackend() const { return fContext->fBackend; }
 

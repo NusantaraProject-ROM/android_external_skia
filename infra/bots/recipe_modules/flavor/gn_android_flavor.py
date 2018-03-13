@@ -389,10 +389,9 @@ if actual_freq != str(freq):
       args['extra_cflags'] = repr(extra_cflags).replace("'", '"')
 
     gn_args = ' '.join('%s=%s' % (k,v) for (k,v) in sorted(args.iteritems()))
-
-    gn    = 'gn.exe'    if 'Win' in os else 'gn'
-    ninja = 'ninja.exe' if 'Win' in os else 'ninja'
-    gn = self.m.vars.skia_dir.join('bin', gn)
+    gn      = 'gn.exe'    if 'Win' in os else 'gn'
+    ninja   = 'ninja.exe' if 'Win' in os else 'ninja'
+    gn      = self.m.vars.skia_dir.join('bin', gn)
 
     self._py('fetch-gn', self.m.vars.skia_dir.join('bin', 'fetch-gn'))
     self._run('gn gen', gn, 'gen', self.out_dir, '--args=' + gn_args)

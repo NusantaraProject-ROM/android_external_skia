@@ -14,7 +14,6 @@
 #include "GrOnFlushResourceProvider.h"
 #include "GrOpList.h"
 #include "GrRenderTargetContext.h"
-#include "GrPathRenderingRenderTargetContext.h"
 #include "GrRenderTargetProxy.h"
 #include "GrResourceAllocator.h"
 #include "GrResourceProvider.h"
@@ -31,7 +30,41 @@
 
 #include "GrTracing.h"
 #include "text/GrAtlasTextContext.h"
-#include "text/GrStencilAndCoverTextContext.h"
+
+// Turn on/off the sorting of opLists at flush time
+#ifndef SK_DISABLE_RENDER_TARGET_SORTING
+   #define SK_DISABLE_RENDER_TARGET_SORTING
+#endif
+
+#ifdef SK_DISABLE_RENDER_TARGET_SORTING
+static const bool kDefaultSortRenderTargets = false;
+#else
+static const bool kDefaultSortRenderTargets = true;
+#endif
+
+GrDrawingManager::GrDrawingManager(GrContext* context,
+                                   const GrPathRendererChain::Options& optionsForPathRendererChain,
+                                   const GrAtlasTextContext::Options& optionsForAtlasTextContext,
+                                   GrSingleOwner* singleOwner,
+                                   GrContextOptions::Enable sortRenderTargets)
+        : fContext(context)
+        , fOptionsForPathRendererChain(optionsForPathRendererChain)
+        , fOptionsForAtlasTextContext(optionsForAtlasTextContext)
+        , fSingleOwner(singleOwner)
+        , fAbandoned(false)
+        , fAtlasTextContext(nullptr)
+        , fPathRendererChain(nullptr)
+        , fSoftwarePathRenderer(nullptr)
+        , fFlushing(false) {
+
+    if (GrContextOptions::Enable::kNo == sortRenderTargets) {
+        fSortRenderTargets = false;
+    } else if (GrContextOptions::Enable::kYes == sortRenderTargets) {
+        fSortRenderTargets = true;
+    } else {
+        fSortRenderTargets = kDefaultSortRenderTargets;
+    }
+}
 
 void GrDrawingManager::cleanup() {
     for (int i = 0; i < fOpLists.count(); ++i) {
@@ -117,11 +150,10 @@ GrSemaphoresSubmitted GrDrawingManager::internalFlush(GrSurfaceProxy*,
     }
 #endif
 
-#ifndef SK_DISABLE_RENDER_TARGET_SORTING
-    SkDEBUGCODE(bool result =)
-                        SkTTopoSort<GrOpList, GrOpList::TopoSortTraits>(&fOpLists);
-    SkASSERT(result);
-#endif
+    if (fSortRenderTargets) {
+        SkDEBUGCODE(bool result =) SkTTopoSort<GrOpList, GrOpList::TopoSortTraits>(&fOpLists);
+        SkASSERT(result);
+    }
 
     GrGpu* gpu = fContext->contextPriv().getGpu();
 
@@ -181,21 +213,14 @@ GrSemaphoresSubmitted GrDrawingManager::internalFlush(GrSurfaceProxy*,
             alloc.markEndOfOpList(i);
         }
 
-#ifdef SK_DISABLE_EXPLICIT_GPU_RESOURCE_ALLOCATION
-        startIndex = 0;
-        stopIndex = fOpLists.count();
-#else
         GrResourceAllocator::AssignError error = GrResourceAllocator::AssignError::kNoError;
-        while (alloc.assign(&startIndex, &stopIndex, &error))
-#endif
-        {
-#ifndef SK_DISABLE_EXPLICIT_GPU_RESOURCE_ALLOCATION
+        while (alloc.assign(&startIndex, &stopIndex, &error)) {
             if (GrResourceAllocator::AssignError::kFailedProxyInstantiation == error) {
                 for (int i = startIndex; i < stopIndex; ++i) {
                     fOpLists[i]->purgeOpsWithUninstantiatedProxies();
                 }
             }
-#endif
+
             if (this->executeOpLists(startIndex, stopIndex, &flushState)) {
                 flushed = true;
             }
@@ -223,6 +248,7 @@ GrSemaphoresSubmitted GrDrawingManager::internalFlush(GrSurfaceProxy*,
 bool GrDrawingManager::executeOpLists(int startIndex, int stopIndex, GrOpFlushState* flushState) {
     SkASSERT(startIndex <= stopIndex && stopIndex <= fOpLists.count());
 
+    GrResourceProvider* resourceProvider = fContext->contextPriv().resourceProvider();
     bool anyOpListsExecuted = false;
 
     for (int i = startIndex; i < stopIndex; ++i) {
@@ -230,15 +256,19 @@ bool GrDrawingManager::executeOpLists(int startIndex, int stopIndex, GrOpFlushSt
              continue;
         }
 
-#ifdef SK_DISABLE_EXPLICIT_GPU_RESOURCE_ALLOCATION
-        if (!fOpLists[i]->instantiate(fContext->contextPriv().resourceProvider())) {
-            SkDebugf("OpList failed to instantiate.\n");
-            fOpLists[i] = nullptr;
-            continue;
+        if (resourceProvider->explicitlyAllocateGPUResources()) {
+            if (!fOpLists[i]->isInstantiated()) {
+                // If the backing surface wasn't allocated drop the draw of the entire opList.
+                fOpLists[i] = nullptr;
+                continue;
+            }
+        } else {
+            if (!fOpLists[i]->instantiate(resourceProvider)) {
+                SkDebugf("OpList failed to instantiate.\n");
+                fOpLists[i] = nullptr;
+                continue;
+            }
         }
-#else
-        SkASSERT(fOpLists[i]->isInstantiated());
-#endif
 
         // TODO: handle this instantiation via lazy surface proxies?
         // Instantiate all deferred proxies (being built on worker threads) so we can upload them
@@ -313,7 +343,7 @@ GrSemaphoresSubmitted GrDrawingManager::prepareSurfaceForExternalIO(
     GrSurface* surface = proxy->priv().peekSurface();
 
     if (gpu && surface->asRenderTarget()) {
-        gpu->resolveRenderTarget(surface->asRenderTarget(), proxy->origin());
+        gpu->resolveRenderTarget(surface->asRenderTarget());
     }
     return result;
 }
@@ -444,28 +474,13 @@ sk_sp<GrRenderTargetContext> GrDrawingManager::makeRenderTargetContext(
     }
 
     // SkSurface catches bad color space usage at creation. This check handles anything that slips
-    // by, including internal usage. We allow a null color space here, for read/write pixels and
-    // other special code paths. If a color space is provided, though, enforce all other rules.
-    if (colorSpace && !SkSurface_Gpu::Valid(fContext, sProxy->config(), colorSpace.get())) {
+    // by, including internal usage.
+    if (!SkSurface_Gpu::Valid(fContext, sProxy->config(), colorSpace.get())) {
         SkDEBUGFAIL("Invalid config and colorspace combination");
         return nullptr;
     }
 
     sk_sp<GrRenderTargetProxy> rtp(sk_ref_sp(sProxy->asRenderTargetProxy()));
-
-    bool useDIF = false;
-    if (surfaceProps) {
-        useDIF = surfaceProps->isUseDeviceIndependentFonts();
-    }
-
-    if (useDIF && fContext->caps()->shaderCaps()->pathRenderingSupport() &&
-        GrFSAAType::kNone != rtp->fsaaType()) {
-
-        return sk_sp<GrRenderTargetContext>(new GrPathRenderingRenderTargetContext(
-                                                    fContext, this, std::move(rtp),
-                                                    std::move(colorSpace), surfaceProps,
-                                                    fContext->getAuditTrail(), fSingleOwner));
-    }
 
     return sk_sp<GrRenderTargetContext>(new GrRenderTargetContext(fContext, this, std::move(rtp),
                                                                   std::move(colorSpace),
@@ -481,14 +496,13 @@ sk_sp<GrTextureContext> GrDrawingManager::makeTextureContext(sk_sp<GrSurfaceProx
     }
 
     // SkSurface catches bad color space usage at creation. This check handles anything that slips
-    // by, including internal usage. We allow a null color space here, for read/write pixels and
-    // other special code paths. If a color space is provided, though, enforce all other rules.
-    if (colorSpace && !SkSurface_Gpu::Valid(fContext, sProxy->config(), colorSpace.get())) {
+    // by, including internal usage.
+    if (!SkSurface_Gpu::Valid(fContext, sProxy->config(), colorSpace.get())) {
         SkDEBUGFAIL("Invalid config and colorspace combination");
         return nullptr;
     }
 
-    // GrTextureRenderTargets should always be using GrRenderTargetContext
+    // GrTextureRenderTargets should always be using a GrRenderTargetContext
     SkASSERT(!sProxy->asRenderTargetProxy());
 
     sk_sp<GrTextureProxy> textureProxy(sk_ref_sp(sProxy->asTextureProxy()));

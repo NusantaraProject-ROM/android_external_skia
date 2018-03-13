@@ -8,12 +8,12 @@
  Unicode Unicode5 UTF-8 UTF-16 UTF-32 ASCII Unichar
  API
  BMP GIF HEIF ICO JPEG PNG WBMP WebP
- CPU
+ CPU Little_Endian Big_Endian
  GPU GPU-backed OpenGL Vulkan I/O MSAA UV_Mapping Multi_Sample_Anti_Aliasing GPU_Share_Group
  PDF XPS
  RFC
  NaN NaNs
- Bezier_Curve Coons_Patch Cartesian_Coordinate Euclidean_Distance Euclidean_Space
+ Bezier_Curve Coons_Patch Cartesian_Coordinate Euclidean_Distance Euclidean_Space Mip_Map
  C C++ Destructor Subclasses
  SkUserConfig  # not external, but still thinking about how markup refers to this
  SkXXX.h        # ditto
@@ -59,8 +59,8 @@ FT_Load_Glyph
 #Topic ##
 
 #Topic Backend_Semaphore
+#Alias Backend_Semaphores
 #Class GrBackendSemaphore
-#Alias GrBackendSemaphores
 ##
 ##
 
@@ -444,7 +444,7 @@ FT_Load_Glyph
 #Topic Number_Types
     #Typedef uint16_t SkGlyphID
     #Typedef ##
-    #Topic Scalar
+    #Subtopic Scalar
     #Alias Scalar
     #Typedef float SkScalar
     #Typedef ##
@@ -690,7 +690,7 @@ FT_Load_Glyph
 
 #Topic Surface_Properties
     #Class SkSurfaceProps
-        #Topic Legacy_Font_Host
+        #Subtopic Legacy_Font_Host
         #Enum InitType
             #Const kLegacyFontHost_InitType 0
             ##
@@ -773,11 +773,3 @@ FT_Load_Glyph
     #Struct ##
 #Topic ##
 
-#Enum YUV_ColorSpace
-#Const kJPEG_SkYUVColorSpace 0
-##
-#Const kRec601_SkYUVColorSpace 1
-##
-#Const kRec709_SkYUVColorSpace 2
-##
-##

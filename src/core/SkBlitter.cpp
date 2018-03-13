@@ -80,17 +80,23 @@ void SkBlitter::blitFatAntiRect(const SkRect& rect) {
 }
 
 void SkBlitter::blitCoverageDeltas(SkCoverageDeltaList* deltas, const SkIRect& clip,
-                                   bool isEvenOdd, bool isInverse, bool isConvex) {
-    int         runSize = clip.width() + 1; // +1 so we can set runs[clip.width()] = 0
-    void*       storage = this->allocBlitMemory(runSize * (sizeof(int16_t) + sizeof(SkAlpha)));
-    int16_t*    runs    = reinterpret_cast<int16_t*>(storage);
-    SkAlpha*    alphas  = reinterpret_cast<SkAlpha*>(runs + runSize);
+                                   bool isEvenOdd, bool isInverse, bool isConvex,
+                                   SkArenaAlloc* alloc) {
+    // We cannot use blitter to allocate the storage because the same blitter might be used across
+    // many threads.
+    int      runSize    = clip.width() + 1; // +1 so we can set runs[clip.width()] = 0
+    int16_t* runs       = alloc->makeArrayDefault<int16_t>(runSize);
+    SkAlpha* alphas     = alloc->makeArrayDefault<SkAlpha>(runSize);
     runs[clip.width()]  = 0; // we must set the last run to 0 so blitAntiH can stop there
 
     bool canUseMask = !deltas->forceRLE() &&
                       SkCoverageDeltaMask::CanHandle(SkIRect::MakeLTRB(0, 0, clip.width(), 1));
     const SkAntiRect& antiRect = deltas->getAntiRect();
-    for(int y = deltas->top(); y < deltas->bottom(); ++y) {
+
+    // Only access rows within our clip. Otherwise, we'll have data race in the threaded backend.
+    int top = SkTMax(deltas->top(), clip.fTop);
+    int bottom = SkTMin(deltas->bottom(), clip.fBottom);
+    for(int y = top; y < bottom; ++y) {
         // If antiRect is non-empty and we're at its top row, blit it and skip to the bottom
         if (antiRect.fHeight && y == antiRect.fY) {
             this->blitAntiRect(antiRect.fX, antiRect.fY, antiRect.fWidth, antiRect.fHeight,

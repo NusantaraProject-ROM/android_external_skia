@@ -274,11 +274,11 @@ public:
 
 private:
     // Generates a kTileCount x kTileCount filmstrip with evenly distributed frames.
-    static constexpr int               kTileCount = 5;
+    static constexpr int      kTileCount = 5;
 
-    Name                               fName;
-    SkISize                            fTileSize = SkISize::MakeEmpty();
-    std::unique_ptr<skottie::Animation> fAnimation;
+    Name                      fName;
+    SkISize                   fTileSize = SkISize::MakeEmpty();
+    sk_sp<skottie::Animation> fAnimation;
 };
 #endif
 
@@ -424,9 +424,20 @@ public:
     Error draw(const Src&, SkBitmap*, SkWStream*, SkString*) const override;
     const char* fileExtension() const override { return "png"; }
     SinkFlags flags() const override { return SinkFlags{ SinkFlags::kRaster, SinkFlags::kDirect }; }
-private:
+protected:
+    void allocPixels(const Src& src, SkBitmap*) const;
+
     SkColorType         fColorType;
     sk_sp<SkColorSpace> fColorSpace;
+};
+
+class ThreadedSink : public RasterSink {
+public:
+    explicit ThreadedSink(SkColorType, sk_sp<SkColorSpace> = nullptr);
+    Error draw(const Src&, SkBitmap*, SkWStream*, SkString*) const override;
+
+private:
+    std::unique_ptr<SkExecutor> fExecutor;
 };
 
 class SKPSink : public Sink {
