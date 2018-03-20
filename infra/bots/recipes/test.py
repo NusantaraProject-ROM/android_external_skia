@@ -212,6 +212,17 @@ def dm_flags(api, bot):
     if 'Vulkan' in bot:
       configs = ['vk']
 
+    # Test 1010102 on our Linux/NVIDIA bots
+    if 'QuadroP400' in bot and api.vars.is_linux:
+      if 'Vulkan' in bot:
+        configs.append('vk1010102')
+        # Decoding transparent images to 1010102 just looks bad
+        blacklist('vk1010102 image _ _')
+      else:
+        configs.append('gl1010102')
+        # Decoding transparent images to 1010102 just looks bad
+        blacklist('gl1010102 image _ _')
+
     if 'ChromeOS' in bot:
       # Just run GLES for now - maybe add gles_msaa4 in the future
       configs = ['gles']
@@ -351,7 +362,9 @@ def dm_flags(api, bot):
   if api.vars.internal_hardware_label == 1:
     # skia:7046
     blacklist('_ test _ WritePixelsNonTexture_Gpu')
+    blacklist('_ test _ WritePixelsNonTextureMSAA_Gpu')
     blacklist('_ test _ WritePixels_Gpu')
+    blacklist('_ test _ WritePixelsMSAA_Gpu')
     blacklist('_ test _ GrSurfaceRenderability')
     blacklist('_ test _ ES2BlendWithNoTexture')
 
@@ -520,22 +533,24 @@ def dm_flags(api, bot):
   if 'Chromecast' in bot:
     if 'GPU' in bot:
       # skia:6687
-      match.append('~matrixconvolution')
-      match.append('~blur_image_filter')
-      match.append('~blur_0.01')
-      match.append('~lighting')
-      match.append('~imageblur2')
       match.append('~animated-image-blurs')
+      match.append('~blur_0.01')
+      match.append('~blur_image_filter')
+      match.append('~imageblur2')
+      match.append('~lighting')
+      match.append('~longpathdash')
+      match.append('~matrixconvolution')
+      match.append('~textblobmixedsizes_df')
       match.append('~textblobrandomfont')
     # Blacklisted to avoid OOM (we see DM just end with "broken pipe")
-    match.append('~GM_animated-image-blurs')
-    match.append('~verylarge')
-    match.append('~ImageFilterBlurLargeImage')
-    match.append('~TextBlobCache')
     match.append('~bigbitmaprect_')
-    match.append('~savelayer_clipmask')
     match.append('~DrawBitmapRect')
     match.append('~drawbitmaprect')
+    match.append('~GM_animated-image-blurs')
+    match.append('~ImageFilterBlurLargeImage')
+    match.append('~savelayer_clipmask')
+    match.append('~TextBlobCache')
+    match.append('~verylarge')
 
   if 'GalaxyS6' in bot:
     match.append('~SpecialImage') # skia:6338
@@ -560,6 +575,11 @@ def dm_flags(api, bot):
   if 'Vulkan' in bot and 'Adreno530' in bot:
       # skia:5777
       match.extend(['~CopySurface'])
+
+  if 'Vulkan' in bot and 'Adreno' in bot:
+      # skia:7663
+      match.extend(['~WritePixelsNonTextureMSAA_Gpu'])
+      match.extend(['~WritePixelsMSAA_Gpu'])
 
   if 'Vulkan' in bot and 'NexusPlayer' in bot:
     # skia:6132
@@ -602,7 +622,9 @@ def dm_flags(api, bot):
     match.append('~^SRGBReadWritePixels$')
     match.append('~^VkUploadPixelsTests$')
     match.append('~^WritePixelsNonTexture_Gpu$')
+    match.append('~^WritePixelsNonTextureMSAA_Gpu$')
     match.append('~^WritePixels_Gpu$')
+    match.append('~^WritePixelsMSAA_Gpu$')
     match.append('~^skbug6653$')
 
   if 'Vulkan' in bot and 'IntelIris540' in bot and 'Win' in bot:
@@ -675,7 +697,9 @@ def dm_flags(api, bot):
     match.append('~SpecialImage_DeferredGpu')
     match.append('~SpecialImage_Gpu')
     match.append('~WritePixels_Gpu')
+    match.append('~WritePixelsMSAA_Gpu')
     match.append('~WritePixelsNonTexture_Gpu')
+    match.append('~WritePixelsNonTextureMSAA_Gpu')
     match.append('~XfermodeImageFilterCroppedInput_Gpu')
     match.append('~GrDefaultPathRendererTest') #skia:7244
     match.append('~GrMSAAPathRendererTest') #skia:7244
@@ -1107,6 +1131,8 @@ def GenTests(api):
                                      'svg', 'VERSION'),
         api.path['start_dir'].join('tmp', 'uninteresting_hashes.txt')
     ) +
+    api.step_data('get swarming bot id',
+                  stdout=api.raw_io.output('build123-m2--device5')) +
     api.step_data('push [START_DIR]/skia/resources/* '+
                   '/sdcard/revenge_of_the_skiabot/resources', retcode=1)
   )

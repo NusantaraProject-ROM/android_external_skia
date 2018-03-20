@@ -34,7 +34,7 @@ public:
     // foo(5, 7) when compiled on GCC and foo(7, 5) when compiled on Clang.
     // By requiring params to be passed in, we avoid the temptation to call
     // next() in a way that does not consume fuzzed bytes in a single
-    // uplatform-independent order.
+    // platform-independent order.
     template <typename T>
     void next(T* t);
 
@@ -109,6 +109,7 @@ inline void Fuzz::nextRange(T* n, Min min, Max max) {
     }
     if (min > max) {
         // Avoid misuse of nextRange
+        SkDebugf("min > max (%d > %d) \n", min, max);
         this->signalBug();
     }
     if (*n < 0) { // Handle negatives
@@ -134,9 +135,10 @@ struct Fuzzable {
     void (*fn)(Fuzz*);
 };
 
+// Not static so that we can link these into oss-fuzz harnesses if we like.
 #define DEF_FUZZ(name, f)                                               \
-    static void fuzz_##name(Fuzz*);                                     \
+    void fuzz_##name(Fuzz*);                                            \
     sk_tools::Registry<Fuzzable> register_##name({#name, fuzz_##name}); \
-    static void fuzz_##name(Fuzz* f)
+    void fuzz_##name(Fuzz* f)
 
 #endif//Fuzz_DEFINED

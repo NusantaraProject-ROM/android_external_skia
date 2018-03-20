@@ -40,9 +40,7 @@ public:
     int getRenderTargetSampleCount(int requestedCount, GrPixelConfig config) const override;
     int maxRenderTargetSampleCount(GrPixelConfig config) const override;
 
-    bool renderTargetWritePixelsSupported(bool isAlsoTexture, int sampleCnt) const override {
-        return sampleCnt <= 1 && isAlsoTexture;
-    }
+    bool surfaceSupportsWritePixels(const GrSurface* surface) const override;
 
     bool isConfigTexturableLinearly(GrPixelConfig config) const {
         return SkToBool(ConfigInfo::kTextureable_Flag & fConfigTable[config].fLinearFlags);
@@ -146,6 +144,8 @@ private:
 
     void initConfigTable(const GrVkInterface*, VkPhysicalDevice, const VkPhysicalDeviceProperties&);
     void initStencilFormat(const GrVkInterface* iface, VkPhysicalDevice physDev);
+
+    void applyDriverCorrectnessWorkarounds(const VkPhysicalDeviceProperties&);
 
     struct ConfigInfo {
         ConfigInfo() : fOptimalFlags(0), fLinearFlags(0) {}
