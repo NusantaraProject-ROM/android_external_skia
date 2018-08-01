@@ -9,26 +9,33 @@
 #define sk_tool_utils_DEFINED
 
 #include "SkColor.h"
+#include "SkData.h"
+#include "SkEncodedImageFormat.h"
+#include "SkFontStyle.h"
 #include "SkImageEncoder.h"
 #include "SkImageInfo.h"
 #include "SkRandom.h"
+#include "SkRect.h"
 #include "SkRefCnt.h"
+#include "SkScalar.h"
 #include "SkStream.h"
+#include "SkTArray.h"
 #include "SkTDArray.h"
-#include "SkTypeface.h"
+#include "SkTypes.h"
 
 class SkBitmap;
 class SkCanvas;
-class SkColorFilter;
+class SkFontStyle;
 class SkImage;
 class SkPaint;
 class SkPath;
+class SkPixmap;
 class SkRRect;
 class SkShader;
 class SkSurface;
 class SkSurfaceProps;
-class SkTestFont;
 class SkTextBlobBuilder;
+class SkTypeface;
 
 namespace sk_tool_utils {
 
@@ -66,9 +73,6 @@ namespace sk_tool_utils {
      */
     sk_sp<SkTypeface> create_portable_typeface(const char* name, SkFontStyle style);
 
-    /** Call to clean up portable font references. */
-    void release_portable_typefaces();
-
     /**
      *  Call writePixels() by using the pixels from bitmap, but with an info that claims
      *  the pixels are colorType + alphaType
@@ -90,9 +94,6 @@ namespace sk_tool_utils {
                       bool respectColorSpaces = false);
     bool equal_pixels(const SkImage* a, const SkImage* b, unsigned maxDiff = 0,
                       bool respectColorSpaces = false);
-
-    // private to sk_tool_utils
-    sk_sp<SkTypeface> create_font(const char* name, SkFontStyle);
 
     /** Returns a newly created CheckerboardShader. */
     sk_sp<SkShader> create_checkerboard_shader(SkColor c1, SkColor c2, int size);
@@ -138,6 +139,12 @@ namespace sk_tool_utils {
     //
     // numPts and step must be co-prime.
     SkPath make_star(const SkRect& bounds, int numPts = 5, int step = 2);
+
+    void create_hemi_normal_map(SkBitmap* bm, const SkIRect& dst);
+
+    void create_frustum_normal_map(SkBitmap* bm, const SkIRect& dst);
+
+    void create_tetra_normal_map(SkBitmap* bm, const SkIRect& dst);
 
     void make_big_path(SkPath& path);
 

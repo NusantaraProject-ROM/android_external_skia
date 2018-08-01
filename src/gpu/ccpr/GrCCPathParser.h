@@ -9,10 +9,11 @@
 #define GrCCPathParser_DEFINED
 
 #include "GrMesh.h"
-#include "GrNonAtomicRef.h"
-#include "GrTessellator.h"
+#include "SkPath.h"
+#include "SkPathPriv.h"
 #include "SkRect.h"
 #include "SkRefCnt.h"
+#include "GrTessellator.h"
 #include "ccpr/GrCCCoverageProcessor.h"
 #include "ccpr/GrCCGeometry.h"
 #include "ops/GrDrawOp.h"
@@ -25,14 +26,23 @@ class SkPath;
  * This class parses SkPaths into CCPR primitives in GPU buffers, then issues calls to draw their
  * coverage counts.
  */
-class GrCCPathParser : public GrNonAtomicRef<GrCCPathParser> {
+class GrCCPathParser {
 public:
     // Indicates whether a path should enforce a scissor clip when rendering its mask. (Specified
     // as an int because these values get used directly as indices into arrays.)
     enum class ScissorMode : int { kNonScissored = 0, kScissored = 1 };
     static constexpr int kNumScissorModes = 2;
 
-    GrCCPathParser(int maxTotalPaths, int maxPathPoints, int numSkPoints, int numSkVerbs);
+    struct PathStats {
+        int fMaxPointsPerPath = 0;
+        int fNumTotalSkPoints = 0;
+        int fNumTotalSkVerbs = 0;
+        int fNumTotalConicWeights = 0;
+
+        void statPath(const SkPath&);
+    };
+
+    GrCCPathParser(int numPaths, const PathStats&);
 
     ~GrCCPathParser() {
         // Enforce the contract that the client always calls saveParsedPath or discardParsedPath.
@@ -57,8 +67,8 @@ public:
     // Commits the currently-parsed path from staging to the current batch, and specifies whether
     // the mask should be rendered with a scissor in effect. Accepts an optional post-device-space
     // translate for placement in an atlas.
-    void saveParsedPath(ScissorMode, const SkIRect& clippedDevIBounds, int16_t atlasOffsetX,
-                        int16_t atlasOffsetY);
+    void saveParsedPath(ScissorMode, const SkIRect& clippedDevIBounds,
+                        const SkIVector& devToAtlasOffset);
     void discardParsedPath();
 
     // Compiles the outstanding saved paths into a batch, and returns an ID that can be used to draw
@@ -76,14 +86,36 @@ private:
     using PrimitiveTallies = GrCCGeometry::PrimitiveTallies;
 
     // Every kBeginPath verb has a corresponding PathInfo entry.
-    struct PathInfo {
-        PathInfo(ScissorMode scissorMode, int16_t offsetX, int16_t offsetY)
-                : fScissorMode(scissorMode), fAtlasOffsetX(offsetX), fAtlasOffsetY(offsetY) {}
+    class PathInfo {
+    public:
+        PathInfo(ScissorMode scissorMode, const SkIVector& devToAtlasOffset)
+                : fScissorMode(scissorMode), fDevToAtlasOffset(devToAtlasOffset) {}
 
+        ScissorMode scissorMode() const { return fScissorMode; }
+        const SkIVector& devToAtlasOffset() const { return fDevToAtlasOffset; }
+
+        // An empty tessellation fan is also valid; we use negative count to denote not tessellated.
+        bool hasFanTessellation() const { return fFanTessellationCount >= 0; }
+        int fanTessellationCount() const {
+            SkASSERT(this->hasFanTessellation());
+            return fFanTessellationCount;
+        }
+        const GrTessellator::WindingVertex* fanTessellation() const {
+            SkASSERT(this->hasFanTessellation());
+            return fFanTessellation.get();
+        }
+
+        void adoptFanTessellation(const GrTessellator::WindingVertex* vertices, int count) {
+            SkASSERT(count >= 0);
+            fFanTessellation.reset(vertices);
+            fFanTessellationCount = count;
+        }
+
+    private:
         ScissorMode fScissorMode;
-        int16_t fAtlasOffsetX, fAtlasOffsetY;
-        std::unique_ptr<GrTessellator::WindingVertex[]> fFanTessellation;
-        int fFanTessellationCount = 0;
+        SkIVector fDevToAtlasOffset;  // Translation from device space to location in atlas.
+        int fFanTessellationCount = -1;
+        std::unique_ptr<const GrTessellator::WindingVertex[]> fFanTessellation;
     };
 
     // Defines a batch of CCPR primitives. Start indices are deduced by looking at the previous
@@ -104,9 +136,9 @@ private:
     void parsePath(const SkPath&, const SkPoint* deviceSpacePts);
     void endContourIfNeeded(bool insideContour);
 
-    void drawRenderPass(GrOpFlushState*, const GrPipeline&, CoverageCountBatchID,
-                        GrCCCoverageProcessor::RenderPass, GrCCCoverageProcessor::WindMethod,
-                        int PrimitiveTallies::*instanceType, const SkIRect& drawBounds) const;
+    void drawPrimitives(GrOpFlushState*, const GrPipeline&, CoverageCountBatchID,
+                        GrCCCoverageProcessor::PrimitiveType, int PrimitiveTallies::*instanceType,
+                        const SkIRect& drawBounds) const;
 
     // Staging area for the path being parsed.
     SkDEBUGCODE(int fParsingPath = false);
@@ -125,7 +157,14 @@ private:
     sk_sp<GrBuffer> fInstanceBuffer;
     PrimitiveTallies fBaseInstances[kNumScissorModes];
     mutable SkSTArray<32, GrMesh> fMeshesScratchBuffer;
-    mutable SkSTArray<32, GrPipeline::DynamicState> fDynamicStatesScratchBuffer;
+    mutable SkSTArray<32, SkIRect> fScissorRectScratchBuffer;
 };
+
+inline void GrCCPathParser::PathStats::statPath(const SkPath& path) {
+    fMaxPointsPerPath = SkTMax(fMaxPointsPerPath, path.countPoints());
+    fNumTotalSkPoints += path.countPoints();
+    fNumTotalSkVerbs += path.countVerbs();
+    fNumTotalConicWeights += SkPathPriv::ConicWeightCnt(path);
+}
 
 #endif

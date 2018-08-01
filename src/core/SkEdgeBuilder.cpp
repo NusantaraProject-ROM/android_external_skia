@@ -4,13 +4,17 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+
 #include "SkEdgeBuilder.h"
-#include "SkPath.h"
-#include "SkEdge.h"
+
 #include "SkAnalyticEdge.h"
+#include "SkEdge.h"
 #include "SkEdgeClipper.h"
-#include "SkLineClipper.h"
 #include "SkGeometry.h"
+#include "SkLineClipper.h"
+#include "SkPath.h"
+#include "SkPathPriv.h"
+#include "SkTo.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -215,6 +219,11 @@ void SkEdgeBuilder::addClipper(SkEdgeClipper* clipper) {
     SkPath::Verb verb;
 
     while ((verb = clipper->next(pts)) != SkPath::kDone_Verb) {
+        const int count = SkPathPriv::PtsInIter(verb);
+        if (!SkScalarsAreFinite(&pts[0].fX, count*2)) {
+            fIsFinite = false;
+            return;
+        }
         switch (verb) {
             case SkPath::kLine_Verb:
                 this->addLine(pts);
@@ -332,7 +341,7 @@ int SkEdgeBuilder::buildPoly(const SkPath& path, const SkIRect* iclip, int shift
     }
     SkASSERT((size_t)(edge - edgeStart) <= maxEdgeCount * edgeSize);
     SkASSERT((size_t)(edgePtr - (char**)fEdgeList) <= maxEdgeCount);
-    return SkToInt(edgePtr - (char**)fEdgeList);
+    return fIsFinite ? SkToInt(edgePtr - (char**)fEdgeList) : 0;
 }
 
 static void handle_quad(SkEdgeBuilder* builder, const SkPoint pts[3]) {
@@ -445,7 +454,7 @@ int SkEdgeBuilder::build(const SkPath& path, const SkIRect* iclip, int shiftUp,
         }
     }
     fEdgeList = fList.begin();
-    return fList.count();
+    return fIsFinite ? fList.count() : 0;
 }
 
 int SkEdgeBuilder::build_edges(const SkPath& path, const SkIRect* shiftedClip,
@@ -462,5 +471,5 @@ int SkEdgeBuilder::build_edges(const SkPath& path, const SkIRect* shiftedClip,
     // For example, a single cubic edge with a valley shape \_/ is fine for DAA.
     SkASSERT(edgeType == kBezier || canCullToTheRight || count != 1);
 
-    return count;
+    return fIsFinite ? count : 0;
 }

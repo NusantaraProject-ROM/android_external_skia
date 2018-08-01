@@ -177,7 +177,6 @@ struct T {                              \
 RECORD(NoOp, 0);
 RECORD(Flush, 0);
 RECORD(Restore, 0,
-        SkIRect devBounds;
         TypedMatrix matrix);
 RECORD(Save, 0);
 
@@ -212,19 +211,15 @@ private:
 static_assert(sizeof(ClipOpAndAA) == 4, "ClipOpAndAASize");
 
 RECORD(ClipPath, 0,
-        SkIRect devBounds;
         PreCachedPath path;
         ClipOpAndAA opAA);
 RECORD(ClipRRect, 0,
-        SkIRect devBounds;
         SkRRect rrect;
         ClipOpAndAA opAA);
 RECORD(ClipRect, 0,
-        SkIRect devBounds;
         SkRect rect;
         ClipOpAndAA opAA);
 RECORD(ClipRegion, 0,
-        SkIRect devBounds;
         SkRegion region;
         SkClipOp op);
 
@@ -349,6 +344,8 @@ RECORD(DrawAtlas, kDraw_Tag|kHasImage_Tag|kHasPaint_Tag,
 RECORD(DrawVertices, kDraw_Tag|kHasPaint_Tag,
         SkPaint paint;
         sk_sp<SkVertices> vertices;
+        PODArray<SkMatrix> bones;
+        int boneCount;
         SkBlendMode bmode);
 RECORD(DrawShadowRec, kDraw_Tag,
        PreCachedPath path;

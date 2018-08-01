@@ -9,6 +9,7 @@
 
 #include "GrContext.h"
 #include "GrDeferredProxyUploader.h"
+#include "GrMemoryPool.h"
 #include "GrSurfaceProxy.h"
 #include "GrTextureProxyPriv.h"
 
@@ -24,11 +25,13 @@ uint32_t GrOpList::CreateUniqueID() {
     return id;
 }
 
-GrOpList::GrOpList(GrResourceProvider* resourceProvider,
+GrOpList::GrOpList(GrResourceProvider* resourceProvider, sk_sp<GrOpMemoryPool> opMemoryPool,
                    GrSurfaceProxy* surfaceProxy, GrAuditTrail* auditTrail)
-    : fAuditTrail(auditTrail)
-    , fUniqueID(CreateUniqueID())
-    , fFlags(0) {
+        : fOpMemoryPool(std::move(opMemoryPool))
+        , fAuditTrail(auditTrail)
+        , fUniqueID(CreateUniqueID())
+        , fFlags(0) {
+    SkASSERT(fOpMemoryPool);
     fTarget.setProxy(sk_ref_sp(surfaceProxy), kWrite_GrIOType);
     fTarget.get()->setLastOpList(this);
 
@@ -124,14 +127,17 @@ bool GrOpList::isInstantiated() const {
 }
 
 #ifdef SK_DEBUG
-void GrOpList::dump() const {
+void GrOpList::dump(bool printDependencies) const {
     SkDebugf("--------------------------------------------------------------\n");
-    SkDebugf("node: %d -> RT: %d\n", fUniqueID, fTarget.get() ? fTarget.get()->uniqueID().asUInt()
-                                                              : -1);
-    SkDebugf("relies On (%d): ", fDependencies.count());
-    for (int i = 0; i < fDependencies.count(); ++i) {
-        SkDebugf("%d, ", fDependencies[i]->fUniqueID);
+    SkDebugf("opList: %d -> RT: %d\n", fUniqueID, fTarget.get() ? fTarget.get()->uniqueID().asUInt()
+                                                                : -1);
+
+    if (printDependencies) {
+        SkDebugf("relies On (%d): ", fDependencies.count());
+        for (int i = 0; i < fDependencies.count(); ++i) {
+            SkDebugf("%d, ", fDependencies[i]->fUniqueID);
+        }
+        SkDebugf("\n");
     }
-    SkDebugf("\n");
 }
 #endif

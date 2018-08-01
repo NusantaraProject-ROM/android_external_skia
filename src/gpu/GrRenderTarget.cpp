@@ -19,18 +19,17 @@
 #include "SkRectPriv.h"
 
 GrRenderTarget::GrRenderTarget(GrGpu* gpu, const GrSurfaceDesc& desc,
-                               GrRenderTargetFlags flags,
                                GrStencilAttachment* stencil)
         : INHERITED(gpu, desc)
         , fSampleCnt(desc.fSampleCnt)
-        , fStencilAttachment(stencil)
-        , fFlags(flags) {
+        , fStencilAttachment(stencil) {
     SkASSERT(desc.fFlags & kRenderTarget_GrSurfaceFlag);
-    SkASSERT(!(fFlags & GrRenderTargetFlags::kMixedSampled) || fSampleCnt > 1);
-    SkASSERT(!(fFlags & GrRenderTargetFlags::kWindowRectsSupport) ||
-             gpu->caps()->maxWindowRectangles() > 0);
+    SkASSERT(!this->hasMixedSamples() || fSampleCnt > 1);
+    SkASSERT(!this->supportsWindowRects() || gpu->caps()->maxWindowRectangles() > 0);
     fResolveRect = SkRectPriv::MakeILargestInverted();
 }
+
+GrRenderTarget::~GrRenderTarget() = default;
 
 void GrRenderTarget::flagAsNeedingResolve(const SkIRect* rect) {
     if (kCanResolve_ResolveType == getResolveType()) {
@@ -61,13 +60,13 @@ void GrRenderTarget::flagAsResolved() {
 }
 
 void GrRenderTarget::onRelease() {
-    SkSafeSetNull(fStencilAttachment);
+    fStencilAttachment = nullptr;
 
     INHERITED::onRelease();
 }
 
 void GrRenderTarget::onAbandon() {
-    SkSafeSetNull(fStencilAttachment);
+    fStencilAttachment = nullptr;
 
     INHERITED::onAbandon();
 }
@@ -80,9 +79,9 @@ bool GrRenderTargetPriv::attachStencilAttachment(sk_sp<GrStencilAttachment> sten
         // we're not actually adding one.
         return true;
     }
-    fRenderTarget->fStencilAttachment = stencil.release();
+    fRenderTarget->fStencilAttachment = std::move(stencil);
     if (!fRenderTarget->completeStencilAttachment()) {
-        SkSafeSetNull(fRenderTarget->fStencilAttachment);
+        fRenderTarget->fStencilAttachment = nullptr;
         return false;
     }
     return true;

@@ -6,15 +6,17 @@
  */
 
 #include "SkDevice.h"
+
 #include "SkColorFilter.h"
 #include "SkDraw.h"
-#include "SkDrawFilter.h"
+#include "SkGlyphRun.h"
 #include "SkImageFilter.h"
 #include "SkImageFilterCache.h"
 #include "SkImagePriv.h"
 #include "SkImage_Base.h"
 #include "SkLatticeIter.h"
 #include "SkLocalMatrixShader.h"
+#include "SkMakeUnique.h"
 #include "SkMatrixPriv.h"
 #include "SkPatchUtils.h"
 #include "SkPathMeasure.h"
@@ -26,6 +28,7 @@
 #include "SkTLazy.h"
 #include "SkTextBlobRunIterator.h"
 #include "SkTextToPathIter.h"
+#include "SkTo.h"
 #include "SkUtils.h"
 #include "SkVertices.h"
 
@@ -127,18 +130,17 @@ void SkBaseDevice::drawDRRect(const SkRRect& outer,
 }
 
 void SkBaseDevice::drawPatch(const SkPoint cubics[12], const SkColor colors[4],
-                             const SkPoint texCoords[4], SkBlendMode bmode,
-                             bool interpColorsLinearly, const SkPaint& paint) {
+                             const SkPoint texCoords[4], SkBlendMode bmode, const SkPaint& paint) {
     SkISize lod = SkPatchUtils::GetLevelOfDetail(cubics, &this->ctm());
     auto vertices = SkPatchUtils::MakeVertices(cubics, colors, texCoords, lod.width(), lod.height(),
-                                               interpColorsLinearly);
+                                               this->imageInfo().colorSpace());
     if (vertices) {
-        this->drawVertices(vertices.get(), bmode, paint);
+        this->drawVertices(vertices.get(), nullptr, 0, bmode, paint);
     }
 }
 
 void SkBaseDevice::drawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
-                                const SkPaint &paint, SkDrawFilter* drawFilter) {
+                                const SkPaint &paint) {
 
     SkPaint runPaint = paint;
 
@@ -150,18 +152,15 @@ void SkBaseDevice::drawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
         // so it is safe to not re-seed the paint for this reason.
         it.applyFontToPaint(&runPaint);
 
-        if (drawFilter && !drawFilter->filter(&runPaint, SkDrawFilter::kText_Type)) {
-            // A false return from filter() means we should abort the current draw.
-            runPaint = paint;
-            continue;
-        }
-
-        runPaint.setFlags(this->filterTextFlags(runPaint));
-
         switch (it.positioning()) {
-        case SkTextBlob::kDefault_Positioning:
-            this->drawText(it.glyphs(), textLen, x + offset.x(), y + offset.y(), runPaint);
-            break;
+        case SkTextBlob::kDefault_Positioning: {
+            auto origin = SkPoint::Make(x + offset.x(), y + offset.y());
+            SkGlyphRunBuilder builder;
+            builder.drawText(runPaint, (const char*) it.glyphs(), textLen, origin);
+            auto glyphRunList = builder.useGlyphRunList();
+            glyphRunList->temporaryShuntToDrawPosText(this, SkPoint::Make(0, 0));
+        }
+        break;
         case SkTextBlob::kHorizontal_Positioning:
             this->drawPosText(it.glyphs(), textLen, it.pos(), 1,
                               SkPoint::Make(x, y + offset.y()), runPaint);
@@ -172,11 +171,6 @@ void SkBaseDevice::drawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
             break;
         default:
             SK_ABORT("unhandled positioning mode");
-        }
-
-        if (drawFilter) {
-            // A draw filter may change the paint arbitrarily, so we must re-seed in this case.
-            runPaint = paint;
         }
     }
 }
@@ -245,6 +239,18 @@ void SkBaseDevice::drawImageLattice(const SkImage* image,
     }
 }
 
+void SkBaseDevice::drawGlyphRunList(SkGlyphRunList* glyphRunList) {
+    auto blob = glyphRunList->blob();
+
+    if (blob == nullptr) {
+        glyphRunList->temporaryShuntToDrawPosText(this, SkPoint::Make(0, 0));
+    } else {
+        auto origin = glyphRunList->origin();
+        auto paint = glyphRunList->paint();
+        this->drawTextBlob(blob, origin.x(), origin.y(), paint);
+    }
+}
+
 void SkBaseDevice::drawBitmapLattice(const SkBitmap& bitmap,
                                      const SkCanvas::Lattice& lattice, const SkRect& dst,
                                      const SkPaint& paint) {
@@ -297,7 +303,7 @@ void SkBaseDevice::drawAtlas(const SkImage* atlas, const SkRSXform xform[],
     }
     SkPaint p(paint);
     p.setShader(atlas->makeShader());
-    this->drawVertices(builder.detach().get(), mode, p);
+    this->drawVertices(builder.detach().get(), nullptr, 0, mode, p);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -469,35 +475,15 @@ void SkBaseDevice::drawTextOnPath(const void* text, size_t byteLength,
 }
 
 #include "SkUtils.h"
-typedef int (*CountTextProc)(const char* text);
-static int count_utf16(const char* text) {
-    const uint16_t* prev = (uint16_t*)text;
-    (void)SkUTF16_NextUnichar(&prev);
-    return SkToInt((const char*)prev - text);
-}
-static int return_4(const char* text) { return 4; }
-static int return_2(const char* text) { return 2; }
 
 void SkBaseDevice::drawTextRSXform(const void* text, size_t len,
                                    const SkRSXform xform[], const SkPaint& paint) {
-    CountTextProc proc = nullptr;
-    switch (paint.getTextEncoding()) {
-        case SkPaint::kUTF8_TextEncoding:
-            proc = SkUTF8_CountUTF8Bytes;
-            break;
-        case SkPaint::kUTF16_TextEncoding:
-            proc = count_utf16;
-            break;
-        case SkPaint::kUTF32_TextEncoding:
-            proc = return_4;
-            break;
-        case SkPaint::kGlyphID_TextEncoding:
-            proc = return_2;
-            break;
-    }
-
+    SkPaint::TextEncoding textEncoding = paint.getTextEncoding();
+    const char* end = (const char*)text + len;
     SkPaint localPaint(paint);
     SkShader* shader = paint.getShader();
+    SkScalar pos[2] = {0.0f, 0.0f};
+    SkPoint origin = SkPoint::Make(0, 0);
 
     SkMatrix localM, currM;
     const void* stopText = (const char*)text + len;
@@ -511,34 +497,37 @@ void SkBaseDevice::drawTextRSXform(const void* text, size_t len,
         // with a localmatrixshader so that the shader draws as if there was no change to the ctm.
         if (shader) {
             SkMatrix inverse;
-            SkAssertResult(localM.invert(&inverse));
-            localPaint.setShader(shader->makeWithLocalMatrix(inverse));
+            if (localM.invert(&inverse)) {
+                localPaint.setShader(shader->makeWithLocalMatrix(inverse));
+            } else {
+                localPaint.setShader(nullptr);  // can't handle this xform
+            }
         }
-
-        int subLen = proc((const char*)text);
-        this->drawText(text, subLen, 0, 0, localPaint);
+        int subLen = 0;
+        switch (textEncoding) {
+            case SkPaint::kUTF8_TextEncoding:
+                subLen = SkUTF8_CountUTF8Bytes((const char*)text);
+                break;
+            case SkPaint::kUTF16_TextEncoding:
+                {
+                    const uint16_t* ptr = (const uint16_t*)text;
+                    (void)SkUTF16_NextUnichar(&ptr, (const uint16_t*)end);
+                    subLen = SkToInt((const char*)ptr - (const char*)text);
+                };
+                break;
+            case SkPaint::kUTF32_TextEncoding:
+                subLen = 4;
+                break;
+            case SkPaint::kGlyphID_TextEncoding:
+                subLen = 2;
+                break;
+        }
+        this->drawPosText(text, subLen, pos, 2, origin, localPaint);
         text = (const char*)text + subLen;
     }
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-
-uint32_t SkBaseDevice::filterTextFlags(const SkPaint& paint) const {
-    uint32_t flags = paint.getFlags();
-
-    if (!paint.isLCDRenderText() || !paint.isAntiAlias()) {
-        return flags;
-    }
-
-    if (kUnknown_SkPixelGeometry == fSurfaceProps.pixelGeometry()
-        || this->onShouldDisableLCD(paint)) {
-
-        flags &= ~SkPaint::kLCDRenderText_Flag;
-        flags |= SkPaint::kGenA8FromLCD_Flag;
-    }
-
-    return flags;
-}
 
 sk_sp<SkSurface> SkBaseDevice::makeSurface(SkImageInfo const&, SkSurfaceProps const&) {
     return nullptr;

@@ -69,6 +69,10 @@ GrGLTexture::GrGLTexture(GrGLGpu* gpu, const GrSurfaceDesc& desc, const IDDesc& 
 void GrGLTexture::init(const GrSurfaceDesc& desc, const IDDesc& idDesc) {
     SkASSERT(0 != idDesc.fInfo.fID);
     SkASSERT(0 != idDesc.fInfo.fFormat);
+    if (idDesc.fInfo.fTarget == GR_GL_TEXTURE_RECTANGLE ||
+        idDesc.fInfo.fTarget == GR_GL_TEXTURE_EXTERNAL) {
+        this->setIsGLTextureRectangleOrExternal();
+    }
     fTexParams.invalidate();
     fTexParamsTimestamp = GrGpu::kExpiredTimestamp;
     fInfo = idDesc.fInfo;
@@ -93,10 +97,6 @@ void GrGLTexture::onAbandon() {
     INHERITED::onAbandon();
 }
 
-GrBackendObject GrGLTexture::getTextureHandle() const {
-    return reinterpret_cast<GrBackendObject>(&fInfo);
-}
-
 GrBackendTexture GrGLTexture::getBackendTexture() const {
     return GrBackendTexture(this->width(), this->height(), this->texturePriv().mipMapped(), fInfo);
 }
@@ -108,7 +108,8 @@ sk_sp<GrGLTexture> GrGLTexture::MakeWrapped(GrGLGpu* gpu, const GrSurfaceDesc& d
 
 bool GrGLTexture::onStealBackendTexture(GrBackendTexture* backendTexture,
                                         SkImage::BackendTextureReleaseProc* releaseProc) {
-    *backendTexture = GrBackendTexture(width(), height(), config(), fInfo);
+    *backendTexture = GrBackendTexture(this->width(), this->height(),
+                                       this->texturePriv().mipMapped(), fInfo);
     // Set the release proc to a no-op function. GL doesn't require any special cleanup.
     *releaseProc = [](GrBackendTexture){};
 

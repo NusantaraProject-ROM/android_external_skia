@@ -10,7 +10,9 @@
 
 #include "SkBitmapDevice.h"
 #include "SkDraw.h"
+#include "SkRectPriv.h"
 #include "SkTaskGroup2D.h"
+#include <new>
 
 class SkThreadedBMPDevice : public SkBitmapDevice {
 public:
@@ -30,15 +32,18 @@ protected:
 
     void drawPath(const SkPath&, const SkPaint&, const SkMatrix* prePathMatrix,
                   bool pathIsMutable) override;
-    void drawBitmap(const SkBitmap&, SkScalar x, SkScalar y, const SkPaint&) override;
     void drawSprite(const SkBitmap&, int x, int y, const SkPaint&) override;
-
-    void drawText(const void* text, size_t len, SkScalar x, SkScalar y,
-                  const SkPaint&) override;
     void drawPosText(const void* text, size_t len, const SkScalar pos[],
                      int scalarsPerPos, const SkPoint& offset, const SkPaint& paint) override;
-    void drawVertices(const SkVertices*, SkBlendMode, const SkPaint&) override;
-    void drawDevice(SkBaseDevice*, int x, int y, const SkPaint&) override;
+    void drawVertices(const SkVertices*, const SkMatrix* bones, int boneCount, SkBlendMode,
+                      const SkPaint&) override;
+
+    void drawBitmap(const SkBitmap&, const SkMatrix&, const SkRect* dstOrNull,
+                    const SkPaint&) override;
+    void drawBitmapRect(const SkBitmap& bitmap, const SkRect* src, const SkRect& dst,
+                        const SkPaint& paint, SkCanvas::SrcRectConstraint constraint) override;
+
+    sk_sp<SkSpecialImage> snapSpecial() override;
 
     void flush() override;
 
@@ -67,17 +72,17 @@ private:
                                           const SkIRect& tileBounds)>;
 
         DrawElement() {}
-        DrawElement(SkThreadedBMPDevice* device, DrawFn&& drawFn, const SkRect& rawDrawBounds)
+        DrawElement(SkThreadedBMPDevice* device, DrawFn&& drawFn, const SkIRect& drawBounds)
                 : fInitialized(true)
                 , fDrawFn(std::move(drawFn))
                 , fDS(device)
-                , fDrawBounds(device->transformDrawBounds(rawDrawBounds)) {}
-        DrawElement(SkThreadedBMPDevice* device, InitFn&& initFn, const SkRect& rawDrawBounds)
+                , fDrawBounds(drawBounds) {}
+        DrawElement(SkThreadedBMPDevice* device, InitFn&& initFn, const SkIRect& drawBounds)
                 : fInitialized(false)
                 , fNeedInit(true)
                 , fInitFn(std::move(initFn))
                 , fDS(device)
-                , fDrawBounds(device->transformDrawBounds(rawDrawBounds)) {}
+                , fDrawBounds(drawBounds) {}
 
         SK_ALWAYS_INLINE bool tryInitOnce(SkArenaAlloc* alloc) {
             bool t = true;
@@ -133,13 +138,15 @@ private:
         // Push a draw command into the queue. If Fn is DrawFn, we're pushing an element without
         // the need of initialization. If Fn is InitFn, we're pushing an element with init-once
         // and the InitFn will generate the DrawFn during initialization.
-        template<typename Fn>
+        template<bool useCTM = true, typename Fn>
         SK_ALWAYS_INLINE void push(const SkRect& rawDrawBounds, Fn&& fn) {
             if (fSize == MAX_QUEUE_SIZE) {
                 this->reset();
             }
             SkASSERT(fSize < MAX_QUEUE_SIZE);
-            new (&fElements[fSize++]) DrawElement(fDevice, std::move(fn), rawDrawBounds);
+            SkIRect drawBounds = fDevice->transformDrawBounds<useCTM>(rawDrawBounds);
+            fElements[fSize].~DrawElement(); // release previous resources to prevent memory leak
+            new (&fElements[fSize++]) DrawElement(fDevice, std::move(fn), drawBounds);
             fTasks->addColumn();
         }
 
@@ -155,7 +162,30 @@ private:
         int                                 fSize;
     };
 
-    SkIRect transformDrawBounds(const SkRect& drawBounds) const;
+    template<bool useCTM = true>
+    SkIRect transformDrawBounds(const SkRect& drawBounds) const {
+        if (drawBounds == SkRectPriv::MakeLargest()) {
+            return SkRectPriv::MakeILarge();
+        }
+        SkRect transformedBounds;
+        if (useCTM) {
+            this->ctm().mapRect(&transformedBounds, drawBounds);
+        } else {
+            transformedBounds = drawBounds;
+        }
+        return transformedBounds.roundOut();
+    }
+
+
+
+    template<typename T>
+    T* cloneArray(const T* array, int count) {
+       T* clone = fAlloc.makeArrayDefault<T>(count);
+       memcpy(clone, array, sizeof(T) * count);
+       return clone;
+    }
+
+    SkBitmap snapBitmap(const SkBitmap& bitmap);
 
     const int fTileCnt;
     const int fThreadCnt;

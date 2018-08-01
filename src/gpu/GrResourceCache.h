@@ -11,7 +11,6 @@
 #include "GrGpuResource.h"
 #include "GrGpuResourceCacheAccess.h"
 #include "GrGpuResourcePriv.h"
-#include "GrResourceCache.h"
 #include "GrResourceKey.h"
 #include "SkMessageBus.h"
 #include "SkRefCnt.h"
@@ -28,6 +27,10 @@ class SkTraceMemoryDump;
 struct GrGpuResourceFreedMessage {
     GrGpuResource* fResource;
     uint32_t fOwningUniqueID;
+    bool shouldSend(uint32_t inboxID) const {
+        // The inbox's ID is the unique ID of the owning GrContext.
+        return inboxID == fOwningUniqueID;
+    }
 };
 
 /**
@@ -67,6 +70,9 @@ public:
     /** Used to access functionality needed by GrGpuResource for lifetime management. */
     class ResourceAccess;
     ResourceAccess resourceAccess();
+
+    /** Unique ID of the owning GrContext. */
+    uint32_t contextUniqueID() const { return fContextUniqueID; }
 
     /**
      * Sets the cache limits in terms of number of resources, max gpu memory byte size, and number
@@ -266,7 +272,6 @@ private:
     void insertResource(GrGpuResource*);
     void removeResource(GrGpuResource*);
     void notifyCntReachedZero(GrGpuResource*, uint32_t flags);
-    void didChangeGpuMemorySize(const GrGpuResource*, size_t oldSize);
     void changeUniqueKey(GrGpuResource*, const GrUniqueKey&);
     void removeUniqueKey(GrGpuResource*);
     void willRemoveScratchKey(const GrGpuResource*);
@@ -411,13 +416,6 @@ private:
      */
     void notifyCntReachedZero(GrGpuResource* resource, uint32_t flags) {
         fCache->notifyCntReachedZero(resource, flags);
-    }
-
-    /**
-     * Called by GrGpuResources when their sizes change.
-     */
-    void didChangeGpuMemorySize(const GrGpuResource* resource, size_t oldSize) {
-        fCache->didChangeGpuMemorySize(resource, oldSize);
     }
 
     /**

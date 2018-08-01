@@ -18,18 +18,11 @@
 #include "../private/GrTypesPriv.h"
 
 class GrTexturePriv;
-enum class SkDestinationSurfaceColorMode;
 
 class GrTexture : virtual public GrSurface {
 public:
     GrTexture* asTexture() override { return this; }
     const GrTexture* asTexture() const override { return this; }
-
-    /**
-     *  Return the native ID or handle to the texture, depending on the
-     *  platform. e.g. on OpenGL, return the texture ID.
-     */
-    virtual GrBackendObject getTextureHandle() const = 0;
 
     virtual GrBackendTexture getBackendTexture() const = 0;
 
@@ -87,7 +80,6 @@ private:
     GrSamplerState::Filter        fHighestFilterMode;
     GrMipMapsStatus               fMipMapsStatus;
     int                           fMaxMipMapLevel;
-    SkDestinationSurfaceColorMode fMipColorMode;
     friend class GrTexturePriv;
 
     typedef GrSurface INHERITED;

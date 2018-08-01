@@ -33,7 +33,9 @@ String HCodeGenerator::ParameterType(const Context& context, const Type& type,
         return "float";
     } else if (type == *context.fFloat2_Type || type == *context.fHalf2_Type) {
         return "SkPoint";
-    } else if (type == *context.fInt4_Type || type == *context.fShort4_Type) {
+    } else if (type == *context.fInt4_Type ||
+               type == *context.fShort4_Type ||
+               type == *context.fByte4_Type) {
         return "SkIRect";
     } else if (type == *context.fFloat4_Type || type == *context.fHalf4_Type) {
         return "SkRect";
@@ -54,7 +56,7 @@ String HCodeGenerator::FieldType(const Context& context, const Type& type,
     } else if (type == *context.fFragmentProcessor_Type) {
         // we don't store fragment processors in fields, they get registered via
         // registerChildProcessor instead
-        ASSERT(false);
+        SkASSERT(false);
         return "<error>";
     }
     return ParameterType(context, type, layout);
@@ -111,13 +113,13 @@ void HCodeGenerator::writeExtraConstructorParams(const char* separator) {
                     lastIdentifierLength = 0;
                     foundBreak = false;
                 }
-                ASSERT(lastIdentifierLength < BUFFER_SIZE);
+                SkASSERT(lastIdentifierLength < BUFFER_SIZE);
                 lastIdentifier[lastIdentifierLength] = c;
                 ++lastIdentifierLength;
             } else {
                 foundBreak = true;
                 if (c == ',') {
-                    ASSERT(lastIdentifierLength < BUFFER_SIZE);
+                    SkASSERT(lastIdentifierLength < BUFFER_SIZE);
                     lastIdentifier[lastIdentifierLength] = 0;
                     this->writef("%s%s", separator, lastIdentifier);
                     separator = ", ";
@@ -127,7 +129,7 @@ void HCodeGenerator::writeExtraConstructorParams(const char* separator) {
             }
         }
         if (lastIdentifierLength) {
-            ASSERT(lastIdentifierLength < BUFFER_SIZE);
+            SkASSERT(lastIdentifierLength < BUFFER_SIZE);
             lastIdentifier[lastIdentifierLength] = 0;
             this->writef("%s%s", separator, lastIdentifier);
         }
@@ -176,9 +178,9 @@ void HCodeGenerator::writeConstructor() {
         const char* msg = "may not be present when constructor is overridden";
         this->failOnSection(CONSTRUCTOR_CODE_SECTION, msg);
         this->failOnSection(CONSTRUCTOR_PARAMS_SECTION, msg);
-        this->failOnSection(COORD_TRANSFORM_SECTION, msg);
         this->failOnSection(INITIALIZERS_SECTION, msg);
         this->failOnSection(OPTIMIZATION_FLAGS_SECTION, msg);
+        return;
     }
     this->writef("    %s(", fFullName.c_str());
     const char* separator = "";
@@ -276,17 +278,16 @@ bool HCodeGenerator::generateCode() {
                  "#define %s_DEFINED\n",
                  fFullName.c_str(),
                  fFullName.c_str());
-    this->writef("#include \"SkTypes.h\"\n"
-                 "#if SK_SUPPORT_GPU\n");
+    this->writef("#include \"SkTypes.h\"\n");
     this->writeSection(HEADER_SECTION);
     this->writef("#include \"GrFragmentProcessor.h\"\n"
                  "#include \"GrCoordTransform.h\"\n");
     this->writef("class %s : public GrFragmentProcessor {\n"
                  "public:\n",
                  fFullName.c_str());
-    for (const auto& p : fProgram.fElements) {
-        if (ProgramElement::kEnum_Kind == p->fKind && !((Enum&) *p).fBuiltin) {
-            this->writef("%s\n", p->description().c_str());
+    for (const auto& p : fProgram) {
+        if (ProgramElement::kEnum_Kind == p.fKind && !((Enum&) p).fBuiltin) {
+            this->writef("%s\n", p.description().c_str());
         }
     }
     this->writeSection(CLASS_SECTION);
@@ -317,8 +318,7 @@ bool HCodeGenerator::generateCode() {
     this->writef("    typedef GrFragmentProcessor INHERITED;\n"
                 "};\n");
     this->writeSection(HEADER_END_SECTION);
-    this->writef("#endif\n"
-                 "#endif\n");
+    this->writef("#endif\n");
     return 0 == fErrors.errorCount();
 }
 

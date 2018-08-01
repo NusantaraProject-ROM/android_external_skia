@@ -21,13 +21,13 @@
 using TriPointInstance = GrCCCoverageProcessor::TriPointInstance;
 using QuadPointInstance = GrCCCoverageProcessor::QuadPointInstance;
 
-GrCCPathParser::GrCCPathParser(int maxTotalPaths, int maxPathPoints, int numSkPoints,
-                               int numSkVerbs)
-        : fLocalDevPtsBuffer(maxPathPoints + 1)  // Overallocate by one point to accomodate for
-                                                 // overflow with Sk4f. (See parsePath.)
-        , fGeometry(numSkPoints, numSkVerbs)
-        , fPathsInfo(maxTotalPaths)
-        , fScissorSubBatches(maxTotalPaths)
+GrCCPathParser::GrCCPathParser(int numPaths, const PathStats& pathStats)
+          // Overallocate by one point to accomodate for overflow with Sk4f. (See parsePath.)
+        : fLocalDevPtsBuffer(pathStats.fMaxPointsPerPath + 1)
+        , fGeometry(pathStats.fNumTotalSkPoints, pathStats.fNumTotalSkVerbs,
+                    pathStats.fNumTotalConicWeights)
+        , fPathsInfo(numPaths)
+        , fScissorSubBatches(numPaths)
         , fTotalPrimitiveCounts{PrimitiveTallies(), PrimitiveTallies()} {
     // Batches decide what to draw by looking where the previous one ended. Define initial batches
     // that "end" at the beginning of the data. These will not be drawn, but will only be be read by
@@ -114,7 +114,9 @@ void GrCCPathParser::parsePath(const SkPath& path, const SkPoint* deviceSpacePts
         return;
     }
 
+    const float* conicWeights = SkPathPriv::ConicWeightData(path);
     int ptsIdx = 0;
+    int conicWeightsIdx = 0;
     bool insideContour = false;
 
     for (SkPath::Verb verb : SkPathPriv::Verbs(path)) {
@@ -130,24 +132,28 @@ void GrCCPathParser::parsePath(const SkPath& path, const SkPoint* deviceSpacePts
                 insideContour = false;
                 continue;
             case SkPath::kLine_Verb:
-                fGeometry.lineTo(deviceSpacePts[ptsIdx]);
+                fGeometry.lineTo(&deviceSpacePts[ptsIdx - 1]);
                 ++ptsIdx;
                 continue;
             case SkPath::kQuad_Verb:
-                fGeometry.quadraticTo(deviceSpacePts[ptsIdx], deviceSpacePts[ptsIdx + 1]);
+                fGeometry.quadraticTo(&deviceSpacePts[ptsIdx - 1]);
                 ptsIdx += 2;
                 continue;
             case SkPath::kCubic_Verb:
-                fGeometry.cubicTo(deviceSpacePts[ptsIdx], deviceSpacePts[ptsIdx + 1],
-                                  deviceSpacePts[ptsIdx + 2]);
+                fGeometry.cubicTo(&deviceSpacePts[ptsIdx - 1]);
                 ptsIdx += 3;
                 continue;
             case SkPath::kConic_Verb:
-                SK_ABORT("Conics are not supported.");
+                fGeometry.conicTo(&deviceSpacePts[ptsIdx - 1], conicWeights[conicWeightsIdx]);
+                ptsIdx += 2;
+                ++conicWeightsIdx;
+                continue;
             default:
                 SK_ABORT("Unexpected path verb.");
         }
     }
+    SkASSERT(ptsIdx == path.countPoints());
+    SkASSERT(conicWeightsIdx == SkPathPriv::ConicWeightCnt(path));
 
     this->endContourIfNeeded(insideContour);
 }
@@ -159,10 +165,10 @@ void GrCCPathParser::endContourIfNeeded(bool insideContour) {
 }
 
 void GrCCPathParser::saveParsedPath(ScissorMode scissorMode, const SkIRect& clippedDevIBounds,
-                                    int16_t atlasOffsetX, int16_t atlasOffsetY) {
+                                    const SkIVector& devToAtlasOffset) {
     SkASSERT(fParsingPath);
 
-    fPathsInfo.emplace_back(scissorMode, atlasOffsetX, atlasOffsetY);
+    fPathsInfo.emplace_back(scissorMode, devToAtlasOffset);
 
     // Tessellate fans from very large and/or simple paths, in order to reduce overdraw.
     int numVerbs = fGeometry.verbs().count() - fCurrPathVerbsIdx - 1;
@@ -170,7 +176,7 @@ void GrCCPathParser::saveParsedPath(ScissorMode scissorMode, const SkIRect& clip
     int64_t fanningWork = (int64_t)clippedDevIBounds.height() * clippedDevIBounds.width();
     if (tessellationWork * (50*50) + (100*100) < fanningWork) { // Don't tessellate under 100x100.
         fCurrPathPrimitiveCounts.fTriangles =
-                fCurrPathPrimitiveCounts.fWoundTriangles = 0;
+                fCurrPathPrimitiveCounts.fWeightedTriangles = 0;
 
         const SkTArray<GrCCGeometry::Verb, true>& verbs = fGeometry.verbs();
         const SkTArray<SkPoint, true>& pts = fGeometry.points();
@@ -197,6 +203,7 @@ void GrCCPathParser::saveParsedPath(ScissorMode scissorMode, const SkIRect& clip
                     continue;
 
                 case GrCCGeometry::Verb::kMonotonicQuadraticTo:
+                case GrCCGeometry::Verb::kMonotonicConicTo:
                     fan.lineTo(pts[ptsIdx + 1]);
                     ptsIdx += 2;
                     continue;
@@ -236,19 +243,19 @@ void GrCCPathParser::saveParsedPath(ScissorMode scissorMode, const SkIRect& clip
             if (1 == abs(tessWinding)) {
                 ++fCurrPathPrimitiveCounts.fTriangles;
             } else {
-                ++fCurrPathPrimitiveCounts.fWoundTriangles;
+                ++fCurrPathPrimitiveCounts.fWeightedTriangles;
             }
         }
 
-        fPathsInfo.back().fFanTessellation.reset(vertices);
-        fPathsInfo.back().fFanTessellationCount = count;
+        fPathsInfo.back().adoptFanTessellation(vertices, count);
     }
 
     fTotalPrimitiveCounts[(int)scissorMode] += fCurrPathPrimitiveCounts;
 
     if (ScissorMode::kScissored == scissorMode) {
         fScissorSubBatches.push_back() = {fTotalPrimitiveCounts[(int)ScissorMode::kScissored],
-                                          clippedDevIBounds.makeOffset(atlasOffsetX, atlasOffsetY)};
+                                          clippedDevIBounds.makeOffset(devToAtlasOffset.fX,
+                                                                       devToAtlasOffset.fY)};
     }
 
     SkDEBUGCODE(fParsingPath = false);
@@ -263,23 +270,23 @@ void GrCCPathParser::discardParsedPath() {
 GrCCPathParser::CoverageCountBatchID GrCCPathParser::closeCurrentBatch() {
     SkASSERT(!fInstanceBuffer);
     SkASSERT(!fCoverageCountBatches.empty());
-    const auto& lastBatch = fCoverageCountBatches.back();
-    const auto& lastScissorSubBatch = fScissorSubBatches[lastBatch.fEndScissorSubBatchIdx - 1];
 
+    const auto& lastBatch = fCoverageCountBatches.back();
+    int maxMeshes = 1 + fScissorSubBatches.count() - lastBatch.fEndScissorSubBatchIdx;
+    fMaxMeshesPerDraw = SkTMax(fMaxMeshesPerDraw, maxMeshes);
+
+    const auto& lastScissorSubBatch = fScissorSubBatches[lastBatch.fEndScissorSubBatchIdx - 1];
     PrimitiveTallies batchTotalCounts = fTotalPrimitiveCounts[(int)ScissorMode::kNonScissored] -
                                         lastBatch.fEndNonScissorIndices;
     batchTotalCounts += fTotalPrimitiveCounts[(int)ScissorMode::kScissored] -
                         lastScissorSubBatch.fEndPrimitiveIndices;
 
+    // This will invalidate lastBatch.
     fCoverageCountBatches.push_back() = {
         fTotalPrimitiveCounts[(int)ScissorMode::kNonScissored],
         fScissorSubBatches.count(),
         batchTotalCounts
     };
-
-    int maxMeshes = 1 + fScissorSubBatches.count() - lastBatch.fEndScissorSubBatchIdx;
-    fMaxMeshesPerDraw = SkTMax(fMaxMeshesPerDraw, maxMeshes);
-
     return fCoverageCountBatches.count() - 1;
 }
 
@@ -298,7 +305,7 @@ GrCCPathParser::CoverageCountBatchID GrCCPathParser::closeCurrentBatch() {
 // Returns the next triangle instance after the final one emitted.
 static TriPointInstance* emit_recursive_fan(const SkTArray<SkPoint, true>& pts,
                                             SkTArray<int32_t, true>& indices, int firstIndex,
-                                            int indexCount, const Sk2f& atlasOffset,
+                                            int indexCount, const Sk2f& devToAtlasOffset,
                                             TriPointInstance out[]) {
     if (indexCount < 3) {
         return out;
@@ -307,35 +314,35 @@ static TriPointInstance* emit_recursive_fan(const SkTArray<SkPoint, true>& pts,
     int32_t oneThirdCount = indexCount / 3;
     int32_t twoThirdsCount = (2 * indexCount) / 3;
     out++->set(pts[indices[firstIndex]], pts[indices[firstIndex + oneThirdCount]],
-               pts[indices[firstIndex + twoThirdsCount]], atlasOffset);
+               pts[indices[firstIndex + twoThirdsCount]], devToAtlasOffset);
 
-    out = emit_recursive_fan(pts, indices, firstIndex, oneThirdCount + 1, atlasOffset, out);
+    out = emit_recursive_fan(pts, indices, firstIndex, oneThirdCount + 1, devToAtlasOffset, out);
     out = emit_recursive_fan(pts, indices, firstIndex + oneThirdCount,
-                             twoThirdsCount - oneThirdCount + 1, atlasOffset, out);
+                             twoThirdsCount - oneThirdCount + 1, devToAtlasOffset, out);
 
     int endIndex = firstIndex + indexCount;
     int32_t oldValue = indices[endIndex];
     indices[endIndex] = indices[firstIndex];
     out = emit_recursive_fan(pts, indices, firstIndex + twoThirdsCount,
-                             indexCount - twoThirdsCount + 1, atlasOffset, out);
+                             indexCount - twoThirdsCount + 1, devToAtlasOffset, out);
     indices[endIndex] = oldValue;
 
     return out;
 }
 
 static void emit_tessellated_fan(const GrTessellator::WindingVertex* vertices, int numVertices,
-                                 const Sk2f& atlasOffset, TriPointInstance* triPointInstanceData,
+                                 const Sk2f& devToAtlasOffset,
+                                 TriPointInstance* triPointInstanceData,
                                  QuadPointInstance* quadPointInstanceData,
                                  GrCCGeometry::PrimitiveTallies* indices) {
     for (int i = 0; i < numVertices; i += 3) {
         if (1 == abs(vertices[i].fWinding)) {
             triPointInstanceData[indices->fTriangles++].set(vertices[i].fPos, vertices[i + 1].fPos,
-                                                            vertices[i + 2].fPos, atlasOffset);
+                                                            vertices[i + 2].fPos, devToAtlasOffset);
         } else {
-            quadPointInstanceData[indices->fWoundTriangles++].set(
-                    vertices[i].fPos, vertices[i+1].fPos, vertices[i + 2].fPos, atlasOffset,
-                    // Tessellator has opposite winding sense.
-                    -static_cast<float>(vertices[i].fWinding));
+            quadPointInstanceData[indices->fWeightedTriangles++].setW(
+                    vertices[i].fPos, vertices[i+1].fPos, vertices[i + 2].fPos, devToAtlasOffset,
+                    static_cast<float>(abs(vertices[i].fWinding)));
         }
     }
 }
@@ -373,13 +380,15 @@ bool GrCCPathParser::finalize(GrOnFlushResourceProvider* onFlushRP) {
     // them on the first index that will not overwrite previous TriPointInstance data.
     int quadBaseIdx =
             GR_CT_DIV_ROUND_UP(triEndIdx * sizeof(TriPointInstance), sizeof(QuadPointInstance));
-    fBaseInstances[0].fWoundTriangles = quadBaseIdx;
-    fBaseInstances[1].fWoundTriangles = fBaseInstances[0].fWoundTriangles +
-                                        fTotalPrimitiveCounts[0].fWoundTriangles;
-    fBaseInstances[0].fCubics = fBaseInstances[1].fWoundTriangles +
-                                fTotalPrimitiveCounts[1].fWoundTriangles;
+    fBaseInstances[0].fWeightedTriangles = quadBaseIdx;
+    fBaseInstances[1].fWeightedTriangles = fBaseInstances[0].fWeightedTriangles +
+                                        fTotalPrimitiveCounts[0].fWeightedTriangles;
+    fBaseInstances[0].fCubics = fBaseInstances[1].fWeightedTriangles +
+                                fTotalPrimitiveCounts[1].fWeightedTriangles;
     fBaseInstances[1].fCubics = fBaseInstances[0].fCubics + fTotalPrimitiveCounts[0].fCubics;
-    int quadEndIdx = fBaseInstances[1].fCubics + fTotalPrimitiveCounts[1].fCubics;
+    fBaseInstances[0].fConics = fBaseInstances[1].fCubics + fTotalPrimitiveCounts[1].fCubics;
+    fBaseInstances[1].fConics = fBaseInstances[0].fConics + fTotalPrimitiveCounts[0].fConics;
+    int quadEndIdx = fBaseInstances[1].fConics + fTotalPrimitiveCounts[1].fConics;
 
     fInstanceBuffer = onFlushRP->makeBuffer(kVertex_GrBufferType,
                                             quadEndIdx * sizeof(QuadPointInstance));
@@ -393,8 +402,7 @@ bool GrCCPathParser::finalize(GrOnFlushResourceProvider* onFlushRP) {
     SkASSERT(quadPointInstanceData);
 
     PathInfo* nextPathInfo = fPathsInfo.begin();
-    float atlasOffsetX = 0.0, atlasOffsetY = 0.0;
-    Sk2f atlasOffset;
+    Sk2f devToAtlasOffset;
     PrimitiveTallies instanceIndices[2] = {fBaseInstances[0], fBaseInstances[1]};
     PrimitiveTallies* currIndices = nullptr;
     SkSTArray<256, int32_t, true> currFan;
@@ -402,20 +410,20 @@ bool GrCCPathParser::finalize(GrOnFlushResourceProvider* onFlushRP) {
 
     const SkTArray<SkPoint, true>& pts = fGeometry.points();
     int ptsIdx = -1;
+    int nextConicWeightIdx = 0;
 
     // Expand the ccpr verbs into GPU instance buffers.
     for (GrCCGeometry::Verb verb : fGeometry.verbs()) {
         switch (verb) {
             case GrCCGeometry::Verb::kBeginPath:
                 SkASSERT(currFan.empty());
-                currIndices = &instanceIndices[(int)nextPathInfo->fScissorMode];
-                atlasOffsetX = static_cast<float>(nextPathInfo->fAtlasOffsetX);
-                atlasOffsetY = static_cast<float>(nextPathInfo->fAtlasOffsetY);
-                atlasOffset = {atlasOffsetX, atlasOffsetY};
-                currFanIsTessellated = nextPathInfo->fFanTessellation.get();
+                currIndices = &instanceIndices[(int)nextPathInfo->scissorMode()];
+                devToAtlasOffset = Sk2f(static_cast<float>(nextPathInfo->devToAtlasOffset().fX),
+                                        static_cast<float>(nextPathInfo->devToAtlasOffset().fY));
+                currFanIsTessellated = nextPathInfo->hasFanTessellation();
                 if (currFanIsTessellated) {
-                    emit_tessellated_fan(nextPathInfo->fFanTessellation.get(),
-                                         nextPathInfo->fFanTessellationCount, atlasOffset,
+                    emit_tessellated_fan(nextPathInfo->fanTessellation(),
+                                         nextPathInfo->fanTessellationCount(), devToAtlasOffset,
                                          triPointInstanceData, quadPointInstanceData, currIndices);
                 }
                 ++nextPathInfo;
@@ -438,7 +446,8 @@ bool GrCCPathParser::finalize(GrOnFlushResourceProvider* onFlushRP) {
                 continue;
 
             case GrCCGeometry::Verb::kMonotonicQuadraticTo:
-                triPointInstanceData[currIndices->fQuadratics++].set(&pts[ptsIdx], atlasOffset);
+                triPointInstanceData[currIndices->fQuadratics++].set(&pts[ptsIdx],
+                                                                     devToAtlasOffset);
                 ptsIdx += 2;
                 if (!currFanIsTessellated) {
                     SkASSERT(!currFan.empty());
@@ -447,9 +456,21 @@ bool GrCCPathParser::finalize(GrOnFlushResourceProvider* onFlushRP) {
                 continue;
 
             case GrCCGeometry::Verb::kMonotonicCubicTo:
-                quadPointInstanceData[currIndices->fCubics++].set(&pts[ptsIdx], atlasOffsetX,
-                                                                  atlasOffsetY);
+                quadPointInstanceData[currIndices->fCubics++].set(&pts[ptsIdx], devToAtlasOffset[0],
+                                                                  devToAtlasOffset[1]);
                 ptsIdx += 3;
+                if (!currFanIsTessellated) {
+                    SkASSERT(!currFan.empty());
+                    currFan.push_back(ptsIdx);
+                }
+                continue;
+
+            case GrCCGeometry::Verb::kMonotonicConicTo:
+                quadPointInstanceData[currIndices->fConics++].setW(
+                        &pts[ptsIdx], devToAtlasOffset,
+                        fGeometry.getConicWeight(nextConicWeightIdx));
+                ptsIdx += 2;
+                ++nextConicWeightIdx;
                 if (!currFanIsTessellated) {
                     SkASSERT(!currFan.empty());
                     currFan.push_back(ptsIdx);
@@ -470,7 +491,7 @@ bool GrCCPathParser::finalize(GrOnFlushResourceProvider* onFlushRP) {
                     // fanSize + log3(fanSize), but we approximate with log2.
                     currFan.push_back_n(SkNextLog2(fanSize));
                     SkDEBUGCODE(TriPointInstance* end =)
-                            emit_recursive_fan(pts, currFan, 0, fanSize, atlasOffset,
+                            emit_recursive_fan(pts, currFan, 0, fanSize, devToAtlasOffset,
                                                triPointInstanceData + currIndices->fTriangles);
                     currIndices->fTriangles += fanSize - 2;
                     SkASSERT(triPointInstanceData + currIndices->fTriangles == end);
@@ -488,21 +509,22 @@ bool GrCCPathParser::finalize(GrOnFlushResourceProvider* onFlushRP) {
     SkASSERT(instanceIndices[1].fTriangles == fBaseInstances[0].fQuadratics);
     SkASSERT(instanceIndices[0].fQuadratics == fBaseInstances[1].fQuadratics);
     SkASSERT(instanceIndices[1].fQuadratics == triEndIdx);
-    SkASSERT(instanceIndices[0].fWoundTriangles == fBaseInstances[1].fWoundTriangles);
-    SkASSERT(instanceIndices[1].fWoundTriangles == fBaseInstances[0].fCubics);
+    SkASSERT(instanceIndices[0].fWeightedTriangles == fBaseInstances[1].fWeightedTriangles);
+    SkASSERT(instanceIndices[1].fWeightedTriangles == fBaseInstances[0].fCubics);
     SkASSERT(instanceIndices[0].fCubics == fBaseInstances[1].fCubics);
-    SkASSERT(instanceIndices[1].fCubics == quadEndIdx);
+    SkASSERT(instanceIndices[1].fCubics == fBaseInstances[0].fConics);
+    SkASSERT(instanceIndices[0].fConics == fBaseInstances[1].fConics);
+    SkASSERT(instanceIndices[1].fConics == quadEndIdx);
 
     fMeshesScratchBuffer.reserve(fMaxMeshesPerDraw);
-    fDynamicStatesScratchBuffer.reserve(fMaxMeshesPerDraw);
+    fScissorRectScratchBuffer.reserve(fMaxMeshesPerDraw);
 
     return true;
 }
 
 void GrCCPathParser::drawCoverageCount(GrOpFlushState* flushState, CoverageCountBatchID batchID,
                                        const SkIRect& drawBounds) const {
-    using RenderPass = GrCCCoverageProcessor::RenderPass;
-    using WindMethod = GrCCCoverageProcessor::WindMethod;
+    using PrimitiveType = GrCCCoverageProcessor::PrimitiveType;
 
     SkASSERT(fInstanceBuffer);
 
@@ -512,59 +534,43 @@ void GrCCPathParser::drawCoverageCount(GrOpFlushState* flushState, CoverageCount
                         SkBlendMode::kPlus);
 
     if (batchTotalCounts.fTriangles) {
-        this->drawRenderPass(flushState, pipeline, batchID, RenderPass::kTriangleHulls,
-                             WindMethod::kCrossProduct, &PrimitiveTallies::fTriangles, drawBounds);
-        this->drawRenderPass(flushState, pipeline, batchID, RenderPass::kTriangleEdges,
-                             WindMethod::kCrossProduct, &PrimitiveTallies::fTriangles,
-                             drawBounds); // Might get skipped.
-        this->drawRenderPass(flushState, pipeline, batchID, RenderPass::kTriangleCorners,
-                             WindMethod::kCrossProduct, &PrimitiveTallies::fTriangles, drawBounds);
+        this->drawPrimitives(flushState, pipeline, batchID, PrimitiveType::kTriangles,
+                             &PrimitiveTallies::fTriangles, drawBounds);
     }
 
-    if (batchTotalCounts.fWoundTriangles) {
-        this->drawRenderPass(flushState, pipeline, batchID, RenderPass::kTriangleHulls,
-                             WindMethod::kInstanceData, &PrimitiveTallies::fWoundTriangles,
-                             drawBounds);
-        this->drawRenderPass(flushState, pipeline, batchID, RenderPass::kTriangleEdges,
-                             WindMethod::kInstanceData, &PrimitiveTallies::fWoundTriangles,
-                             drawBounds); // Might get skipped.
-        this->drawRenderPass(flushState, pipeline, batchID, RenderPass::kTriangleCorners,
-                             WindMethod::kInstanceData, &PrimitiveTallies::fWoundTriangles,
-                             drawBounds);
+    if (batchTotalCounts.fWeightedTriangles) {
+        this->drawPrimitives(flushState, pipeline, batchID, PrimitiveType::kWeightedTriangles,
+                             &PrimitiveTallies::fWeightedTriangles, drawBounds);
     }
 
     if (batchTotalCounts.fQuadratics) {
-        this->drawRenderPass(flushState, pipeline, batchID, RenderPass::kQuadraticHulls,
-                             WindMethod::kCrossProduct, &PrimitiveTallies::fQuadratics, drawBounds);
-        this->drawRenderPass(flushState, pipeline, batchID, RenderPass::kQuadraticCorners,
-                             WindMethod::kCrossProduct, &PrimitiveTallies::fQuadratics, drawBounds);
+        this->drawPrimitives(flushState, pipeline, batchID, PrimitiveType::kQuadratics,
+                             &PrimitiveTallies::fQuadratics, drawBounds);
     }
 
     if (batchTotalCounts.fCubics) {
-        this->drawRenderPass(flushState, pipeline, batchID, RenderPass::kCubicHulls,
-                             WindMethod::kCrossProduct, &PrimitiveTallies::fCubics, drawBounds);
-        this->drawRenderPass(flushState, pipeline, batchID, RenderPass::kCubicCorners,
-                             WindMethod::kCrossProduct, &PrimitiveTallies::fCubics, drawBounds);
+        this->drawPrimitives(flushState, pipeline, batchID, PrimitiveType::kCubics,
+                             &PrimitiveTallies::fCubics, drawBounds);
+    }
+
+    if (batchTotalCounts.fConics) {
+        this->drawPrimitives(flushState, pipeline, batchID, PrimitiveType::kConics,
+                             &PrimitiveTallies::fConics, drawBounds);
     }
 }
 
-void GrCCPathParser::drawRenderPass(GrOpFlushState* flushState, const GrPipeline& pipeline,
+void GrCCPathParser::drawPrimitives(GrOpFlushState* flushState, const GrPipeline& pipeline,
                                     CoverageCountBatchID batchID,
-                                    GrCCCoverageProcessor::RenderPass renderPass,
-                                    GrCCCoverageProcessor::WindMethod windMethod,
+                                    GrCCCoverageProcessor::PrimitiveType primitiveType,
                                     int PrimitiveTallies::*instanceType,
                                     const SkIRect& drawBounds) const {
-    SkASSERT(pipeline.getScissorState().enabled());
-
-    if (!GrCCCoverageProcessor::DoesRenderPass(renderPass, flushState->caps())) {
-        return;
-    }
+    SkASSERT(pipeline.isScissorEnabled());
 
     // Don't call reset(), as that also resets the reserve count.
     fMeshesScratchBuffer.pop_back_n(fMeshesScratchBuffer.count());
-    fDynamicStatesScratchBuffer.pop_back_n(fDynamicStatesScratchBuffer.count());
+    fScissorRectScratchBuffer.pop_back_n(fScissorRectScratchBuffer.count());
 
-    GrCCCoverageProcessor proc(flushState->resourceProvider(), renderPass, windMethod);
+    GrCCCoverageProcessor proc(flushState->resourceProvider(), primitiveType);
 
     SkASSERT(batchID > 0);
     SkASSERT(batchID < fCoverageCountBatches.count());
@@ -578,8 +584,8 @@ void GrCCPathParser::drawRenderPass(GrOpFlushState* flushState, const GrPipeline
         int baseInstance = fBaseInstances[(int)ScissorMode::kNonScissored].*instanceType +
                            previousBatch.fEndNonScissorIndices.*instanceType;
         proc.appendMesh(fInstanceBuffer.get(), instanceCount, baseInstance, &fMeshesScratchBuffer);
-        fDynamicStatesScratchBuffer.push_back().fScissorRect.setXYWH(0, 0, drawBounds.width(),
-                                                                     drawBounds.height());
+        fScissorRectScratchBuffer.push_back().setXYWH(0, 0, drawBounds.width(),
+                                                      drawBounds.height());
         SkDEBUGCODE(totalInstanceCount += instanceCount);
     }
 
@@ -597,18 +603,17 @@ void GrCCPathParser::drawRenderPass(GrOpFlushState* flushState, const GrPipeline
         SkASSERT(instanceCount > 0);
         proc.appendMesh(fInstanceBuffer.get(), instanceCount,
                         baseScissorInstance + startIndex, &fMeshesScratchBuffer);
-        fDynamicStatesScratchBuffer.push_back().fScissorRect = scissorSubBatch.fScissor;
+        fScissorRectScratchBuffer.push_back() = scissorSubBatch.fScissor;
         SkDEBUGCODE(totalInstanceCount += instanceCount);
     }
 
-    SkASSERT(fMeshesScratchBuffer.count() == fDynamicStatesScratchBuffer.count());
+    SkASSERT(fMeshesScratchBuffer.count() == fScissorRectScratchBuffer.count());
     SkASSERT(fMeshesScratchBuffer.count() <= fMaxMeshesPerDraw);
     SkASSERT(totalInstanceCount == batch.fTotalPrimitiveCounts.*instanceType);
 
     if (!fMeshesScratchBuffer.empty()) {
-        SkASSERT(flushState->rtCommandBuffer());
-        flushState->rtCommandBuffer()->draw(pipeline, proc, fMeshesScratchBuffer.begin(),
-                                            fDynamicStatesScratchBuffer.begin(),
-                                            fMeshesScratchBuffer.count(), SkRect::Make(drawBounds));
+        proc.draw(flushState, pipeline, fScissorRectScratchBuffer.begin(),
+                  fMeshesScratchBuffer.begin(), fMeshesScratchBuffer.count(),
+                  SkRect::Make(drawBounds));
     }
 }

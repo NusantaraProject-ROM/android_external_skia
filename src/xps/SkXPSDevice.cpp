@@ -44,10 +44,12 @@
 #include "SkShader.h"
 #include "SkSize.h"
 #include "SkStream.h"
+#include "SkStrikeCache.h"
 #include "SkTDArray.h"
 #include "SkTLazy.h"
 #include "SkTScopedComPtr.h"
 #include "SkTTCFHeader.h"
+#include "SkTo.h"
 #include "SkTypefacePriv.h"
 #include "SkUtils.h"
 #include "SkVertices.h"
@@ -1154,9 +1156,11 @@ void SkXPSDevice::drawPoints(SkCanvas::PointMode mode,
     draw(this, &SkDraw::drawPoints, mode, count, points, paint, this);
 }
 
-void SkXPSDevice::drawVertices(const SkVertices* v, SkBlendMode blendMode, const SkPaint& paint) {
+void SkXPSDevice::drawVertices(const SkVertices* v, const SkMatrix* bones, int boneCount,
+                               SkBlendMode blendMode, const SkPaint& paint) {
     draw(this, &SkDraw::drawVertices, v->mode(), v->vertexCount(), v->positions(), v->texCoords(),
-         v->colors(), blendMode, v->indices(), v->indexCount(), paint);
+         v->colors(), v->boneIndices(), v->boneWeights(), blendMode, v->indices(), v->indexCount(),
+         paint, bones, boneCount);
 }
 
 void SkXPSDevice::drawPaint(const SkPaint& origPaint) {
@@ -1875,9 +1879,10 @@ HRESULT SkXPSDevice::CreateTypefaceUse(const SkPaint& paint,
     newTypefaceUse.ttcIndex = isTTC ? ttcIndex : -1;
     newTypefaceUse.fontData = fontData;
     newTypefaceUse.xpsFont = xpsFontResource.release();
-
-    SkAutoGlyphCache agc(paint, &this->surfaceProps(), &SkMatrix::I());
-    SkGlyphCache* glyphCache = agc.getCache();
+    auto glyphCache =
+        SkStrikeCache::FindOrCreateStrikeExclusive(
+            paint, &this->surfaceProps(),
+            SkScalerContextFlags::kNone, nullptr);
     unsigned int glyphCount = glyphCache->getGlyphCount();
     newTypefaceUse.glyphsUsed = new SkBitSet(glyphCount);
 
@@ -2045,63 +2050,6 @@ private:
     GlyphRun* const fXpsGlyphs;
 };
 
-void SkXPSDevice::drawText(const void* text, size_t byteLen,
-                           SkScalar x, SkScalar y,
-                           const SkPaint& paint) {
-    if (byteLen < 1) return;
-
-    if (text_must_be_pathed(paint, this->ctm())) {
-        SkPath path;
-        paint.getTextPath(text, byteLen, x, y, &path);
-        this->drawPath(path, paint, nullptr, true);
-        //TODO: add automation "text"
-        return;
-    }
-
-    TypefaceUse* typeface;
-    HRV(CreateTypefaceUse(paint, &typeface));
-
-    const SkMatrix& matrix = SkMatrix::I();
-
-    SkAutoGlyphCache    autoCache(paint, &this->surfaceProps(), &matrix);
-    SkGlyphCache*       cache = autoCache.getCache();
-
-    // Advance width and offsets for glyphs measured in hundredths of the font em size
-    // (XPS Spec 5.1.3).
-    FLOAT centemPerUnit = 100.0f / SkScalarToFLOAT(paint.getTextSize());
-    GlyphRun xpsGlyphs;
-    xpsGlyphs.setReserve(num_glyph_guess(paint.getTextEncoding(),
-        static_cast<const char*>(text), byteLen));
-
-    ProcessOneGlyph processOneGlyph(centemPerUnit, typeface->glyphsUsed, &xpsGlyphs);
-
-    SkFindAndPlaceGlyph::ProcessText(
-        paint.getTextEncoding(), static_cast<const char*>(text), byteLen,
-        SkPoint{ x, y }, matrix, paint.getTextAlign(), cache, processOneGlyph);
-
-    if (xpsGlyphs.count() == 0) {
-        return;
-    }
-
-    XPS_POINT origin = {
-        xpsGlyphs[0].horizontalOffset / centemPerUnit,
-        xpsGlyphs[0].verticalOffset / -centemPerUnit,
-    };
-    xpsGlyphs[0].horizontalOffset = 0.0f;
-    xpsGlyphs[0].verticalOffset = 0.0f;
-
-    HRV(AddGlyphs(this->fXpsFactory.get(),
-                  this->fCurrentXpsCanvas.get(),
-                  typeface,
-                  nullptr,
-                  xpsGlyphs.begin(), xpsGlyphs.count(),
-                  &origin,
-                  SkScalarToFLOAT(paint.getTextSize()),
-                  XPS_STYLE_SIMULATION_NONE,
-                  this->ctm(),
-                  paint));
-}
-
 void SkXPSDevice::drawPosText(const void* text, size_t byteLen,
                               const SkScalar pos[], int scalarsPerPos,
                               const SkPoint& offset, const SkPaint& paint) {
@@ -2119,10 +2067,10 @@ void SkXPSDevice::drawPosText(const void* text, size_t byteLen,
     TypefaceUse* typeface;
     HRV(CreateTypefaceUse(paint, &typeface));
 
-    const SkMatrix& matrix = SkMatrix::I();
-
-    SkAutoGlyphCache    autoCache(paint, &this->surfaceProps(), &matrix);
-    SkGlyphCache*       cache = autoCache.getCache();
+    auto cache =
+        SkStrikeCache::FindOrCreateStrikeExclusive(
+            paint, &this->surfaceProps(),
+            SkScalerContextFlags::kNone, nullptr);
 
     // Advance width and offsets for glyphs measured in hundredths of the font em size
     // (XPS Spec 5.1.3).
@@ -2135,7 +2083,7 @@ void SkXPSDevice::drawPosText(const void* text, size_t byteLen,
 
     SkFindAndPlaceGlyph::ProcessPosText(
         paint.getTextEncoding(), static_cast<const char*>(text), byteLen,
-        offset, matrix, pos, scalarsPerPos, paint.getTextAlign(), cache, processOneGlyph);
+        offset, SkMatrix::I(), pos, scalarsPerPos, cache.get(), processOneGlyph);
 
     if (xpsGlyphs.count() == 0) {
         return;

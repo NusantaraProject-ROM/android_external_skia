@@ -50,6 +50,7 @@
 #include "ir/SkSLType.h"
 #include "ir/SkSLTypeReference.h"
 #include "ir/SkSLVarDeclarations.h"
+#include "ir/SkSLVariableReference.h"
 
 namespace SkSL {
 
@@ -85,7 +86,8 @@ private:
      * Prepare to compile a program. Resets state, pushes a new symbol table, and installs the
      * settings.
      */
-    void start(const Program::Settings* settings);
+    void start(const Program::Settings* settings,
+               std::vector<std::unique_ptr<ProgramElement>>* inherited);
 
     /**
      * Performs cleanup after compilation is complete.
@@ -113,6 +115,8 @@ private:
                                      std::vector<std::unique_ptr<Expression>> arguments);
     int coercionCost(const Expression& expr, const Type& type);
     std::unique_ptr<Expression> coerce(std::unique_ptr<Expression> expr, const Type& type);
+    std::unique_ptr<Expression> convertAppend(int offset,
+                                           const std::vector<std::unique_ptr<ASTExpression>>& args);
     std::unique_ptr<Block> convertBlock(const ASTBlock& block);
     std::unique_ptr<Statement> convertBreak(const ASTBreakStatement& b);
     std::unique_ptr<Expression> convertNumberConstructor(
@@ -162,7 +166,7 @@ private:
 
     void fixRectSampling(std::vector<std::unique_ptr<Expression>>& arguments);
     void checkValid(const Expression& expr);
-    void markWrittenTo(const Expression& expr, bool readWrite);
+    void setRefKind(const Expression& expr, VariableReference::RefKind kind);
     void getConstantInt(const Expression& value, int64_t* out);
 
     Program::Kind fKind;
@@ -179,7 +183,7 @@ private:
     ErrorReporter& fErrors;
     int fInvocations;
     std::vector<std::unique_ptr<ProgramElement>>* fProgramElements;
-    Variable* fSkPerVertex;
+    const Variable* fSkPerVertex = nullptr;
     Variable* fRTAdjust;
     Variable* fRTAdjustInterfaceBlock;
     int fRTAdjustFieldIndex;

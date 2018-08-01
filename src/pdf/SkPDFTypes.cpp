@@ -5,20 +5,19 @@
  * found in the LICENSE file.
  */
 
+#include "SkPDFTypes.h"
+
 #include "SkData.h"
 #include "SkDeflate.h"
 #include "SkMakeUnique.h"
-#include "SkPDFTypes.h"
 #include "SkPDFUtils.h"
 #include "SkStream.h"
 #include "SkStreamPriv.h"
+#include "SkTo.h"
+
+#include <new>
 
 ////////////////////////////////////////////////////////////////////////////////
-
-SkString* pun(char* x) { return reinterpret_cast<SkString*>(x); }
-const SkString* pun(const char* x) {
-    return reinterpret_cast<const SkString*>(x);
-}
 
 SkPDFUnion::SkPDFUnion(Type t) : fType(t) {}
 
@@ -26,7 +25,7 @@ SkPDFUnion::~SkPDFUnion() {
     switch (fType) {
         case Type::kNameSkS:
         case Type::kStringSkS:
-            pun(fSkString)->~SkString();
+            fSkString.destroy();
             return;
         case Type::kObjRef:
         case Type::kObject:
@@ -59,7 +58,7 @@ SkPDFUnion SkPDFUnion::copy() const {
     switch (fType) {
         case Type::kNameSkS:
         case Type::kStringSkS:
-            new (pun(u.fSkString)) SkString(*pun(fSkString));
+            u.fSkString.init(fSkString.get());
             return u;
         case Type::kObjRef:
         case Type::kObject:
@@ -140,11 +139,10 @@ void SkPDFUnion::emitObject(SkWStream* stream,
             return;
         case Type::kNameSkS:
             stream->writeText("/");
-            write_name_escaped(stream, pun(fSkString)->c_str());
+            write_name_escaped(stream, fSkString.get().c_str());
             return;
         case Type::kStringSkS:
-            SkPDFUtils::WriteString(stream, pun(fSkString)->c_str(),
-                                    pun(fSkString)->size());
+            SkPDFUtils::WriteString(stream, fSkString.get().c_str(), fSkString.get().size());
             return;
         case Type::kObjRef:
             stream->writeDecAsText(objNumMap.getObjectNumber(fObject));
@@ -221,13 +219,13 @@ SkPDFUnion SkPDFUnion::String(const char* value) {
 
 SkPDFUnion SkPDFUnion::Name(const SkString& s) {
     SkPDFUnion u(Type::kNameSkS);
-    new (pun(u.fSkString)) SkString(s);
+    u.fSkString.init(s);
     return u;
 }
 
 SkPDFUnion SkPDFUnion::String(const SkString& s) {
     SkPDFUnion u(Type::kStringSkS);
-    new (pun(u.fSkString)) SkString(s);
+    u.fSkString.init(s);
     return u;
 }
 

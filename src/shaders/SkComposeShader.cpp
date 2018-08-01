@@ -141,20 +141,3 @@ std::unique_ptr<GrFragmentProcessor> SkComposeShader::asFragmentProcessor(
                                                               std::move(fpA), fMode);
 }
 #endif
-
-#ifndef SK_IGNORE_TO_STRING
-void SkComposeShader::toString(SkString* str) const {
-    str->append("SkComposeShader: (");
-
-    str->append("dst: ");
-    as_SB(fDst)->toString(str);
-    str->append(" src: ");
-    as_SB(fSrc)->toString(str);
-    str->appendf(" mode: %s", SkBlendMode_Name(fMode));
-    str->appendf(" lerpT: %g", fLerpT);
-
-    this->INHERITED::toString(str);
-
-    str->append(")");
-}
-#endif

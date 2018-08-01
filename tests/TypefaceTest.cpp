@@ -8,6 +8,7 @@
 #include "SkAdvancedTypefaceMetrics.h"
 #include "SkData.h"
 #include "SkFixed.h"
+#include "SkFontDescriptor.h"
 #include "SkFontMgr.h"
 #include "SkMakeUnique.h"
 #include "SkOTTable_OS_2.h"
@@ -94,6 +95,45 @@ DEF_TEST(TypefaceStyle, reporter) {
     }
 }
 
+DEF_TEST(TypefaceRoundTrip, reporter) {
+    sk_sp<SkTypeface> typeface(MakeResourceAsTypeface("fonts/7630.otf"));
+    if (!typeface) {
+        // Not all SkFontMgr can MakeFromStream().
+        return;
+    }
+
+    int fontIndex;
+    std::unique_ptr<SkStreamAsset> stream(typeface->openStream(&fontIndex));
+
+    sk_sp<SkFontMgr> fm = SkFontMgr::RefDefault();
+    sk_sp<SkTypeface> typeface2 = fm->makeFromStream(std::move(stream), fontIndex);
+    REPORTER_ASSERT(reporter, typeface2);
+}
+
+DEF_TEST(FontDescriptorNegativeVariationSerialize, reporter) {
+    SkFontDescriptor desc;
+    SkFixed axis = -SK_Fixed1;
+    auto font = skstd::make_unique<SkMemoryStream>("a", 1, false);
+    desc.setFontData(skstd::make_unique<SkFontData>(std::move(font), 0, &axis, 1));
+
+    SkDynamicMemoryWStream stream;
+    desc.serialize(&stream);
+    SkFontDescriptor descD;
+    SkFontDescriptor::Deserialize(stream.detachAsStream().get(), &descD);
+    std::unique_ptr<SkFontData> fontData = descD.detachFontData();
+    if (!fontData) {
+        REPORT_FAILURE(reporter, "fontData", SkString());
+        return;
+    }
+
+    if (fontData->getAxisCount() != 1) {
+        REPORT_FAILURE(reporter, "fontData->getAxisCount() != 1", SkString());
+        return;
+    }
+
+    REPORTER_ASSERT(reporter, fontData->getAxis()[0] == -SK_Fixed1);
+};
+
 DEF_TEST(TypefaceAxes, reporter) {
     std::unique_ptr<SkStreamAsset> distortable(GetResourceAsStream("fonts/Distortable.ttf"));
     if (!distortable) {
@@ -134,7 +174,7 @@ DEF_TEST(TypefaceAxes, reporter) {
     // Convert to fixed for "almost equal".
     SkFixed fixedRead = SkScalarToFixed(positionRead[0].value);
     SkFixed fixedOriginal = SkScalarToFixed(position[1].value);
-    REPORTER_ASSERT(reporter, fixedRead == fixedOriginal);
+    REPORTER_ASSERT(reporter, SkTAbs(fixedRead - fixedOriginal) < 2);
 }
 
 DEF_TEST(TypefaceVariationIndex, reporter) {
@@ -186,15 +226,55 @@ DEF_TEST(Typeface, reporter) {
     REPORTER_ASSERT(reporter, SkTypeface::Equal(t2.get(), nullptr));
 }
 
+DEF_TEST(TypefaceAxesParameters, reporter) {
+    std::unique_ptr<SkStreamAsset> distortable(GetResourceAsStream("fonts/Distortable.ttf"));
+    if (!distortable) {
+        REPORT_FAILURE(reporter, "distortable", SkString());
+        return;
+    }
+    constexpr int numberOfAxesInDistortable = 1;
+    constexpr SkScalar minAxisInDistortable = 0.5;
+    constexpr SkScalar defAxisInDistortable = 1;
+    constexpr SkScalar maxAxisInDistortable = 2;
+    constexpr bool axisIsHiddenInDistortable = false;
+
+    sk_sp<SkFontMgr> fm = SkFontMgr::RefDefault();
+
+    SkFontArguments params;
+    sk_sp<SkTypeface> typeface = fm->makeFromStream(std::move(distortable), params);
+
+    if (!typeface) {
+        // Not all SkFontMgr can makeFromStream().
+        return;
+    }
+
+    SkFontParameters::Variation::Axis parameter[numberOfAxesInDistortable];
+    int count = typeface->getVariationDesignParameters(parameter, SK_ARRAY_COUNT(parameter));
+    if (count == -1) {
+        return;
+    }
+
+    REPORTER_ASSERT(reporter, count == SK_ARRAY_COUNT(parameter));
+    REPORTER_ASSERT(reporter, parameter[0].min == minAxisInDistortable);
+    REPORTER_ASSERT(reporter, parameter[0].def == defAxisInDistortable);
+    REPORTER_ASSERT(reporter, parameter[0].max == maxAxisInDistortable);
+    REPORTER_ASSERT(reporter, parameter[0].tag == SkSetFourByteTag('w','g','h','t'));
+    REPORTER_ASSERT(reporter, parameter[0].isHidden() == axisIsHiddenInDistortable);
+
+}
+
 namespace {
 
-class SkEmptyTypeface : public SkTypeface {
+class EmptyTypeface : public SkTypeface {
 public:
-    static sk_sp<SkTypeface> Create() { return sk_sp<SkTypeface>(new SkEmptyTypeface()); }
+    static sk_sp<SkTypeface> Create() { return sk_sp<SkTypeface>(new EmptyTypeface()); }
 protected:
-    SkEmptyTypeface() : SkTypeface(SkFontStyle(), true) { }
+    EmptyTypeface() : SkTypeface(SkFontStyle(), true) { }
 
     SkStreamAsset* onOpenStream(int* ttcIndex) const override { return nullptr; }
+    sk_sp<SkTypeface> onMakeClone(const SkFontArguments& args) const override {
+        return sk_ref_sp(this);
+    }
     SkScalerContext* onCreateScalerContext(const SkScalerContextEffects&,
                                            const SkDescriptor*) const override {
         return nullptr;
@@ -221,6 +301,11 @@ protected:
     {
         return 0;
     }
+    int onGetVariationDesignParameters(SkFontParameters::Variation::Axis parameters[],
+                                       int parameterCount) const override
+    {
+        return 0;
+    }
     int onGetTableTags(SkFontTableTag tags[]) const override { return 0; }
     size_t onGetTableData(SkFontTableTag, size_t, size_t, void*) const override { return 0; }
 };
@@ -240,12 +325,12 @@ static int count(skiatest::Reporter* reporter, const SkTypefaceCache& cache) {
 }
 
 DEF_TEST(TypefaceCache, reporter) {
-    sk_sp<SkTypeface> t1(SkEmptyTypeface::Create());
+    sk_sp<SkTypeface> t1(EmptyTypeface::Create());
     {
         SkTypefaceCache cache;
         REPORTER_ASSERT(reporter, count(reporter, cache) == 0);
         {
-            sk_sp<SkTypeface> t0(SkEmptyTypeface::Create());
+            sk_sp<SkTypeface> t0(EmptyTypeface::Create());
             cache.add(t0.get());
             REPORTER_ASSERT(reporter, count(reporter, cache) == 1);
             cache.add(t1.get());

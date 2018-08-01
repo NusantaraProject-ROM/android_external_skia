@@ -9,8 +9,6 @@
 
 #include "gm.h"
 
-#if SK_SUPPORT_GPU
-
 #include "GrContext.h"
 #include "GrContextPriv.h"
 #include "GrProxyProvider.h"
@@ -89,15 +87,13 @@ protected:
 
         GrProxyProvider* proxyProvider = context->contextPriv().proxyProvider();
         GrSurfaceDesc desc;
-        desc.fOrigin = kTopLeft_GrSurfaceOrigin;
         desc.fWidth = fBmp.width();
         desc.fHeight = fBmp.height();
-        desc.fConfig = SkImageInfo2GrPixelConfig(fBmp.info(), *context->caps());
+        desc.fConfig = SkColorType2GrPixelConfig(fBmp.colorType());
         SkASSERT(kUnknown_GrPixelConfig != desc.fConfig);
 
-        sk_sp<GrTextureProxy> proxy = proxyProvider->createTextureProxy(desc, SkBudgeted::kYes,
-                                                                        fBmp.getPixels(),
-                                                                        fBmp.rowBytes());
+        sk_sp<GrTextureProxy> proxy = proxyProvider->createTextureProxy(
+                desc, SkBudgeted::kYes, fBmp.getPixels(), fBmp.rowBytes());
         if (!proxy) {
             return;
         }
@@ -136,7 +132,7 @@ protected:
                     const SkMatrix viewMatrix = SkMatrix::MakeTrans(x, y);
                     grPaint.addColorFragmentProcessor(std::move(fp));
                     renderTargetContext->priv().testingOnly_addDrawOp(
-                            GrRectOpFactory::MakeNonAAFill(std::move(grPaint), viewMatrix,
+                            GrRectOpFactory::MakeNonAAFill(context, std::move(grPaint), viewMatrix,
                                                            renderRect, GrAAType::kNone));
                     x += renderRect.width() + kTestPad;
                 }
@@ -157,5 +153,3 @@ private:
 
 DEF_GM(return new TextureDomainEffect;)
 }
-
-#endif

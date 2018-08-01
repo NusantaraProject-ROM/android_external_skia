@@ -5,13 +5,15 @@
  * found in the LICENSE file.
  */
 
+#include "SkWbmpCodec.h"
+
 #include "SkCodec.h"
 #include "SkCodecPriv.h"
 #include "SkColorData.h"
 #include "SkColorTable.h"
 #include "SkData.h"
 #include "SkStream.h"
-#include "SkWbmpCodec.h"
+#include "SkTo.h"
 
 // Each bit represents a pixel, so width is actually a number of bits.
 // A row will always be stored in bytes, so we round width up to the
@@ -29,7 +31,7 @@ static inline bool valid_color_type(const SkImageInfo& dstInfo) {
         case kRGB_565_SkColorType:
             return true;
         case kRGBA_F16_SkColorType:
-            return dstInfo.colorSpace() && dstInfo.colorSpace()->gammaIsLinear();
+            return dstInfo.colorSpace();
         default:
             return false;
     }

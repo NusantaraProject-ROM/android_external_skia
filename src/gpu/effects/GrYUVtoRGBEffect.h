@@ -11,7 +11,6 @@
 #ifndef GrYUVtoRGBEffect_DEFINED
 #define GrYUVtoRGBEffect_DEFINED
 #include "SkTypes.h"
-#if SK_SUPPORT_GPU
 #include "GrFragmentProcessor.h"
 #include "GrCoordTransform.h"
 class GrYUVtoRGBEffect : public GrFragmentProcessor {
@@ -19,7 +18,6 @@ public:
     static std::unique_ptr<GrFragmentProcessor> Make(sk_sp<GrTextureProxy> yProxy,
                                                      sk_sp<GrTextureProxy> uProxy,
                                                      sk_sp<GrTextureProxy> vProxy,
-                                                     const SkISize sizes[3],
                                                      SkYUVColorSpace colorSpace, bool nv12);
     SkMatrix44 ySamplerTransform() const { return fYSamplerTransform; }
     SkMatrix44 uSamplerTransform() const { return fUSamplerTransform; }
@@ -80,5 +78,4 @@ private:
     GrCoordTransform fVSamplerCoordTransform;
     typedef GrFragmentProcessor INHERITED;
 };
-#endif
 #endif

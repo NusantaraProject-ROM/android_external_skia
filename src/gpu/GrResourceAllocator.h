@@ -17,6 +17,7 @@
 #include "SkTMultiMap.h"
 
 class GrResourceProvider;
+class GrUninstantiateProxyTracker;
 
 /*
  * The ResourceAllocator explicitly distributes GPU resources at flush time. It operates by
@@ -68,7 +69,8 @@ public:
     // If this happens, the caller should remove all ops which reference an uninstantiated proxy.
     // This is used to execute a portion of the queued opLists in order to reduce the total
     // amount of GPU resources required.
-    bool assign(int* startIndex, int* stopIndex, AssignError* outError);
+    bool assign(int* startIndex, int* stopIndex, GrUninstantiateProxyTracker*,
+                AssignError* outError);
 
     void markEndOfOpList(int opListIndex);
 
@@ -135,7 +137,7 @@ private:
         }
 
         void assign(sk_sp<GrSurface>);
-        bool wasAssignedSurface() const { return fAssignedSurface; }
+        bool wasAssignedSurface() const { return fAssignedSurface != nullptr; }
         sk_sp<GrSurface> detachSurface() { return std::move(fAssignedSurface); }
 
         // for SkTDynamicHash

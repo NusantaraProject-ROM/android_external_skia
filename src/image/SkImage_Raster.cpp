@@ -9,7 +9,6 @@
 #include "SkBitmap.h"
 #include "SkBitmapProcShader.h"
 #include "SkCanvas.h"
-#include "SkColorSpaceXform_Base.h"
 #include "SkColorSpaceXformPriv.h"
 #include "SkColorTable.h"
 #include "SkConvertPixels.h"
@@ -37,7 +36,7 @@ static bool is_not_subset(const SkBitmap& bm) {
 
 class SkImage_Raster : public SkImage_Base {
 public:
-    static bool ValidArgs(const Info& info, size_t rowBytes, size_t* minSize) {
+    static bool ValidArgs(const SkImageInfo& info, size_t rowBytes, size_t* minSize) {
         const int maxDimension = SK_MaxS32 >> 2;
 
         if (info.width() <= 0 || info.height() <= 0) {
@@ -78,6 +77,9 @@ public:
     SkImageInfo onImageInfo() const override {
         return fBitmap.info();
     }
+    SkColorType onColorType() const override {
+        return fBitmap.colorType();
+    }
     SkAlphaType onAlphaType() const override {
         return fBitmap.alphaType();
     }
@@ -108,8 +110,7 @@ public:
         SkASSERT(bitmapMayBeMutable || fBitmap.isImmutable());
     }
 
-    sk_sp<SkImage> onMakeColorSpace(sk_sp<SkColorSpace>, SkColorType,
-                                    SkTransferFunctionBehavior) const override;
+    sk_sp<SkImage> onMakeColorSpace(sk_sp<SkColorSpace>, SkColorType) const override;
 
     bool onIsValid(GrContext* context) const override { return true; }
 
@@ -138,7 +139,8 @@ static void release_data(void* addr, void* context) {
     data->unref();
 }
 
-SkImage_Raster::SkImage_Raster(const Info& info, sk_sp<SkData> data, size_t rowBytes, uint32_t id)
+SkImage_Raster::SkImage_Raster(const SkImageInfo& info, sk_sp<SkData> data, size_t rowBytes,
+                               uint32_t id)
     : INHERITED(info.width(), info.height(), id)
 {
     void* addr = const_cast<void*>(data->data());
@@ -312,7 +314,7 @@ sk_sp<SkImage> SkMakeImageFromRasterBitmapPriv(const SkBitmap& bm, SkCopyPixelsM
 }
 
 sk_sp<SkImage> SkMakeImageFromRasterBitmap(const SkBitmap& bm, SkCopyPixelsMode cpm) {
-    if (!SkImageInfoIsValidAllowNumericalCS(bm.info()) || bm.rowBytes() < bm.info().minRowBytes()) {
+    if (!SkImageInfoIsValid(bm.info()) || bm.rowBytes() < bm.info().minRowBytes()) {
         return nullptr;
     }
 
@@ -340,8 +342,7 @@ bool SkImage_Raster::onAsLegacyBitmap(SkBitmap* bitmap) const {
 ///////////////////////////////////////////////////////////////////////////////
 
 sk_sp<SkImage> SkImage_Raster::onMakeColorSpace(sk_sp<SkColorSpace> target,
-                                                SkColorType targetColorType,
-                                                SkTransferFunctionBehavior premulBehavior) const {
+                                                SkColorType targetColorType) const {
     SkPixmap src;
     SkAssertResult(fBitmap.peekPixels(&src));
 
@@ -358,7 +359,7 @@ sk_sp<SkImage> SkImage_Raster::onMakeColorSpace(sk_sp<SkColorSpace> target,
     SkBitmap dst;
     dst.allocPixels(dstInfo);
 
-    SkAssertResult(dst.writePixels(src, 0, 0, premulBehavior));
+    SkAssertResult(dst.writePixels(src, 0, 0));
     dst.setImmutable();
     return SkImage::MakeFromBitmap(dst);
 }

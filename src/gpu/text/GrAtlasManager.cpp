@@ -7,33 +7,45 @@
 
 #include "GrAtlasManager.h"
 
-#include "GrCaps.h"
 #include "GrGlyph.h"
 #include "GrGlyphCache.h"
-#include "GrProxyProvider.h"
 
-GrRestrictedAtlasManager::GrRestrictedAtlasManager(
-                                        sk_sp<const GrCaps> caps,
-                                        float maxTextureBytes,
-                                        GrDrawOpAtlas::AllowMultitexturing allowMultitexturing)
-            : fCaps(std::move(caps))
-            , fAllowMultitexturing(allowMultitexturing) {
+void GrAtlasManager::ComputeAtlasLimits(int maxTextureSize, size_t maxTextureBytes, int* maxDim,
+                                        int* minDim, int* maxPlot, int* minPlot) {
+    SkASSERT(maxDim && minDim && maxPlot && minPlot);
     // Calculate RGBA size. Must be between 512 x 256 and MaxTextureSize x MaxTextureSize / 2
-    int log2MaxTextureSize = SkPrevLog2(fCaps->maxTextureSize());
+    int log2MaxTextureSize = SkPrevLog2(maxTextureSize);
     int log2MaxDim = 9;
+    static const size_t kOne = 1u;
     for (; log2MaxDim <= log2MaxTextureSize; ++log2MaxDim) {
-        int maxDim = 1 << log2MaxDim;
-        int minDim = 1 << (log2MaxDim - 1);
+        size_t maxDimTmp = kOne << log2MaxDim;
+        size_t minDimTmp = kOne << (log2MaxDim - 1);
 
-        if (maxDim * minDim * 4 >= maxTextureBytes) break;
+        if (maxDimTmp * minDimTmp * 4 >= maxTextureBytes) {
+            break;
+        }
     }
 
+
     int log2MinDim = log2MaxDim - 1;
-    int maxDim = 1 << log2MaxDim;
-    int minDim = 1 << log2MinDim;
+    *maxDim = 1 << log2MaxDim;
+    *minDim = 1 << log2MinDim;
     // Plots are either 256 or 512.
-    int maxPlot = SkTMin(512, SkTMax(256, 1 << (log2MaxDim - 2)));
-    int minPlot = SkTMin(512, SkTMax(256, 1 << (log2MaxDim - 3)));
+    *maxPlot = SkTMin(512, SkTMax(256, 1 << (log2MaxDim - 2)));
+    *minPlot = SkTMin(512, SkTMax(256, 1 << (log2MaxDim - 3)));
+}
+
+GrAtlasManager::GrAtlasManager(GrProxyProvider* proxyProvider, GrGlyphCache* glyphCache,
+                               float maxTextureBytes,
+                               GrDrawOpAtlas::AllowMultitexturing allowMultitexturing)
+            : fAllowMultitexturing(allowMultitexturing)
+            , fProxyProvider(proxyProvider)
+            , fGlyphCache(glyphCache) {
+    fCaps = fProxyProvider->refCaps();
+
+    int maxDim, minDim, maxPlot, minPlot;
+    ComputeAtlasLimits(fCaps->maxTextureSize(), maxTextureBytes, &maxDim, &minDim, &maxPlot,
+                       &minPlot);
 
     // Setup default atlas configs. The A8 atlas uses maxDim for both width and height, as the A8
     // format is already very compact.
@@ -56,30 +68,21 @@ GrRestrictedAtlasManager::GrRestrictedAtlasManager(
     fGlyphSizeLimit = minPlot;
 }
 
-GrRestrictedAtlasManager::~GrRestrictedAtlasManager() {
+GrAtlasManager::~GrAtlasManager() {
 }
 
-static GrPixelConfig mask_format_to_pixel_config(GrMaskFormat format, const GrCaps& caps) {
+static GrPixelConfig mask_format_to_pixel_config(GrMaskFormat format) {
     switch (format) {
         case kA8_GrMaskFormat:
             return kAlpha_8_GrPixelConfig;
         case kA565_GrMaskFormat:
             return kRGB_565_GrPixelConfig;
         case kARGB_GrMaskFormat:
-            return caps.srgbSupport() ? kSRGBA_8888_GrPixelConfig : kRGBA_8888_GrPixelConfig;
+            return kRGBA_8888_GrPixelConfig;
         default:
             SkDEBUGFAIL("unsupported GrMaskFormat");
             return kAlpha_8_GrPixelConfig;
     }
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////////////
-GrAtlasManager::GrAtlasManager(GrProxyProvider* proxyProvider, GrGlyphCache* glyphCache,
-                               float maxTextureBytes,
-                               GrDrawOpAtlas::AllowMultitexturing allowMultitexturing)
-            : INHERITED(proxyProvider->refCaps(), maxTextureBytes, allowMultitexturing)
-            , fProxyProvider(proxyProvider)
-            , fGlyphCache(glyphCache) {
 }
 
 void GrAtlasManager::freeAll() {
@@ -94,14 +97,15 @@ bool GrAtlasManager::hasGlyph(GrGlyph* glyph) {
 }
 
 // add to texture atlas that matches this format
-bool GrAtlasManager::addToAtlas(GrResourceProvider* resourceProvider,
+GrDrawOpAtlas::ErrorCode GrAtlasManager::addToAtlas(
+                                GrResourceProvider* resourceProvider,
                                 GrGlyphCache* glyphCache,
                                 GrTextStrike* strike, GrDrawOpAtlas::AtlasID* id,
                                 GrDeferredUploadTarget* target, GrMaskFormat format,
                                 int width, int height, const void* image, SkIPoint16* loc) {
     glyphCache->setStrikeToPreserve(strike);
     return this->getAtlas(format)->addToAtlas(resourceProvider, id, target, width, height,
-                                                image, loc);
+                                              image, loc);
 }
 
 void GrAtlasManager::addGlyphToBulkAndSetUseToken(GrDrawOpAtlas::BulkUseTokenUpdater* updater,
@@ -204,7 +208,7 @@ void GrAtlasManager::setAtlasSizes_ForTesting(const GrDrawOpAtlasConfig configs[
 bool GrAtlasManager::initAtlas(GrMaskFormat format) {
     int index = MaskFormatToAtlasIndex(format);
     if (!fAtlases[index]) {
-        GrPixelConfig config = mask_format_to_pixel_config(format, *fCaps);
+        GrPixelConfig config = mask_format_to_pixel_config(format);
         int width = fAtlasConfigs[index].fWidth;
         int height = fAtlasConfigs[index].fHeight;
         int numPlotsX = fAtlasConfigs[index].numPlotsX();

@@ -6,6 +6,8 @@
  */
 
 #include "SkFont.h"
+
+#include "SkTo.h"
 #include "SkTypeface.h"
 #include "SkUtils.h"
 
@@ -121,9 +123,6 @@ sk_sp<SkFont> SkFont::Testing_CreateFromPaint(const SkPaint& paint) {
     }
     if (paint.isEmbeddedBitmapText()) {
         flags |= kEmbeddedBitmaps_Flag;
-    }
-    if (paint.getFlags() & SkPaint::kGenA8FromLCD_Flag) {
-        flags |= kGenA8FromLCD_Flag;
     }
     if (paint.isFakeBoldText()) {
         flags |= kEmbolden_Flag;

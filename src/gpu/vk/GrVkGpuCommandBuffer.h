@@ -82,49 +82,50 @@ private:
     GrGpu* gpu() override;
 
     // Bind vertex and index buffers
-    void bindGeometry(const GrPrimitiveProcessor&,
-                      const GrBuffer* indexBuffer,
+    void bindGeometry(const GrBuffer* indexBuffer,
                       const GrBuffer* vertexBuffer,
                       const GrBuffer* instanceBuffer);
 
-    GrVkPipelineState* prepareDrawState(const GrPipeline&,
-                                        const GrPrimitiveProcessor&,
-                                        GrPrimitiveType,
-                                        bool hasDynamicState);
+    GrVkPipelineState* prepareDrawState(const GrPrimitiveProcessor&,
+                                        const GrPipeline&,
+                                        const GrPipeline::FixedDynamicState*,
+                                        const GrPipeline::DynamicStateArrays*,
+                                        GrPrimitiveType);
 
-    void onDraw(const GrPipeline& pipeline,
-                const GrPrimitiveProcessor& primProc,
-                const GrMesh mesh[],
-                const GrPipeline::DynamicState[],
+    void onDraw(const GrPrimitiveProcessor&,
+                const GrPipeline&,
+                const GrPipeline::FixedDynamicState*,
+                const GrPipeline::DynamicStateArrays*,
+                const GrMesh[],
                 int meshCount,
                 const SkRect& bounds) override;
 
     // GrMesh::SendToGpuImpl methods. These issue the actual Vulkan draw commands.
     // Marked final as a hint to the compiler to not use virtual dispatch.
-    void sendMeshToGpu(const GrPrimitiveProcessor& primProc, GrPrimitiveType primType,
-                       const GrBuffer* vertexBuffer, int vertexCount, int baseVertex) final {
-        this->sendInstancedMeshToGpu(primProc, primType, vertexBuffer, vertexCount, baseVertex,
-                                     nullptr, 1, 0);
+    void sendMeshToGpu(GrPrimitiveType primType, const GrBuffer* vertexBuffer, int vertexCount,
+                       int baseVertex) final {
+        this->sendInstancedMeshToGpu(primType, vertexBuffer, vertexCount, baseVertex, nullptr, 1,
+                                     0);
     }
 
-    void sendIndexedMeshToGpu(const GrPrimitiveProcessor& primProc, GrPrimitiveType primType,
-                              const GrBuffer* indexBuffer, int indexCount, int baseIndex,
-                              uint16_t /*minIndexValue*/, uint16_t /*maxIndexValue*/,
-                              const GrBuffer* vertexBuffer, int baseVertex) final {
-        this->sendIndexedInstancedMeshToGpu(primProc, primType, indexBuffer, indexCount, baseIndex,
-                                            vertexBuffer, baseVertex, nullptr, 1, 0);
+    void sendIndexedMeshToGpu(GrPrimitiveType primType, const GrBuffer* indexBuffer, int indexCount,
+                              int baseIndex, uint16_t /*minIndexValue*/, uint16_t /*maxIndexValue*/,
+                              const GrBuffer* vertexBuffer, int baseVertex,
+                              GrPrimitiveRestart restart) final {
+        SkASSERT(restart == GrPrimitiveRestart::kNo);
+        this->sendIndexedInstancedMeshToGpu(primType, indexBuffer, indexCount, baseIndex,
+                                            vertexBuffer, baseVertex, nullptr, 1, 0,
+                                            GrPrimitiveRestart::kNo);
     }
 
-    void sendInstancedMeshToGpu(const GrPrimitiveProcessor&, GrPrimitiveType,
-                                const GrBuffer* vertexBuffer, int vertexCount, int baseVertex,
-                                const GrBuffer* instanceBuffer, int instanceCount,
+    void sendInstancedMeshToGpu(GrPrimitiveType, const GrBuffer* vertexBuffer, int vertexCount,
+                                int baseVertex, const GrBuffer* instanceBuffer, int instanceCount,
                                 int baseInstance) final;
 
-    void sendIndexedInstancedMeshToGpu(const GrPrimitiveProcessor&, GrPrimitiveType,
-                                       const GrBuffer* indexBuffer, int indexCount, int baseIndex,
-                                       const GrBuffer* vertexBuffer, int baseVertex,
+    void sendIndexedInstancedMeshToGpu(GrPrimitiveType, const GrBuffer* indexBuffer, int indexCount,
+                                       int baseIndex, const GrBuffer* vertexBuffer, int baseVertex,
                                        const GrBuffer* instanceBuffer, int instanceCount,
-                                       int baseInstance) final;
+                                       int baseInstance, GrPrimitiveRestart) final;
 
     void onClear(const GrFixedClip&, GrColor color) override;
 
@@ -143,13 +144,25 @@ private:
 
     struct CopyInfo {
         CopyInfo(GrSurface* src, GrSurfaceOrigin srcOrigin, const SkIRect& srcRect,
-                 const SkIPoint& dstPoint)
-            : fSrc(src), fSrcOrigin(srcOrigin), fSrcRect(srcRect), fDstPoint(dstPoint) {}
+                 const SkIPoint& dstPoint, bool shouldDiscardDst)
+            : fSrc(src)
+            , fSrcOrigin(srcOrigin)
+            , fSrcRect(srcRect)
+            , fDstPoint(dstPoint)
+            , fShouldDiscardDst(shouldDiscardDst) {}
 
         GrSurface*      fSrc;
         GrSurfaceOrigin fSrcOrigin;
         SkIRect         fSrcRect;
         SkIPoint        fDstPoint;
+        bool            fShouldDiscardDst;
+    };
+
+    enum class LoadStoreState {
+        kUnknown,
+        kStartsWithClear,
+        kStartsWithDiscard,
+        kLoadAndStore,
     };
 
     struct CommandBufferInfo {
@@ -157,12 +170,16 @@ private:
         SkTArray<GrVkSecondaryCommandBuffer*>  fCommandBuffers;
         VkClearValue                           fColorClearValue;
         SkRect                                 fBounds;
-        bool                                   fIsEmpty;
-        bool                                   fStartsWithClear;
+        bool                                   fIsEmpty = true;
+        LoadStoreState                         fLoadStoreState = LoadStoreState::kUnknown;
         // The PreDrawUploads and PreCopies are sent to the GPU before submitting the secondary
         // command buffer.
         SkTArray<InlineUploadInfo>             fPreDrawUploads;
         SkTArray<CopyInfo>                     fPreCopies;
+        // Array of images that will be sampled and thus need to be transfered to sampled layout
+        // before submitting the secondary command buffers. This must happen after we do any predraw
+        // uploads or copies.
+        SkTArray<GrVkImage*>                   fSampledImages;
 
         GrVkSecondaryCommandBuffer* currentCmdBuf() {
             return fCommandBuffers.back();

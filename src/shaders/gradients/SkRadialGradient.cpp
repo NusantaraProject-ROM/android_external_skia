@@ -162,23 +162,14 @@ void GrRadialGradient::GLSLRadialProcessor::emitCode(EmitArgs& args) {
 
 std::unique_ptr<GrFragmentProcessor> SkRadialGradient::asFragmentProcessor(
         const GrFPArgs& args) const {
-    SkASSERT(args.fContext);
-
     SkMatrix matrix;
-    if (!this->getLocalMatrix().invert(&matrix)) {
+    if (!this->totalLocalMatrix(args.fPreLocalMatrix, args.fPostLocalMatrix)->invert(&matrix)) {
         return nullptr;
-    }
-    if (args.fLocalMatrix) {
-        SkMatrix inv;
-        if (!args.fLocalMatrix->invert(&inv)) {
-            return nullptr;
-        }
-        matrix.postConcat(inv);
     }
     matrix.postConcat(fPtsToUnit);
 
     return GrRadialGradient::Make(GrGradientEffect::CreateArgs(
-            args.fContext, this, &matrix, fTileMode, args.fDstColorSpaceInfo->colorSpace()));
+            args.fContext, this, &matrix, fTileMode, args.fDstColorSpaceInfo));
 }
 
 #endif
@@ -194,21 +185,3 @@ void SkRadialGradient::appendGradientStages(SkArenaAlloc*, SkRasterPipeline* p,
                                             SkRasterPipeline*) const {
     p->append(SkRasterPipeline::xy_to_radius);
 }
-
-#ifndef SK_IGNORE_TO_STRING
-void SkRadialGradient::toString(SkString* str) const {
-    str->append("SkRadialGradient: (");
-
-    str->append("center: (");
-    str->appendScalar(fCenter.fX);
-    str->append(", ");
-    str->appendScalar(fCenter.fY);
-    str->append(") radius: ");
-    str->appendScalar(fRadius);
-    str->append(" ");
-
-    this->INHERITED::toString(str);
-
-    str->append(")");
-}
-#endif

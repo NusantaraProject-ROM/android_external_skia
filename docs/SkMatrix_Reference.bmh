@@ -1,12 +1,6 @@
 #Topic Matrix
-#Alias Matrices
-#Alias Matrix_Reference
-
-#Subtopic Overview
-    #Subtopic Subtopic
-    #Populate
-    ##
-##
+#Alias Matrices ##
+#Alias Matrix_Reference ##
 
 #Class SkMatrix
 
@@ -19,8 +13,12 @@ so it must be explicitly initialized. setIdentity initializes Matrix
 so it has no effect. setTranslate, setScale, setSkew, setRotate, set9 and setAll
 initializes all Matrix elements with the corresponding mapping.
 
-Matrix includes a hidden variable that classifies the type of matrix to 
+Matrix includes a hidden variable that classifies the type of matrix to
 improve performance. Matrix is not thread safe unless getType is called first.
+
+#Subtopic Overview
+#Populate
+##
 
 #Subtopic Member_Function
 #Populate
@@ -145,8 +143,8 @@ Sets Matrix to:
 #Param skewY   vertical skew factor ##
 #Param scaleY  vertical scale factor ##
 #Param transY  vertical translation ##
-#Param pers0   input x perspective factor ##
-#Param pers1   input y perspective factor ##
+#Param pers0   input x-axis perspective factor ##
+#Param pers1   input y-axis perspective factor ##
 #Param pers2   perspective scale factor ##
 
 #Return  Matrix constructed from parameters ##
@@ -173,7 +171,7 @@ Sets Matrix to:
 # ------------------------------------------------------------------------------
 
 #Enum TypeMask
-
+#Line # bit field for Matrix complexity ##
 #Code
     enum TypeMask {
         kIdentity_Mask = 0,
@@ -188,18 +186,23 @@ Enum of bit fields for mask returned by getType.
 Used to identify the complexity of Matrix, to optimize performance.
 
 #Const kIdentity_Mask 0
+#Line # identity Matrix; all bits clear ##
 all bits clear if Matrix is identity
 ##
 #Const kTranslate_Mask 1
+#Line # translation Matrix ##
 set if Matrix has translation
 ##
 #Const kScale_Mask 2
+#Line # scale Matrix ##
 set if Matrix has x or y scale
 ##
 #Const kAffine_Mask 4
+#Line # skew or rotate Matrix ##
 set if Matrix skews or rotates
 ##
 #Const kPerspective_Mask 8
+#Line # perspective Matrix ##
 set if Matrix has perspective
 ##
 
@@ -226,10 +229,10 @@ SkPoint polys[][4] = {{{0, 0}, {0, 1}, {1, 1}, {1, 0}}, {{0, 0}, {0, 1}, {2, 1},
 matrix.setPolyToPoly(polys[0], polys[1], 4);
 debugster("setPolyToPoly", matrix);
 #StdOut
-after reset: kIdentity_Mask 
-after postTranslate: kTranslate_Mask 
-after postScale: kTranslate_Mask kScale_Mask 
-after postScale: kTranslate_Mask kScale_Mask kAffine_Mask 
+after reset: kIdentity_Mask
+after postTranslate: kTranslate_Mask
+after postScale: kTranslate_Mask kScale_Mask
+after postScale: kTranslate_Mask kScale_Mask kAffine_Mask
 after setPolyToPoly: kTranslate_Mask kScale_Mask kAffine_Mask kPerspective_Mask
 ##
 ##
@@ -253,7 +256,7 @@ false positives. For example, when kPerspective_Mask is set, all
 other bits are set.
 
 #Return  kIdentity_Mask, or combinations of: kTranslate_Mask, kScale_Mask,
-         kAffine_Mask, kPerspective_Mask 
+         kAffine_Mask, kPerspective_Mask
 ##
 
 #Example
@@ -383,7 +386,7 @@ is translate: false
 #In Property
 #Line # returns if mapped Rect can be represented by another Rect ##
 Returns true Matrix maps Rect to another Rect. If true, Matrix is identity,
-or scales, or rotates a multiple of 90 degrees, or mirrors in x or y. In all
+or scales, or rotates a multiple of 90 degrees, or mirrors on axes. In all
 cases, Matrix may also have translation. Matrix form is either:
 
 #Code
@@ -434,7 +437,7 @@ rectStaysRect: true
 #Line # returns if mapping restricts to 90 degree multiples and mirroring ##
 
 Returns true Matrix maps Rect to another Rect. If true, Matrix is identity,
-or scales, or rotates a multiple of 90 degrees, or mirrors in x or y. In all
+or scales, or rotates a multiple of 90 degrees, or mirrors on axes. In all
 cases, Matrix may also have translation. Matrix form is either:
 
 #Code
@@ -492,7 +495,7 @@ Returns true if the matrix contains perspective elements. Matrix form is:
 | perspective-x  perspective-y  perspective-scale |
 ##
 
-where perspective-x or perspective-y is non-zero, or perspective-scale is 
+where perspective-x or perspective-y is non-zero, or perspective-scale is
 not one. All other elements may have any value.
 
 #Return  true if Matrix is in most general form ##
@@ -527,7 +530,7 @@ uniform scale.
 Returns false if Matrix contains different scales, skewing, perspective, or
 degenerate forms that collapse to a line or point.
 
-Describes that the Matrix makes rendering with and without the matrix are 
+Describes that the Matrix makes rendering with and without the matrix are
 visually alike; a transformed circle remains a circle. Mathematically, this is
 referred to as similarity of a Euclidean_Space, or a similarity transformation.
 
@@ -555,7 +558,7 @@ with isSimilarity false reveals the pair not visible through the matrix.
             {
                 SkAutoCanvasRestore autoRestore(canvas, true);
                 canvas->concat(m);
-                canvas->drawString(str, 0, 0, p);    
+                canvas->drawString(str, 0, 0, p);
             }
             if (!isSimilarity) {
                 canvas->drawString(str, 40, below, p);
@@ -576,7 +579,7 @@ with isSimilarity false reveals the pair not visible through the matrix.
 #Line # returns if mapped 90 angle remains 90 degrees ##
 Returns true if Matrix contains only translation, rotation, reflection, and
 scale. Scale may differ along rotated axes.
-Returns false if Matrix skewing, perspective, or degenerate forms that collapse 
+Returns false if Matrix skewing, perspective, or degenerate forms that collapse
 to a line or point.
 
 Preserves right angles, but not requiring that the arms of the angle
@@ -607,7 +610,7 @@ for (SkScalar sx : { 1, 2 } ) {
                     preservesRightAngles ? "right" : "");
         SkAutoCanvasRestore autoRestore(canvas, true);
         canvas->concat(m);
-        canvas->drawString(str, 0, pos, p);    
+        canvas->drawString(str, 0, pos, p);
         pos += 20;
     }
 }
@@ -619,51 +622,51 @@ for (SkScalar sx : { 1, 2 } ) {
 
 # ------------------------------------------------------------------------------
 
-#Enum
+#Subtopic MemberIndex
+#In Constant
+#Line # member indices ##
 
 #Code
-    enum {
-        kMScaleX,
-        kMSkewX,
-        kMTransX,
-        kMSkewY,
-        kMScaleY,
-        kMTransY,
-        kMPersp0,
-        kMPersp1,
-        kMPersp2,
-    };
+    static constexpr int kMScaleX = 0;
+    static constexpr int kMSkewX  = 1;
+    static constexpr int kMTransX = 2;
+    static constexpr int kMSkewY  = 3;
+    static constexpr int kMScaleY = 4;
+    static constexpr int kMTransY = 5;
+    static constexpr int kMPersp0 = 6;
+    static constexpr int kMPersp1 = 7;
+    static constexpr int kMPersp2 = 8;
 ##
 
 Matrix organizes its values in row order. These members correspond to
 each value in Matrix.
 
 #Const kMScaleX 0
-horizontal scale factor
+#Line # horizontal scale factor ##
 ##
 #Const kMSkewX 1
-horizontal skew factor
+#Line # horizontal skew factor ##
 ##
 #Const kMTransX 2
-horizontal translation
+#Line # horizontal translation ##
 ##
 #Const kMSkewY 3
-vertical skew factor
+#Line # vertical skew factor ##
 ##
 #Const kMScaleY 4
-vertical scale factor
+#Line # vertical scale factor ##
 ##
 #Const kMTransY 5
-vertical translation
+#Line # vertical translation ##
 ##
 #Const kMPersp0 6
-input x perspective factor
+#Line # input x perspective factor ##
 ##
 #Const kMPersp1 7
-input y perspective factor
+#Line # input y perspective factor ##
 ##
 #Const kMPersp2 8
-perspective bias
+#Line # perspective bias ##
 ##
 
 #Example
@@ -693,39 +696,39 @@ for (int i : { SkMatrix::kMScaleX, SkMatrix::kMSkewX,  SkMatrix::kMTransX,
 
 # ------------------------------------------------------------------------------
 
-#Enum
+#Subtopic AffineIndex
+#In Constant
+#Line # affine member indices ##
 
 #Code
-    enum {
-        kAScaleX,
-        kASkewY,
-        kASkewX,
-        kAScaleY,
-        kATransX,
-        kATransY,
-    };
+    static constexpr int kAScaleX = 0;
+    static constexpr int kASkewY  = 1;
+    static constexpr int kASkewX  = 2;
+    static constexpr int kAScaleY = 3;
+    static constexpr int kATransX = 4;
+    static constexpr int kATransY = 5;
 ##
 
 Affine arrays are in column major order to match the matrix used by
 PDF and XPS.
 
 #Const kAScaleX 0
-horizontal scale factor
+#Line # horizontal scale factor ##
 ##
 #Const kASkewY 1
-vertical skew factor
+#Line # vertical skew factor ##
 ##
 #Const kASkewX 2
-horizontal skew factor
+#Line # horizontal skew factor ##
 ##
 #Const kAScaleY 3
-vertical scale factor
+#Line # vertical scale factor ##
 ##
 #Const kATransX 4
-horizontal translation
+#Line # horizontal translation ##
 ##
 #Const kATransY 5
-vertical translation
+#Line # vertical translation ##
 ##
 
 #NoExample
@@ -803,7 +806,7 @@ matrix.get(SkMatrix::kMSkewY) == 24
 #Method SkScalar getScaleX() const
 #In Property
 #Line # returns horizontal scale factor ##
-Returns scale factor multiplied by x input, contributing to x output.
+Returns scale factor multiplied by x-axis input, contributing to x-axis output.
 With mapPoints, scales Points along the x-axis.
 
 #Return  horizontal scale factor ##
@@ -826,7 +829,7 @@ matrix.getScaleX() == 42
 #Method SkScalar getScaleY() const
 #In Property
 #Line # returns vertical scale factor ##
-Returns scale factor multiplied by y input, contributing to y output.
+Returns scale factor multiplied by y-axis input, contributing to y-axis output.
 With mapPoints, scales Points along the y-axis.
 
 #Return  vertical scale factor ##
@@ -849,9 +852,9 @@ matrix.getScaleY() == 24
 #Method SkScalar getSkewY() const
 #In Property
 #Line # returns vertical skew factor ##
-Returns scale factor multiplied by x input, contributing to y output.
+Returns scale factor multiplied by x-axis input, contributing to y-axis output.
 With mapPoints, skews Points along the y-axis.
-Skew x and y together can rotate Points.
+Skewing both axes can rotate Points.
 
 #Return  vertical skew factor ##
 
@@ -873,9 +876,9 @@ matrix.getSkewY() == 24
 #Method SkScalar getSkewX() const
 #In Property
 #Line # returns horizontal skew factor ##
-Returns scale factor multiplied by y input, contributing to x output.
+Returns scale factor multiplied by y-axis input, contributing to x-axis output.
 With mapPoints, skews Points along the x-axis.
-Skew x and y together can rotate Points.
+Skewing both axes can rotate Points.
 
 #Return  horizontal scale factor ##
 
@@ -897,7 +900,7 @@ matrix.getSkewX() == 42
 #Method SkScalar getTranslateX() const
 #In Property
 #Line # returns horizontal translation ##
-Returns translation contributing to x output.
+Returns translation contributing to x-axis output.
 With mapPoints, moves Points along the x-axis.
 
 #Return  horizontal translation factor ##
@@ -920,7 +923,7 @@ matrix.getTranslateX() == 42
 #Method SkScalar getTranslateY() const
 #In Property
 #Line # returns vertical translation ##
-Returns translation contributing to y output.
+Returns translation contributing to y-axis output.
 With mapPoints, moves Points along the y-axis.
 
 #Return  vertical translation factor ##
@@ -943,9 +946,9 @@ matrix.getTranslateY() == 24
 #Method SkScalar getPerspX() const
 #In Property
 #Line # returns input x perspective factor ##
-Returns factor scaling input x relative to input y. 
+Returns factor scaling input x-axis relative to input y-axis.
 
-#Return  input x perspective factor ##
+#Return  input x-axis perspective factor ##
 
 #Example
     SkMatrix m;
@@ -975,9 +978,9 @@ Returns factor scaling input x relative to input y.
 #In Property
 #Line # returns input y perspective factor ##
 
-Returns factor scaling input y relative to input x. 
+Returns factor scaling input y-axis relative to input x-axis.
 
-#Return  input y perspective factor ##
+#Return  input y-axis perspective factor ##
 
 #Example
     SkMatrix m;
@@ -1044,7 +1047,7 @@ after dirty cache:    x = 66
 # ------------------------------------------------------------------------------
 #Subtopic Set
 #Populate
-#Line # set one or more matrix values ##
+#Line # sets one or more matrix values ##
 ##
 
 #Method void set(int index, SkScalar value)
@@ -1082,7 +1085,7 @@ after 2nd skew x mod: x = 66
 #Method void setScaleX(SkScalar v)
 #In Set
 #Line # sets horizontal scale factor ##
-Sets horizontal scale factor. 
+Sets horizontal scale factor.
 
 #Param v  horizontal scale factor to store ##
 
@@ -1108,7 +1111,7 @@ canvas->drawString("x scale", 0, 48, paint);
 #Method void setScaleY(SkScalar v)
 #In Set
 #Line # sets vertical scale factor ##
-Sets vertical scale factor. 
+Sets vertical scale factor.
 
 #Param v  vertical scale factor to store ##
 
@@ -1134,7 +1137,7 @@ canvas->drawString("y scale", 12, 48, paint);
 #Method void setSkewY(SkScalar v)
 #In Set
 #Line # sets vertical skew factor ##
-Sets vertical skew factor. 
+Sets vertical skew factor.
 
 #Param v  vertical skew factor to store ##
 
@@ -1160,7 +1163,7 @@ canvas->drawString("y skew", 12, 48, paint);
 #Method void setSkewX(SkScalar v)
 #In Set
 #Line # sets horizontal skew factor ##
-Sets horizontal skew factor. 
+Sets horizontal skew factor.
 
 #Param v  horizontal skew factor to store ##
 
@@ -1238,8 +1241,8 @@ canvas->drawString("y translate", 8, 24, paint);
 #Method void setPerspX(SkScalar v)
 #In Set
 #Line # sets input x perspective factor ##
-Sets input x perspective factor, which causes mapXY to vary input x inversely
-proportional to input y.
+Sets input x-axis perspective factor, which causes mapXY to vary input x-axis values
+inversely proportional to input y-axis values.
 
 #Param v  perspective factor ##
 
@@ -1266,8 +1269,8 @@ for (SkScalar perspX : { -.003f, 0.f, .003f, .012f } ) {
 #Method void setPerspY(SkScalar v)
 #In Set
 #Line # sets input y perspective factor ##
-Sets input y perspective factor, which causes mapXY to vary input y inversely
-proportional to input x.
+Sets input y-axis perspective factor, which causes mapXY to vary input y-axis values
+inversely proportional to input x-axis values.
 
 #Param v  perspective factor ##
 
@@ -1312,8 +1315,8 @@ Sets all values from parameters. Sets matrix to:
 #Param skewY  vertical skew factor to store ##
 #Param scaleY  vertical scale factor to store ##
 #Param transY  vertical translation to store ##
-#Param persp0  input x perspective factor to store ##
-#Param persp1  input y perspective factor to store ##
+#Param persp0  input x-axis values perspective factor to store ##
+#Param persp1  input y-axis values perspective factor to store ##
 #Param persp2  perspective scale factor to store ##
 
 #Example
@@ -1352,13 +1355,13 @@ SkMatrix matrix = SkMatrix::MakeRectToRect({0, 0, 1, 1}, {3, 4, 7, 9},
                                            SkMatrix::kFill_ScaleToFit);
 SkScalar b[9];
 matrix.get9(b);
-SkDebugf("{%g, %g, %g},\n{%g, %g, %g},\n{%g, %g, %g}\n", b[0], b[1], b[2], 
+SkDebugf("{%g, %g, %g},\n{%g, %g, %g},\n{%g, %g, %g}\n", b[0], b[1], b[2],
          b[3], b[4], b[5], b[6], b[7], b[8]);
 #StdOut
 {4, 0, 3},
 {0, 5, 4},
 {0, 0, 1}
-##    
+##
 ##
 
 #SeeAlso set9
@@ -1650,16 +1653,16 @@ Positive degrees rotates clockwise.
 #In Set
 #Line # sets to rotate and scale about a point ##
 
-Sets Matrix to rotate by sinValue and cosValue, about a pivot point at (px, py). 
+Sets Matrix to rotate by sinValue and cosValue, about a pivot point at (px, py).
 The pivot point is unchanged when mapped with Matrix.
 
 Vector (sinValue, cosValue) describes the angle of rotation relative to (0, 1).
 Vector length specifies scale.
 
-#Param sinValue  rotation vector x component ##
-#Param cosValue  rotation vector y component ##
-#Param px  pivot x ##
-#Param py  pivot y ##
+#Param sinValue  rotation vector x-axis component ##
+#Param cosValue  rotation vector y-axis component ##
+#Param px  pivot x-axis ##
+#Param py  pivot y-axis ##
 
 #Example
 #Height 128
@@ -1683,13 +1686,13 @@ Vector length specifies scale.
 
 #Method void setSinCos(SkScalar sinValue, SkScalar cosValue)
 
-Sets Matrix to rotate by sinValue and cosValue, about a pivot point at (0, 0). 
+Sets Matrix to rotate by sinValue and cosValue, about a pivot point at (0, 0).
 
 Vector (sinValue, cosValue) describes the angle of rotation relative to (0, 1).
 Vector length specifies scale.
 
-#Param sinValue  rotation vector x component ##
-#Param cosValue  rotation vector y component ##
+#Param sinValue  rotation vector x-axis component ##
+#Param cosValue  rotation vector y-axis component ##
 
 #Example
 #Description
@@ -1890,8 +1893,8 @@ Matrix * T(dx, dy) = | D E F | | 0 1 dy | = | D E D*dx+E*dy+F |
                      | G H I | | 0 0  1 |   | G H G*dx+H*dy+I |
 ##
 
-#Param dx  x translation before applying Matrix ##
-#Param dy  y translation before applying Matrix ##
+#Param dx  x-axis translation before applying Matrix ##
+#Param dy  y-axis translation before applying Matrix ##
 
 #Example
 #Height 160
@@ -1901,7 +1904,7 @@ Matrix * T(dx, dy) = | D E F | | 0 1 dy | = | D E D*dx+E*dy+F |
     for (int i = 0; i < 2; ++i ) {
         SkMatrix matrix;
         i == 0 ? matrix.reset(): matrix.setRotate(25, rect.centerX(), 320);
-        { 
+        {
             SkAutoCanvasRestore acr(canvas, true);
             canvas->concat(matrix);
             paint.setColor(SK_ColorGRAY);
@@ -1940,7 +1943,7 @@ Matrix = | D E F |,  S(sx, sy, px, py) = |  0 sy dy |
          | G H I |                       |  0  0  1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -2043,7 +2046,7 @@ Matrix = | D E F |,  R(degrees, px, py) = | s  c dy |
          | G H I |                        | 0  0  1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -2100,7 +2103,7 @@ Matrix = | D E F |,  R(degrees, px, py) = | s  c 0 |
          | G H I |                        | 0  0 1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -2153,7 +2156,7 @@ Matrix = | D E F |,  K(kx, ky, px, py) = | ky  1 dy |
          | G H I |                       |  0  0  1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -2310,8 +2313,8 @@ T(dx, dy) * Matrix = | 0 1 dy | | M N O | = | M+dy*P N+dy*Q O+dy*R |
                      | 0 0  1 | | P Q R |   |      P      Q      R |
 ##
 
-#Param dx  x translation after applying Matrix ##
-#Param dy  y translation after applying Matrix ##
+#Param dx  x-axis translation after applying Matrix ##
+#Param dy  y-axis translation after applying Matrix ##
 
 #Example
 #Height 160
@@ -2324,7 +2327,7 @@ Compare with preTranslate example.
     for (int i = 0; i < 2; ++i ) {
         SkMatrix matrix;
         i == 0 ? matrix.reset(): matrix.setRotate(25, rect.centerX(), 320);
-        { 
+        {
             SkAutoCanvasRestore acr(canvas, true);
             canvas->concat(matrix);
             paint.setColor(SK_ColorGRAY);
@@ -2340,7 +2343,7 @@ Compare with preTranslate example.
     }
 ##
 
-#SeeAlso preTranslate setTranslate MakeTrans 
+#SeeAlso preTranslate setTranslate MakeTrans
 
 #Method ##
 
@@ -2363,7 +2366,7 @@ Matrix = | M N O |,  S(sx, sy, px, py) = |  0 sy dy |
          | P Q R |                       |  0  0  1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -2467,7 +2470,7 @@ Matrix = | M N O |,  I(divx, divy) = |  0 sy  0 |
          | P Q R |                   |  0  0  1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -2491,7 +2494,7 @@ I(divx, divy) * Matrix = |  0 sy  0 | | M N O | = | sy*M sy*N sy*O |
 
 #Example
 #Image 3
-SkMatrix matrix, matrix2;
+SkMatrix matrix;
 SkPoint bitmapBounds[4], perspect[4] = {{50, 10}, {180, 40}, {236, 176}, {10, 206}};
 SkRect::Make(source.bounds()).toQuad(bitmapBounds);
 matrix.setPolyToPoly(bitmapBounds, perspect, 4);
@@ -2525,7 +2528,7 @@ Matrix = | M N O |,  R(degrees, px, py) = | s  c dy |
          | P Q R |                        | 0  0  1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -2582,7 +2585,7 @@ Matrix = | M N O |,  R(degrees, px, py) = | s  c 0 |
          | P Q R |                        | 0  0 1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -2635,7 +2638,7 @@ Matrix = | M N O |,  K(kx, ky, px, py) = | ky  1 dy |
          | P Q R |                       |  0  0  1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -2748,7 +2751,7 @@ other * Matrix = | D E F | * | M N O | = | DJ+EM+FP DK+EN+FQ DL+EO+FR |
 #Example
 #Image 3
 #Height 64
-SkMatrix matrix, matrix2;
+SkMatrix matrix;
 SkPoint bitmapBounds[4], perspect[4] = {{50, 10}, {180, 40}, {236, 176}, {10, 206}};
 SkRect::Make(source.bounds()).toQuad(bitmapBounds);
 matrix.setPolyToPoly(bitmapBounds, perspect, 4);
@@ -2764,7 +2767,7 @@ canvas->drawBitmap(source, 0, 0);
 # ------------------------------------------------------------------------------
 
 #Enum ScaleToFit
-
+#Line # options to map Rects ##
 #Code
     enum ScaleToFit {
         kFill_ScaleToFit,
@@ -2780,21 +2783,25 @@ or may restrict Matrix to square scaling. If restricted, ScaleToFit specifies
 how Matrix maps to the side or center of the destination Rect.
 
 #Const kFill_ScaleToFit 0
+#Line # scales in x and y to fill destination Rect ##
     Computes Matrix that scales in x and y independently, so that source Rect is
     mapped to completely fill destination Rect. The aspect ratio of source Rect
     may change.
 ##
 #Const kStart_ScaleToFit 1
+#Line # scales and aligns to left and top ##
     Computes Matrix that maintains source Rect aspect ratio, mapping source Rect
     width or height to destination Rect. Aligns mapping to left and top edges
     of destination Rect.
 ##
 #Const kCenter_ScaleToFit 2
+#Line # scales and aligns to center ##
     Computes Matrix that maintains source Rect aspect ratio, mapping source Rect
     width or height to destination Rect. Aligns mapping to center of destination
     Rect.
 ##
 #Const kEnd_ScaleToFit 3
+#Line # scales and aligns to right and bottom ##
     Computes Matrix that maintains source Rect aspect ratio, mapping source Rect
     width or height to destination Rect. Aligns mapping to right and bottom
     edges of destination Rect.
@@ -2879,7 +2886,7 @@ src: 1, 2, 3, 4  dst: 5, 6, 8, 9  success: true
 ##
 ##
 
-#SeeAlso MakeRectToRect ScaleToFit setPolyToPoly SkRect::isEmpty 
+#SeeAlso MakeRectToRect ScaleToFit setPolyToPoly SkRect::isEmpty
 
 ##
 
@@ -2947,7 +2954,7 @@ If count is zero, sets Matrix to identity and returns true.
 If count is one, sets Matrix to translate and returns true.
 If count is two or more, sets Matrix to map Points if possible; returns false
 if Matrix cannot be constructed. If count is four, Matrix may include
-perspective. 
+perspective.
 
 #Param src  Points to map from ##
 #Param dst  Points to map to ##
@@ -3015,9 +3022,10 @@ unchanged.
     paint.setStrokeWidth(3);
     paint.setStrokeCap(SkPaint::kRound_Cap);
     canvas->drawPoints(SkCanvas::kPoints_PointMode, 4, dst, paint);
-    matrix.invert(&matrix);
-    canvas->concat(matrix);
-    canvas->drawPoints(SkCanvas::kPoints_PointMode, 4, dst, paint);
+    if (matrix.invert(&matrix)) {
+        canvas->concat(matrix);
+        canvas->drawPoints(SkCanvas::kPoints_PointMode, 4, dst, paint);
+    }
 ##
 
 #SeeAlso Concat
@@ -3082,14 +3090,15 @@ If Matrix contains perspective, returns false and leaves affine unchanged.
 SkMatrix matrix;
 matrix.setAll(2, 3, 4, 5, 6, 7, 0, 0, 1);
 SkScalar affine[6];
-matrix.asAffine(affine);
-const char* names[] = { "ScaleX", "SkewY", "SkewX", "ScaleY", "TransX", "TransY" };
-for (int i = 0; i < 6; ++i) {
-    SkDebugf("%s: %g ", names[i], affine[i]);
+if (matrix.asAffine(affine)) {
+    const char* names[] = { "ScaleX", "SkewY", "SkewX", "ScaleY", "TransX", "TransY" };
+    for (int i = 0; i < 6; ++i) {
+        SkDebugf("%s: %g ", names[i], affine[i]);
+    }
+    SkDebugf("\n");
 }
-SkDebugf("\n");
 #StdOut
-ScaleX: 2 SkewY: 5 SkewX: 3 ScaleY: 6 TransX: 4 TransY: 7 
+ScaleX: 2 SkewY: 5 SkewX: 3 ScaleY: 6 TransX: 4 TransY: 7
 ##
 ##
 
@@ -3127,17 +3136,18 @@ Matrix is set, row, then column, to:
 SkMatrix matrix;
 matrix.setAll(2, 3, 4, 5, 6, 7, 0, 0, 1);
 SkScalar affine[6];
-matrix.asAffine(affine);
-const char* names[] = { "ScaleX", "SkewY", "SkewX", "ScaleY", "TransX", "TransY" };
-for (int i = 0; i < 6; ++i) {
-    SkDebugf("%s: %g ", names[i], affine[i]);
+if (matrix.asAffine(affine)) {
+    const char* names[] = { "ScaleX", "SkewY", "SkewX", "ScaleY", "TransX", "TransY" };
+    for (int i = 0; i < 6; ++i) {
+        SkDebugf("%s: %g ", names[i], affine[i]);
+    }
+    SkDebugf("\n");
+    matrix.reset();
+    matrix.setAffine(affine);
+    matrix.dump();
 }
-SkDebugf("\n");
-matrix.reset();
-matrix.setAffine(affine);
-matrix.dump();
 #StdOut
-ScaleX: 2 SkewY: 5 SkewX: 3 ScaleY: 6 TransX: 4 TransY: 7 
+ScaleX: 2 SkewY: 5 SkewX: 3 ScaleY: 6 TransX: 4 TransY: 7
 [  2.0000   3.0000   4.0000][  5.0000   6.0000   7.0000][  0.0000   0.0000   1.0000]
 ##
 ##
@@ -3165,7 +3175,7 @@ Matrix = | D E F |,  pt = | y |
          | G H I |        | 1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -3224,7 +3234,7 @@ Matrix = | D E F |,  pt = | y |
          | G H I |        | 1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -3345,8 +3355,8 @@ Matrix * pt = |D E F| |y| = |Ax+By+C Dx+Ey+F Gx+Hy+I| = ------- , -------
               |G H I| |1|                               Gx+Hy+I   Gx+Hy+I
 ##
 
-#Param x  x-coordinate of Point to map ##
-#Param y  y-coordinate of Point to map ##
+#Param x  x-axis value of Point to map ##
+#Param y  y-axis value of Point to map ##
 #Param result  storage for mapped Point ##
 
 #Example
@@ -3390,8 +3400,8 @@ Matrix * pt = |D E F| |y| = |Ax+By+C Dx+Ey+F Gx+Hy+I| = ------- , -------
               |G H I| |1|                               Gx+Hy+I   Gx+Hy+I
 ##
 
-#Param x  x-coordinate of Point to map ##
-#Param y  y-coordinate of Point to map ##
+#Param x  x-axis value of Point to map ##
+#Param y  y-axis value of Point to map ##
 
 #Return  mapped Point ##
 
@@ -3433,7 +3443,7 @@ Matrix = | D E 0 |,  src = | y |
          | G H I |         | 1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -3494,7 +3504,7 @@ Matrix = | D E 0 |,  vec = | y |
          | G H I |         | 1 |
 ##
 
-where 
+where
 
 #Code
 #Literal
@@ -3561,8 +3571,8 @@ Matrix * vec = |D E 0| |dy| = |A*dx+B*dy D*dx+E*dy G*dx+H*dy+I| = ----------- , 
                |G H I| | 1|                                       G*dx+H*dy+I   G*dx+*dHy+I
 ##
 
-#Param dx  x-coordinate of Vector to map ##
-#Param dy  y-coordinate of Vector to map ##
+#Param dx  x-axis value of Vector to map ##
+#Param dy  y-axis value of Vector to map ##
 #Param result  storage for mapped Vector ##
 
 #Example
@@ -3610,8 +3620,8 @@ Matrix * vec = |D E 0| |dy| = |A*dx+B*dy D*dx+E*dy G*dx+H*dy+I| = ----------- , 
                |G H I| | 1|                                       G*dx+H*dy+I   G*dx+*dHy+I
 ##
 
-#Param dx  x-coordinate of Vector to map ##
-#Param dy  y-coordinate of Vector to map ##
+#Param dx  x-axis value of Vector to map ##
+#Param dy  y-axis value of Vector to map ##
 
 #Return  mapped Vector ##
 
@@ -3702,13 +3712,39 @@ Returned value is the same as calling rectStaysRect.
 
 # ------------------------------------------------------------------------------
 
+#Method SkRect mapRect(const SkRect& src) const
+
+Returns bounds of src corners mapped by Matrix.
+
+#Param src  rectangle to map ##
+#Return mapped bounds ##
+
+#Example
+  SkRect rect{110, 50, 180, 100};
+  SkMatrix matrix;
+  matrix.setRotate(50, 28, 28);
+  SkRect mapped = matrix.mapRect(rect);
+  SkPaint paint;
+  paint.setAntiAlias(true);
+  paint.setStyle(SkPaint::kStroke_Style);
+  canvas->drawRect(rect, paint);
+  canvas->drawRect(mapped, paint);
+  canvas->concat(matrix);
+  canvas->drawRect(rect, paint);
+##
+
+#SeeAlso mapRectToQuad mapRectScaleTranslate
+#Method ##
+
+# ------------------------------------------------------------------------------
+
 #Method void mapRectToQuad(SkPoint dst[4], const SkRect& rect) const
 #In Transform
 #Line # maps Rect to Point array ##
 Maps four corners of rect to dst. Points are mapped by multiplying each
 rect corner by Matrix. rect corner is processed in this order:
 (rect.fLeft, rect.fTop), (rect.fRight, rect.fTop), (rect.fRight, rect.fBottom),
-(rect.fLeft, rect.fBottom). 
+(rect.fLeft, rect.fBottom).
 
 rect may be empty: rect.fLeft may be greater than or equal to rect.fRight;
 rect.fTop may be greater than or equal to rect.fBottom.
@@ -3846,9 +3882,9 @@ the area enclosed by the ellipse major and minor axes.
 #Method bool isFixedStepInX() const
 #In Property
 #Line # returns if transformation supports fixed step in x ##
-Returns true if a unit step in x at some y mapped through Matrix can be
-represented by a constant Vector. Returns true if getType returns kIdentity_Mask,
-or combinations of: kTranslate_Mask, kScale_Mask, and kAffine_Mask.
+Returns true if a unit step on x-axis at some y-axis value mapped through Matrix
+can be represented by a constant Vector. Returns true if getType returns
+kIdentity_Mask, or combinations of: kTranslate_Mask, kScale_Mask, and kAffine_Mask.
 
 May return true if getType returns kPerspective_Mask, but only when Matrix
 does not include rotation or skewing along the y-axis.
@@ -3895,12 +3931,12 @@ isFixedStepInX: false
 #Method SkVector fixedStepInX(SkScalar y) const
 #In Property
 #Line # returns step in x for a position in y ##
-Returns Vector representing a unit step in x at y mapped through Matrix.
+Returns Vector representing a unit step on x-axis at y mapped through Matrix.
 If isFixedStepInX is false, returned value is undefined.
 
 #Param y  position of line parallel to x-axis ##
 
-#Return  Vector advance of mapped unit step in x ##
+#Return  Vector advance of mapped unit step on x-axis ##
 
 #Example
 #Image 3
@@ -4030,8 +4066,9 @@ contains NaN, even if the other Matrix also contains NaN.
     };
     SkMatrix a, b;
     a.setAll(1, 0, 0,   0, 1, 0,  1, 0, 1);
-    a.invert(&b);
-    debugster("identity", a, b);
+    if (a.invert(&b)) {
+        debugster("identity", a, b);
+    }
 ##
 
 #SeeAlso cheapEqualTo operator==(const SkMatrix& a, const SkMatrix& b)
@@ -4066,40 +4103,7 @@ matrix != nearlyEqual
 ##
 ##
 
-#SeeAlso toString
-
-##
-
-# ------------------------------------------------------------------------------
-
-#Method void toString(SkString* str) const
-#In Utility
-#Line # converts Matrix to machine readable form ##
-Creates string representation of Matrix. Floating point values
-are written with limited precision; it may not be possible to reconstruct
-original Matrix from output.
-
-#Param str  storage for string representation of Matrix ##
-
-#Example
-    SkMatrix matrix;
-    matrix.setRotate(45);
-    SkString mStr, neStr;
-    matrix.toString(&mStr);
-    SkMatrix nearlyEqual;
-    nearlyEqual.setAll(0.7071f, -0.7071f, 0,   0.7071f, 0.7071f, 0,   0, 0, 1);
-    nearlyEqual.toString(&neStr);
-    SkDebugf("mStr  %s\n", mStr.c_str());
-    SkDebugf("neStr %s\n", neStr.c_str());
-    SkDebugf("matrix %c= nearlyEqual\n", matrix == nearlyEqual ? '=' : '!');
-#StdOut
-mStr  [  0.7071  -0.7071   0.0000][  0.7071   0.7071   0.0000][  0.0000   0.0000   1.0000]
-neStr [  0.7071  -0.7071   0.0000][  0.7071   0.7071   0.0000][  0.0000   0.0000   1.0000]
-matrix != nearlyEqual
-##
-##
-
-#SeeAlso dump
+#SeeAlso SkPath::dump
 
 ##
 
@@ -4158,7 +4162,7 @@ matrix.getMaxScale() 42
 #Method bool SK_WARN_UNUSED_RESULT getMinMaxScales(SkScalar scaleFactors[2]) const
 #In Property
 #Line # returns minimum and maximum scaling, if possible ##
-Sets scaleFactors[0] to the minimum scaling factor, and scaleFactors[1] to the 
+Sets scaleFactors[0] to the minimum scaling factor, and scaleFactors[1] to the
 maximum scaling factor. Scaling factors are computed by decomposing
 the Matrix scaling and skewing elements.
 
@@ -4172,10 +4176,12 @@ scaleFactors to undefined values.
 #Example
     SkMatrix matrix;
     matrix.setAll(1, 0, 0,  0, 1, 0,   0, 0, 0);
-    matrix.invert(&matrix); 
-    SkScalar factor[2] = {2, 2};
-    bool result = matrix.getMinMaxScales(factor);
-    SkDebugf("matrix.getMinMaxScales() %s %g %g\n", result ? "true" : "false", factor[0], factor[1]);
+    if (matrix.invert(&matrix)) {
+        SkScalar factor[2] = {2, 2};
+        bool result = matrix.getMinMaxScales(factor);
+        SkDebugf("matrix.getMinMaxScales() %s %g %g\n",
+                result ? "true" : "false", factor[0], factor[1]);
+    }
 #StdOut
 matrix.getMinMaxScales() false 2 2
 ##
@@ -4193,21 +4199,22 @@ matrix.getMinMaxScales() false 2 2
 Decomposes Matrix into scale components and whatever remains. Returns false if
 Matrix could not be decomposed.
 
-Sets scale to portion of Matrix that scales in x and y. Sets remaining to Matrix
-with x and y scaling factored out. remaining may be passed as nullptr
+Sets scale to portion of Matrix that scale axes. Sets remaining to Matrix
+with scaling factored out. remaining may be passed as nullptr
 to determine if Matrix can be decomposed without computing remainder.
 
 Returns true if scale components are found. scale and remaining are
 unchanged if Matrix contains perspective; scale factors are not finite, or
-are nearly zero. 
+are nearly zero.
 
 On success
 
 #Formula
 Matrix = scale * Remaining
 ##
+.
 
-#Param scale  x and y scaling factors; may be nullptr  ##
+#Param scale  axes scaling factors; may be nullptr  ##
 #Param remaining  Matrix without scaling; may be nullptr ##
 
 #Return  true if scale can be computed ##
@@ -4356,7 +4363,7 @@ canvas->drawBitmap(source, 0, 0);
 #Method void dirtyMatrixTypeCache()
 #In Utility
 #Line # sets internal cache to unknown state ##
-Sets internal cache to unknown state. Use to force update after repeated 
+Sets internal cache to unknown state. Use to force update after repeated
 modifications to Matrix element reference returned by operator[](int index).
 
 #Example

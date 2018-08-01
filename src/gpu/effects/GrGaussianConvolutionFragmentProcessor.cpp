@@ -9,7 +9,6 @@
 
 #include "GrTexture.h"
 #include "GrTextureProxy.h"
-#include "../private/GrGLSL.h"
 #include "glsl/GrGLSLFragmentProcessor.h"
 #include "glsl/GrGLSLFragmentShaderBuilder.h"
 #include "glsl/GrGLSLProgramDataManager.h"
@@ -147,15 +146,22 @@ void GrGLConvolutionEffect::onSetData(const GrGLSLProgramDataManager& pdman,
         }
         if (Direction::kX == conv.direction()) {
             SkScalar inv = SkScalarInvert(SkIntToScalar(texture.width()));
-            pdman.set2f(fBoundsUni, inv * bounds[0], inv * bounds[1]);
+            bounds[0] *= inv;
+            bounds[1] *= inv;
         } else {
             SkScalar inv = SkScalarInvert(SkIntToScalar(texture.height()));
             if (proxy->origin() != kTopLeft_GrSurfaceOrigin) {
-                pdman.set2f(fBoundsUni, 1.0f - (inv * bounds[1]), 1.0f - (inv * bounds[0]));
+                float tmp = bounds[0];
+                bounds[0] = 1.0f - (inv * bounds[1]);
+                bounds[1] = 1.0f - (inv * tmp);
             } else {
-                pdman.set2f(fBoundsUni, inv * bounds[1], inv * bounds[0]);
+                bounds[0] *= inv;
+                bounds[1] *= inv;
             }
         }
+
+        SkASSERT(bounds[0] <= bounds[1]);
+        pdman.set2f(fBoundsUni, bounds[0], bounds[1]);
     }
     int width = conv.width();
 
@@ -177,7 +183,15 @@ void GrGLConvolutionEffect::GenKey(const GrProcessor& processor, const GrShaderC
 
 ///////////////////////////////////////////////////////////////////////////////
 static void fill_in_1D_gaussian_kernel(float* kernel, int width, float gaussianSigma, int radius) {
-    const float denom = 1.0f / (2.0f * gaussianSigma * gaussianSigma);
+    const float twoSigmaSqrd = 2.0f * gaussianSigma * gaussianSigma;
+    if (SkScalarNearlyZero(twoSigmaSqrd, SK_ScalarNearlyZero)) {
+        for (int i = 0; i < width; ++i) {
+            kernel[i] = 0.0f;
+        }
+        return;
+    }
+
+    const float denom = 1.0f / twoSigmaSqrd;
 
     float sum = 0.0f;
     for (int i = 0; i < width; ++i) {
@@ -266,12 +280,12 @@ std::unique_ptr<GrFragmentProcessor> GrGaussianConvolutionFragmentProcessor::Tes
     Direction dir;
     if (d->fRandom->nextBool()) {
         dir = Direction::kX;
-        bounds[0] = d->fRandom->nextRangeU(0, proxy->width()-1);
-        bounds[1] = d->fRandom->nextRangeU(bounds[0], proxy->width()-1);
+        bounds[0] = d->fRandom->nextRangeU(0, proxy->width()-2);
+        bounds[1] = d->fRandom->nextRangeU(bounds[0]+1, proxy->width()-1);
     } else {
         dir = Direction::kY;
-        bounds[0] = d->fRandom->nextRangeU(0, proxy->height()-1);
-        bounds[1] = d->fRandom->nextRangeU(bounds[0], proxy->height()-1);
+        bounds[0] = d->fRandom->nextRangeU(0, proxy->height()-2);
+        bounds[1] = d->fRandom->nextRangeU(bounds[0]+1, proxy->height()-1);
     }
 
     int radius = d->fRandom->nextRangeU(1, kMaxKernelRadius);

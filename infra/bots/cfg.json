@@ -8,9 +8,11 @@
     "ASAN",
     "Coverage",
     "MSAN",
+    "OpenCL",
     "TSAN",
     "UBSAN",
     "Valgrind",
-    "AbandonGpuContext"
+    "AbandonGpuContext",
+    "SKQP"
   ]
 }

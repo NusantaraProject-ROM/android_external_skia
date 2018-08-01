@@ -10,7 +10,7 @@
 #include "SkOSFile.h"
 #include "SkOSPath.h"
 
-bool Catalog::appendFile(const string& path) {
+bool Catalog::appendFile(string path) {
     FILE* file = fopen(path.c_str(), "r");
     if (!file) {
         SkDebugf("could not append %s\n", path.c_str());
@@ -86,7 +86,7 @@ bool Catalog::parseFromFile(const char* path) {
     this->writeString("var text = {");
     this->lf(1);
     fTextOut = true;
-    TextParser::Save save(this);
+    TextParserSave save(this);
     if (!parseFiddles()) {
         return false;
     }
@@ -103,7 +103,7 @@ bool Catalog::parseFromFile(const char* path) {
 
 bool Catalog::pngOut(Definition* example) {
     string result;
-    if (!example->exampleToScript(&result, Definition::ExampleOptions::kPng)) {
+    if (!fBmhParser->exampleToScript(example, BmhParser::ExampleOptions::kPng, &result)) {
         return false;
     }
     if (result.length() > 0) {
@@ -121,7 +121,7 @@ bool Catalog::pngOut(Definition* example) {
 bool Catalog::textOut(Definition* def, const char* stdOutStart,
     const char* stdOutEnd) {
     string result;
-    if (!def->exampleToScript(&result, Definition::ExampleOptions::kText)) {
+    if (!fBmhParser->exampleToScript(def, BmhParser::ExampleOptions::kText, &result)) {
         return false;
     }
     if (result.length() > 0) {

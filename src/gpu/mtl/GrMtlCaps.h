@@ -31,7 +31,8 @@ public:
     int getRenderTargetSampleCount(int requestedCount, GrPixelConfig) const override;
     int maxRenderTargetSampleCount(GrPixelConfig) const override;
 
-    bool surfaceSupportsWritePixels(const GrSurface* surface) const override { return true; }
+    bool surfaceSupportsWritePixels(const GrSurface*) const override { return true; }
+    bool surfaceSupportsReadPixels(const GrSurface*) const override { return true; }
 
     bool isConfigCopyable(GrPixelConfig config) const override {
         return true;
@@ -45,7 +46,12 @@ public:
         return fPreferedStencilFormat;
     }
 #endif
-    bool initDescForDstCopy(const GrRenderTargetProxy* src, GrSurfaceDesc* desc,
+    bool canCopySurface(const GrSurfaceProxy* dst, const GrSurfaceProxy* src,
+                        const SkIRect& srcRect, const SkIPoint& dstPoint) const override {
+        return false;
+    }
+
+    bool initDescForDstCopy(const GrRenderTargetProxy* src, GrSurfaceDesc* desc, GrSurfaceOrigin*,
                             bool* rectsMustMatch, bool* disallowSubrect) const override {
         return false;
     }
@@ -69,6 +75,11 @@ private:
 
     void initGrCaps(const id<MTLDevice> device);
     void initShaderCaps();
+
+#ifdef GR_TEST_UTILS
+    GrBackendFormat onCreateFormatFromBackendTexture(const GrBackendTexture&) const override;
+#endif
+
     void initConfigTable();
 
     struct ConfigInfo {

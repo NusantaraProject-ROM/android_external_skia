@@ -10,6 +10,7 @@
 #include "SkPaint.h"
 
 #include <cmath>
+#include <utility>
 
 namespace {
 
@@ -56,7 +57,7 @@ SkScalar pinFx<SkShader::kClamp_TileMode>(SkScalar fx) {
 
 template<>
 SkScalar pinFx<SkShader::kRepeat_TileMode>(SkScalar fx) {
-    SkScalar f = SkScalarFraction(fx);
+    SkScalar f = SkScalarIsFinite(fx) ? SkScalarFraction(fx) : 0;
     if (f < 0) {
         f = SkTMin(f + 1, nextafterf(1, 0));
     }
@@ -67,7 +68,7 @@ SkScalar pinFx<SkShader::kRepeat_TileMode>(SkScalar fx) {
 
 template<>
 SkScalar pinFx<SkShader::kMirror_TileMode>(SkScalar fx) {
-    SkScalar f = SkScalarMod(fx, 2.0f);
+    SkScalar f = SkScalarIsFinite(fx) ? SkScalarMod(fx, 2.0f) : 0;
     if (f < 0) {
         f = SkTMin(f + 2, nextafterf(2, 0));
     }
@@ -162,7 +163,8 @@ LinearGradient4fContext::shadeSpan(int x, int y, SkPMColor dst[], int count) {
         bias1 = dither_cell[rowIndex + 1];
 
         if (x & 1) {
-            SkTSwap(bias0, bias1);
+            using std::swap;
+            swap(bias0, bias1);
         }
     }
 
@@ -262,7 +264,8 @@ LinearGradient4fContext::shadeSpanInternal(int x, int y, dstType dst[], int coun
         dst   += n;
 
         if (n & 1) {
-            SkTSwap(bias4f0, bias4f1);
+            using std::swap;
+            swap(bias4f0, bias4f1);
         }
     }
 }

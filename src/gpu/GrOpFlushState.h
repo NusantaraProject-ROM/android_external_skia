@@ -12,6 +12,7 @@
 #include "GrAppliedClip.h"
 #include "GrBufferAllocPool.h"
 #include "GrDeferredUpload.h"
+#include "GrUninstantiateProxyTracker.h"
 #include "SkArenaAlloc.h"
 #include "SkArenaAllocList.h"
 #include "ops/GrMeshDrawOp.h"
@@ -73,7 +74,8 @@ public:
 
     /** Overrides of GrMeshDrawOp::Target. */
 
-    void draw(const GrGeometryProcessor*, const GrPipeline*, const GrMesh&) final;
+    void draw(const GrGeometryProcessor*, const GrPipeline*, const GrPipeline::FixedDynamicState*,
+              const GrMesh&) final;
     void* makeVertexSpace(size_t vertexSize, int vertexCount, const GrBuffer**,
                           int* startVertex) final;
     uint16_t* makeIndexSpace(int indexCount, const GrBuffer**, int* startIndex) final;
@@ -94,7 +96,11 @@ public:
 
     // At this point we know we're flushing so full access to the GrAtlasManager is required (and
     // permissible).
-    GrAtlasManager* fullAtlasManager() const final;
+    GrAtlasManager* atlasManager() const final;
+
+    GrUninstantiateProxyTracker* uninstantiateProxyTracker() {
+        return &fUninstantiateProxyTracker;
+    }
 
 private:
     /** GrMeshDrawOp::Target override. */
@@ -115,6 +121,8 @@ private:
         int fMeshCnt = 0;
         GrPendingProgramElement<const GrGeometryProcessor> fGeometryProcessor;
         const GrPipeline* fPipeline;
+        const GrPipeline::FixedDynamicState* fFixedDynamicState;
+        const GrPipeline::DynamicStateArrays* fDynamicStateArrays;
         uint32_t fOpID;
     };
 
@@ -150,6 +158,9 @@ private:
     SkArenaAllocList<Draw>::Iter fCurrDraw;
     int fCurrMesh;
     SkArenaAllocList<InlineUpload>::Iter fCurrUpload;
+
+    // Used to track the proxies that need to be uninstantiated after we finish a flush
+    GrUninstantiateProxyTracker fUninstantiateProxyTracker;
 };
 
 #endif

@@ -33,6 +33,18 @@ link Skia against the headers and libaries found on the system paths.
 use `extra_cflags` and `extra_ldflags` to add include or library paths if
 needed.
 
+A note on software backend performance
+--------------------------------------
+
+A number of routines in Skia's software backend have been written to run
+fastest when compiled by Clang.  If you depend on software rasterization, image
+decoding, or color space conversion and compile Skia with GCC, MSVC or another
+compiler, you will see dramatically worse performance than if you use Clang.
+
+This choice was only a matter of prioritization; there is nothing fundamentally
+wrong with non-Clang compilers.  So if this is a serious issue for you, please
+let us know on the mailing list.
+
 Quickstart
 ----------
 
@@ -245,11 +257,13 @@ The bots use a packaged 2017 toolchain, which Googlers can download like this:
 
 You can then pass the VC and SDK paths to GN by setting your GN args:
 
-    win_vc = "C:\toolchain\depot_tools\win_toolchain\vs_files\a9e1098bba66d2acccc377d5ee81265910f29272\VC"
-    win_sdk = "C:\toolchain\depot_tools\win_toolchain\vs_files\a9e1098bba66d2acccc377d5ee81265910f29272\win_sdk"
+    win_vc = "C:\toolchain\depot_tools\win_toolchain\vs_files\5454e45bf3764c03d3fc1024b3bf5bc41e3ab62c\VC"
+    win_sdk = "C:\toolchain\depot_tools\win_toolchain\vs_files\5454e45bf3764c03d3fc1024b3bf5bc41e3ab62c\win_sdk"
 
 This toolchain is the only way we support 32-bit builds, by also setting `target_cpu="x86"`.
 There is also a corresponding 2015 toolchain, downloaded via `infra/bots/assets/win_toolchain_2015`.
+
+The Skia build assumes that the PATHEXT environment variable contains ".EXE".
 
 ### Visual Studio Solutions
 

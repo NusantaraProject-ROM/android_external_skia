@@ -31,6 +31,7 @@ cc_library_shared {
     name: "libskqp_app",
     sdk_version: "26",
     stl: "libc++_static",
+    compile_multilib: "both",
     tags: ["tests", "optional"],
 
     cflags: [
@@ -112,7 +113,7 @@ cc_library_shared {
     ],
     static_libs: [
           "libjpeg_static_ndk",
-          "libjsoncpp",
+          "libjsoncpp_ndk",
           "libpng_ndk",
           "libwebp-decode",
           "libwebp-encode",
@@ -136,12 +137,12 @@ gn_args = {
   # enable/disable skia subsystems
   'skia_enable_fontmgr_empty': 'true',
   'skia_enable_pdf':           'false',
+  'skia_enable_skottie':       'false',
   'skia_use_expat':            'false',
   'skia_use_dng_sdk':          'false',
   'skia_use_icu':              'false',
   'skia_use_lua':              'false',
   'skia_use_piex':             'false',
-  'skia_use_skcms':            'false',
 
   # specify that the Android.bp will supply the necessary components
   'skia_use_system_expat':         'true', # removed this when gn is fixed

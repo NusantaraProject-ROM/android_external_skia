@@ -5,8 +5,9 @@
  * found in the LICENSE file.
  */
 
-
 #include "SkUtils.h"
+
+#include "SkTo.h"
 
 /*  0xxxxxxx    1 total
     10xxxxxx    // never a leading byte
@@ -288,22 +289,52 @@ int SkUTF16_CountUnichars(const void* text, size_t byteLength) {
     return count;
 }
 
-SkUnichar SkUTF16_NextUnichar(const uint16_t** srcPtr) {
-    SkASSERT(srcPtr && *srcPtr);
-
+SkUnichar SkUTF16_NextUnichar(const uint16_t** srcPtr, const uint16_t* endPtr) {
+    if (!srcPtr || !endPtr) {
+        return -1;
+    }
     const uint16_t* src = *srcPtr;
-    SkUnichar       c = *src++;
+    if (src >= endPtr) {
+        return -1;
+    }
+    uint16_t c = *src++;
+    SkUnichar result = c;
 
-    SkASSERT(!SkUTF16_IsLowSurrogate(c));
+    if (SkUTF16_IsLowSurrogate(c)) {
+        return -1; // srcPtr should never point at low surrogate.
+    }
     if (SkUTF16_IsHighSurrogate(c)) {
-        unsigned c2 = *src++;
-        SkASSERT(SkUTF16_IsLowSurrogate(c2));
+        if (src == endPtr) {
+            return -1;  // Truncated string.
+        }
+        uint16_t low = *src++;
+        if (!SkUTF16_IsLowSurrogate(low)) {
+            return -1;
+        }
+        /*
+        [paraphrased from wikipedia]
+        Take the high surrogate and subtract 0xD800, then multiply by 0x400.
+        Take the low surrogate and subtract 0xDC00.  Add these two results
+        together, and finally add 0x10000 to get the final decoded codepoint.
 
-        // c = ((c & 0x3FF) << 10) + (c2 & 0x3FF) + 0x10000
-        // c = (((c & 0x3FF) + 64) << 10) + (c2 & 0x3FF)
-        c = (c << 10) + c2 + (0x10000 - (0xD800 << 10) - 0xDC00);
+        unicode = (high - 0xD800) * 0x400 + low - 0xDC00 + 0x10000
+        unicode = (high * 0x400) - (0xD800 * 0x400) + low - 0xDC00 + 0x10000
+        unicode = (high << 10) - (0xD800 << 10) + low - 0xDC00 + 0x10000
+        unicode = (high << 10) + low - ((0xD800 << 10) + 0xDC00 - 0x10000)
+        */
+        result = (result << 10) + (SkUnichar)low - ((0xD800 << 10) + 0xDC00 - 0x10000);
     }
     *srcPtr = src;
+    return result;
+}
+
+SkUnichar SkUTF16_NextUnichar(const uint16_t** srcPtr) {
+    SkUnichar c = SkUTF16_NextUnichar(srcPtr, *srcPtr + 2);
+    if (c == -1) {
+        SkASSERT(false);
+        ++(*srcPtr);
+        return 0xFFFD;  // REPLACEMENT CHARACTER.
+    }
     return c;
 }
 
@@ -372,12 +403,6 @@ size_t SkUTF16_ToUTF8(const uint16_t utf16[], int numberOf16BitValues,
     return size;
 }
 
-const char SkHexadecimalDigits::gUpper[16] =
-           { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
-const char SkHexadecimalDigits::gLower[16] =
-           { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
-
-
 // returns -1 on error
 int SkUTF32_CountUnichars(const void* text, size_t byteLength) {
     if (byteLength == 0) {
@@ -398,3 +423,25 @@ int SkUTF32_CountUnichars(const void* text, size_t byteLength) {
     return SkToInt(byteLength >> 2);
 }
 
+// returns -1 on error
+int SkUTFN_CountUnichars(
+    SkTypeface::Encoding encoding, const void* utfN, size_t byteLength) {
+    SkASSERT(utfN != nullptr);
+    switch (encoding) {
+        case SkTypeface::kUTF8_Encoding:
+            return SkUTF8_CountUnichars(utfN, byteLength);
+        case SkTypeface::kUTF16_Encoding:
+            return SkUTF16_CountUnichars(utfN, byteLength);
+        case SkTypeface::kUTF32_Encoding:
+            return SkUTF32_CountUnichars(utfN, byteLength);
+        default:
+            SkDEBUGFAIL("unknown text encoding");
+    }
+
+    return -1;
+}
+
+const char SkHexadecimalDigits::gUpper[16] =
+    { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+const char SkHexadecimalDigits::gLower[16] =
+    { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };

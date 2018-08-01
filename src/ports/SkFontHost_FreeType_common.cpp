@@ -13,6 +13,9 @@
 #include "SkFDot6.h"
 #include "SkFontHost_FreeType_common.h"
 #include "SkPath.h"
+#include "SkTo.h"
+
+#include <utility>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -160,7 +163,8 @@ void copyFT2LCD16(const FT_Bitmap& bitmap, const SkMask& mask, int lcdIsBGR,
                 const uint8_t* srcG = srcR + bitmap.pitch;
                 const uint8_t* srcB = srcG + bitmap.pitch;
                 if (lcdIsBGR) {
-                    SkTSwap(srcR, srcB);
+                    using std::swap;
+                    swap(srcR, srcB);
                 }
                 for (int x = 0; x < width; x++) {
                     dst[x] = packTriple(sk_apply_lut_if<APPLY_PREBLEND>(*srcR++, tableR),
@@ -637,16 +641,14 @@ int line_proc(const FT_Vector* pt, void* ctx) {
     return 0;
 }
 
-int quad_proc(const FT_Vector* pt0, const FT_Vector* pt1,
-                     void* ctx) {
+int quad_proc(const FT_Vector* pt0, const FT_Vector* pt1, void* ctx) {
     SkPath* path = (SkPath*)ctx;
     path->quadTo(SkFDot6ToScalar(pt0->x), -SkFDot6ToScalar(pt0->y),
                  SkFDot6ToScalar(pt1->x), -SkFDot6ToScalar(pt1->y));
     return 0;
 }
 
-int cubic_proc(const FT_Vector* pt0, const FT_Vector* pt1,
-                      const FT_Vector* pt2, void* ctx) {
+int cubic_proc(const FT_Vector* pt0, const FT_Vector* pt1, const FT_Vector* pt2, void* ctx) {
     SkPath* path = (SkPath*)ctx;
     path->cubicTo(SkFDot6ToScalar(pt0->x), -SkFDot6ToScalar(pt0->y),
                   SkFDot6ToScalar(pt1->x), -SkFDot6ToScalar(pt1->y),
@@ -656,7 +658,7 @@ int cubic_proc(const FT_Vector* pt0, const FT_Vector* pt1,
 
 }  // namespace
 
-void SkScalerContext_FreeType_Base::generateGlyphPath(FT_Face face, SkPath* path) {
+bool SkScalerContext_FreeType_Base::generateGlyphPath(FT_Face face, SkPath* path) {
     FT_Outline_Funcs    funcs;
 
     funcs.move_to   = move_proc;
@@ -670,8 +672,9 @@ void SkScalerContext_FreeType_Base::generateGlyphPath(FT_Face face, SkPath* path
 
     if (err != 0) {
         path->reset();
-        return;
+        return false;
     }
 
     path->close();
+    return true;
 }

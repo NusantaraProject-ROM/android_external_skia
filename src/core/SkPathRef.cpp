@@ -5,13 +5,15 @@
  * found in the LICENSE file.
  */
 
+#include "SkPathRef.h"
+
 #include "SkBuffer.h"
 #include "SkNx.h"
 #include "SkOnce.h"
 #include "SkPath.h"
-#include "SkPathRef.h"
 #include "SkPathPriv.h"
 #include "SkSafeMath.h"
+#include "SkTo.h"
 
 // Conic weights must be 0 < weight <= finite
 static bool validate_conic_weights(const SkScalar weights[], int count) {
@@ -563,8 +565,12 @@ SkPoint* SkPathRef::growForRepeatedVerb(int /*SkPath::Verb*/ verb,
         }
     }
 
-    fVerbCnt += numVbs;
-    fPointCnt += pCnt;
+    SkSafeMath safe;
+    fVerbCnt = safe.addInt(fVerbCnt, numVbs);
+    fPointCnt = safe.addInt(fPointCnt, pCnt);
+    if (!safe) {
+        SK_ABORT("cannot grow path");
+    }
     fFreeSpace -= space;
     fBoundsIsDirty = true;  // this also invalidates fIsFinite
     if (dirtyAfterEdit) {
@@ -665,12 +671,11 @@ uint32_t SkPathRef::genID() const {
     return fGenerationID;
 }
 
-void SkPathRef::addGenIDChangeListener(GenIDChangeListener* listener) {
+void SkPathRef::addGenIDChangeListener(sk_sp<GenIDChangeListener> listener) {
     if (nullptr == listener || this == gEmpty) {
-        delete listener;
         return;
     }
-    *fGenIDChangeListeners.append() = listener;
+    *fGenIDChangeListeners.append() = listener.release();
 }
 
 // we need to be called *before* the genID gets changed or zerod
@@ -680,7 +685,7 @@ void SkPathRef::callGenIDChangeListeners() {
     }
 
     // Listeners get at most one shot, so whether these triggered or not, blow them away.
-    fGenIDChangeListeners.deleteAll();
+    fGenIDChangeListeners.unrefAll();
 }
 
 SkRRect SkPathRef::getRRect() const {

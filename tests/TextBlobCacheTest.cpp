@@ -23,8 +23,8 @@
 
 #include "Test.h"
 
-#if SK_SUPPORT_GPU
 #include "GrContext.h"
+#include "GrContextPriv.h"
 #include "GrTest.h"
 
 static void draw(SkCanvas* canvas, int redraw, const SkTArray<sk_sp<SkTextBlob>>& blobs) {
@@ -54,7 +54,7 @@ static void text_blob_cache_inner(skiatest::Reporter* reporter, GrContext* conte
     // configure our context for maximum stressing of cache and atlas
     if (stressTest) {
         GrTest::SetupAlwaysEvictAtlas(context);
-        context->setTextBlobCacheLimit_ForTesting(0);
+        context->contextPriv().setTextBlobCacheLimit_ForTesting(0);
     }
 
     SkImageInfo info = SkImageInfo::Make(kWidth, kHeight, kN32_SkColorType, kPremul_SkAlphaType);
@@ -162,4 +162,3 @@ DEF_GPUTEST_FOR_NULLGL_CONTEXT(TextBlobAbnormal, reporter, ctxInfo) {
 DEF_GPUTEST_FOR_NULLGL_CONTEXT(TextBlobStressAbnormal, reporter, ctxInfo) {
     text_blob_cache_inner(reporter, ctxInfo.grContext(), 256, 256, 10, false, true);
 }
-#endif

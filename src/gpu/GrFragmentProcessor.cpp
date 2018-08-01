@@ -20,7 +20,7 @@
 
 bool GrFragmentProcessor::isEqual(const GrFragmentProcessor& that) const {
     if (this->classID() != that.classID() ||
-        !this->hasSameSamplersAndAccesses(that)) {
+        !this->hasSameSamplers(that)) {
         return false;
     }
     if (!this->hasSameTransforms(that)) {
@@ -476,6 +476,15 @@ std::unique_ptr<GrFragmentProcessor> GrFragmentProcessor::RunInSeries(
 GrFragmentProcessor::Iter::Iter(const GrPipeline& pipeline) {
     for (int i = pipeline.numFragmentProcessors() - 1; i >= 0; --i) {
         fFPStack.push_back(&pipeline.getFragmentProcessor(i));
+    }
+}
+
+GrFragmentProcessor::Iter::Iter(const GrPaint& paint) {
+    for (int i = paint.numCoverageFragmentProcessors() - 1; i >= 0; --i) {
+        fFPStack.push_back(paint.getCoverageFragmentProcessor(i));
+    }
+    for (int i = paint.numColorFragmentProcessors() - 1; i >= 0; --i) {
+        fFPStack.push_back(paint.getColorFragmentProcessor(i));
     }
 }
 

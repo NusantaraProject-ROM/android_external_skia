@@ -31,6 +31,15 @@ public:
     // been instantiated or not.
     GrMipMapped proxyMipMapped() const { return fTextureProxy->fMipMapped; }
 
+    bool isGLTextureRectangleOrExternal() const {
+        return fTextureProxy->isGLTextureRectangleOrExternal();
+    }
+    // We assume that if a texture is not a GL_TEXTURE_RECTANGLE or GL_TEXTURE_EXTERNAL then it is a
+    // GL_TEXTURE_2D
+    bool isGLTexture2D() const { return !fTextureProxy->isGLTextureRectangleOrExternal(); }
+    // We only support the clamp wrap mode with gl rectangle or external textures.
+    bool isClampOnly() const { return fTextureProxy->isGLTextureRectangleOrExternal(); }
+
 private:
     explicit GrTextureProxyPriv(GrTextureProxy* textureProxy) : fTextureProxy(textureProxy) {}
     GrTextureProxyPriv(const GrTextureProxyPriv&) {} // unimpl

@@ -5,15 +5,22 @@
  * found in the LICENSE file.
  */
 
-#include "Test.h"
+#include "SkTypes.h"
 
-#if SK_SUPPORT_GPU
-
+#include "GrContext.h"
+#include "GrContextFactory.h"
 #include "GrContextPriv.h"
 #include "GrProxyProvider.h"
-#include "GrSurfaceProxy.h"
+#include "GrSamplerState.h"
 #include "GrTextureProducer.h"
 #include "GrTextureProxy.h"
+#include "GrTypes.h"
+#include "GrTypesPriv.h"
+#include "SkRect.h"
+#include "SkRefCnt.h"
+#include "Test.h"
+
+#include <initializer_list>
 
 // For DetermineDomainMode (in the MDB world) we have 3 rects:
 //      1) the final instantiated backing storage (i.e., the actual GrTexture's extent)
@@ -119,7 +126,6 @@ static sk_sp<GrTextureProxy> create_proxy(GrProxyProvider* proxyProvider,
     SkBackingFit fit = isExact ? SkBackingFit::kExact : SkBackingFit::kApprox;
 
     GrSurfaceDesc desc;
-    desc.fOrigin = kTopLeft_GrSurfaceOrigin;
     desc.fWidth = size;
     desc.fHeight = size;
     desc.fConfig = kRGBA_8888_GrPixelConfig;
@@ -134,7 +140,7 @@ static sk_sp<GrTextureProxy> create_proxy(GrProxyProvider* proxyProvider,
               (isPowerOfTwo || isExact) ? RectInfo::kHard : RectInfo::kBad,
               name);
 
-    return proxyProvider->createProxy(desc, fit, SkBudgeted::kYes);
+    return proxyProvider->createProxy(desc, kTopLeft_GrSurfaceOrigin, fit, SkBudgeted::kYes);
 }
 
 static RectInfo::EdgeType compute_inset_edgetype(RectInfo::EdgeType previous,
@@ -382,5 +388,3 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(DetermineDomainModeTest, reporter, ctxInfo) {
 
     proxy_test(reporter, context->contextPriv().proxyProvider());
 }
-
-#endif

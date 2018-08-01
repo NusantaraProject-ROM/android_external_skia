@@ -38,6 +38,14 @@ public:
     bool hasPendingIO() const { return fSurface->hasPendingIO(); }
     bool hasUniqueRef() const { return fSurface->internalHasUniqueRef(); }
 
+    GrInternalSurfaceFlags flags() const { return fSurface->fSurfaceFlags; }
+
+    bool isGLTextureRectangleOrExternal() const {
+        return fSurface->isGLTextureRectangleOrExternal();
+    }
+    // We only support the clamp wrap mode with gl rectangle or external textures.
+    bool isClampOnly() const { return fSurface->isGLTextureRectangleOrExternal(); }
+
 private:
     explicit GrSurfacePriv(GrSurface* surface) : fSurface(surface) {}
     GrSurfacePriv(const GrSurfacePriv&); // unimpl

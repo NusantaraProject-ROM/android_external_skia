@@ -9,8 +9,6 @@
 
 #include "gm.h"
 
-#if SK_SUPPORT_GPU
-
 #include "GrContext.h"
 #include "GrContextPriv.h"
 #include "GrGpu.h"
@@ -18,6 +16,7 @@
 #include "SkBitmap.h"
 #include "SkGradientShader.h"
 #include "SkImage.h"
+#include "SkTo.h"
 
 namespace skiagm {
 class ImageFromYUVTextures : public GM {
@@ -95,6 +94,10 @@ protected:
     }
 
     void createYUVTextures(GrContext* context, GrBackendTexture yuvTextures[3]) {
+        if (context->abandoned()) {
+            return;
+        }
+
         GrGpu* gpu = context->contextPriv().getGpu();
         if (!gpu) {
             return;
@@ -112,15 +115,20 @@ protected:
     }
 
     void deleteYUVTextures(GrContext* context, GrBackendTexture yuvTextures[3]) {
+        if (context->abandoned()) {
+            return;
+        }
 
         GrGpu* gpu = context->contextPriv().getGpu();
         if (!gpu) {
             return;
         }
 
+        context->flush();
+        gpu->testingOnly_flushGpuAndSync();
         for (int i = 0; i < 3; ++i) {
             if (yuvTextures[i].isValid()) {
-                gpu->deleteTestingOnlyBackendTexture(&yuvTextures[i]);
+                gpu->deleteTestingOnlyBackendTexture(yuvTextures[i]);
             }
         }
 
@@ -137,11 +145,6 @@ protected:
 
         constexpr SkScalar kPad = 10.f;
 
-        SkISize sizes[] = {
-            { fYUVBmps[0].width(), fYUVBmps[0].height()},
-            { fYUVBmps[1].width(), fYUVBmps[1].height()},
-            { fYUVBmps[2].width(), fYUVBmps[2].height()},
-        };
         SkTArray<sk_sp<SkImage>> images;
         images.push_back(fRGBImage);
         for (int space = kJPEG_SkYUVColorSpace; space <= kLastEnum_SkYUVColorSpace; ++space) {
@@ -149,7 +152,7 @@ protected:
             this->createYUVTextures(context, yuvTextures);
             images.push_back(SkImage::MakeFromYUVTexturesCopy(context,
                                                               static_cast<SkYUVColorSpace>(space),
-                                                              yuvTextures, sizes,
+                                                              yuvTextures,
                                                               kTopLeft_GrSurfaceOrigin));
             this->deleteYUVTextures(context, yuvTextures);
         }
@@ -172,5 +175,3 @@ private:
 
 DEF_GM(return new ImageFromYUVTextures;)
 }
-
-#endif

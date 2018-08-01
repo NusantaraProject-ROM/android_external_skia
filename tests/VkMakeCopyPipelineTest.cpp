@@ -9,7 +9,7 @@
 
 #include "SkTypes.h"
 
-#if SK_SUPPORT_GPU && defined(SK_VULKAN)
+#if defined(SK_VULKAN)
 
 #include "GrContextFactory.h"
 #include "GrContextPriv.h"
@@ -55,11 +55,10 @@ public:
 
             "layout(set = 1, binding = 0) uniform sampler2D uTextureSampler;"
             "layout(location = 1) in half2 vTexCoord;"
-            "layout(location = 0, index = 0) out half4 fsColorOut;"
 
             "// Copy Program FS\n"
             "void main() {"
-            "fsColorOut = texture(uTextureSampler, vTexCoord);"
+            "sk_FragColor = texture(uTextureSampler, vTexCoord);"
             "}";
 
         SkSL::Program::Settings settings;
@@ -116,7 +115,6 @@ public:
 
         GrSurfaceDesc surfDesc;
         surfDesc.fFlags = kRenderTarget_GrSurfaceFlag;
-        surfDesc.fOrigin = kTopLeft_GrSurfaceOrigin;
         surfDesc.fWidth = 16;
         surfDesc.fHeight = 16;
         surfDesc.fConfig = kRGBA_8888_GrPixelConfig;
@@ -179,10 +177,6 @@ public:
 DEF_GPUTEST_FOR_VULKAN_CONTEXT(VkMakeCopyPipelineTest, reporter, ctxInfo) {
     GrContext* context = ctxInfo.grContext();
     GrVkGpu* gpu = static_cast<GrVkGpu*>(context->contextPriv().getGpu());
-
-    if (!gpu->vkCaps().supportsCopiesAsDraws()) {
-        return;
-    }
 
     TestVkCopyProgram copyProgram;
     copyProgram.test(gpu, reporter);

@@ -8,13 +8,15 @@
 #ifndef Fuzz_DEFINED
 #define Fuzz_DEFINED
 
-#include "SkData.h"
 #include "../tools/Registry.h"
+#include "SkData.h"
 #include "SkMalloc.h"
 #include "SkTypes.h"
 
+#include <limits>
 #include <cmath>
 #include <signal.h>
+#include <limits>
 
 class Fuzz : SkNoncopyable {
 public:
@@ -62,6 +64,7 @@ private:
 
     sk_sp<SkData> fBytes;
     size_t fNextByte;
+    friend void fuzz__MakeEncoderCorpus(Fuzz*);
 };
 
 // UBSAN reminds us that bool can only legally hold 0 or 1.

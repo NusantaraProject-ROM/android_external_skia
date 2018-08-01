@@ -5,10 +5,12 @@
  * found in the LICENSE file.
  */
 
+#include "SkPDFMetadata.h"
+
 #include "SkMD5.h"
 #include "SkMilestone.h"
-#include "SkPDFMetadata.h"
 #include "SkPDFTypes.h"
+#include "SkTo.h"
 #include "SkUtils.h"
 
 #include <utility>
@@ -132,7 +134,7 @@ sk_sp<SkPDFObject> SkPDFMetadata::MakeDocumentInformationDict(
     if (metadata.fModified.fEnabled) {
         dict->insertString("ModDate", pdf_date(metadata.fModified.fDateTime));
     }
-    return dict;
+    return std::move(dict);
 }
 
 SkPDFMetadata::UUID SkPDFMetadata::CreateUUID(
@@ -184,7 +186,7 @@ sk_sp<SkPDFObject> SkPDFMetadata::MakePdfId(const UUID& doc,
             SkString(reinterpret_cast<const char*>(&doc), sizeof(UUID)));
     array->appendString(
             SkString(reinterpret_cast<const char*>(&instance), sizeof(UUID)));
-    return array;
+    return std::move(array);
 }
 
 // Convert a block of memory to hexadecimal.  Input and output pointers will be

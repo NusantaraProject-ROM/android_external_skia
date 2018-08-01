@@ -85,7 +85,7 @@ bool SkColorMatrixFilterRowMajor255::asColorMatrix(SkScalar matrix[20]) const {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-//  This code was duplicated from src/effects/SkColorMatrixc.cpp in order to be used in core.
+//  This code was duplicated from src/effects/SkColorMatrix.cpp in order to be used in core.
 //////
 
 // To detect if we need to apply clamping after applying a matrix, we check if
@@ -299,24 +299,13 @@ std::unique_ptr<GrFragmentProcessor> SkColorMatrixFilterRowMajor255::asFragmentP
 
 #endif
 
-#ifndef SK_IGNORE_TO_STRING
-void SkColorMatrixFilterRowMajor255::toString(SkString* str) const {
-    str->append("SkColorMatrixFilterRowMajor255: ");
-
-    str->append("matrix: (");
-    for (int i = 0; i < 20; ++i) {
-        str->appendScalar(fMatrix[i]);
-        if (i < 19) {
-            str->append(", ");
-        }
-    }
-    str->append(")");
-}
-#endif
-
 ///////////////////////////////////////////////////////////////////////////////
 
 sk_sp<SkColorFilter> SkColorFilter::MakeMatrixFilterRowMajor255(const SkScalar array[20]) {
+    if (!SkScalarsAreFinite(array, 20)) {
+        return nullptr;
+    }
+
     return sk_sp<SkColorFilter>(new SkColorMatrixFilterRowMajor255(array));
 }
 
@@ -324,6 +313,10 @@ sk_sp<SkColorFilter> SkColorFilter::MakeMatrixFilterRowMajor255(const SkScalar a
 
 sk_sp<SkColorFilter>
 SkColorMatrixFilterRowMajor255::MakeSingleChannelOutput(const SkScalar row[5]) {
+    if (!SkScalarsAreFinite(row, 5)) {
+        return nullptr;
+    }
+
     SkASSERT(row);
     auto cf = sk_make_sp<SkColorMatrixFilterRowMajor255>();
     static_assert(sizeof(SkScalar) * 5 * 4 == sizeof(cf->fMatrix), "sizes don't match");
@@ -331,5 +324,5 @@ SkColorMatrixFilterRowMajor255::MakeSingleChannelOutput(const SkScalar row[5]) {
         memcpy(cf->fMatrix + 5 * i, row, sizeof(SkScalar) * 5);
     }
     cf->initState();
-    return cf;
+    return std::move(cf);
 }

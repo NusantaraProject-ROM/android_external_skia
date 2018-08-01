@@ -5,17 +5,24 @@
  * found in the LICENSE file.
  */
 
+#include "CodecPriv.h"
+#include "Resources.h"
 #include "SkAndroidCodec.h"
 #include "SkBitmap.h"
 #include "SkCodec.h"
-#include "SkStream.h"
-
-#include "CodecPriv.h"
-#include "Resources.h"
+#include "SkCodecAnimation.h"
+#include "SkData.h"
+#include "SkImageInfo.h"
+#include "SkRefCnt.h"
+#include "SkSize.h"
+#include "SkString.h"
+#include "SkTypes.h"
 #include "Test.h"
 #include "sk_tool_utils.h"
 
-#include <initializer_list>
+#include <cstring>
+#include <memory>
+#include <utility>
 #include <vector>
 
 DEF_TEST(Codec_trunc, r) {
@@ -415,9 +422,27 @@ DEF_TEST(AndroidCodec_animated, r) {
             options.fPriorFrame = i - 1;
             info = info.makeAlphaType(frameInfo.fAlphaType);
 
-            const auto result = codec->codec()->getPixels(info, bm.getPixels(), bm.rowBytes(),
-                                                          &options);
+            auto result = codec->codec()->getPixels(info, bm.getPixels(), bm.rowBytes(),
+                                                    &options);
             REPORTER_ASSERT(r, result == SkCodec::kSuccess);
+
+            // Now compare to not using prior frame.
+            SkBitmap bm2;
+            bm2.allocPixels(info);
+
+            options.fPriorFrame = SkCodec::kNone;
+            result = codec->codec()->getPixels(info, bm2.getPixels(), bm2.rowBytes(),
+                                               &options);
+            REPORTER_ASSERT(r, result == SkCodec::kSuccess);
+
+            for (int y = 0; y < info.height(); ++y) {
+                if (memcmp(bm.getAddr32(0, y), bm2.getAddr32(0, y), info.minRowBytes())) {
+                    ERRORF(r, "pixel mismatch for sample size %i, frame %i resulting in "
+                              "dimensions %i x %i line %i\n",
+                              sampleSize, i, info.width(), info.height(), y);
+                    break;
+                }
+            }
         }
     }
 }

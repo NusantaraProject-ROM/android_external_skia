@@ -95,11 +95,8 @@ void GrAHardwareBufferImageGenerator::deleteImageTexture(void* context) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-#if SK_SUPPORT_GPU
-
 sk_sp<GrTextureProxy> GrAHardwareBufferImageGenerator::onGenerateTexture(
-        GrContext* context, const SkImageInfo& info, const SkIPoint& origin,
-        SkTransferFunctionBehavior, bool willNeedMipMaps) {
+        GrContext* context, const SkImageInfo& info, const SkIPoint& origin, bool willNeedMipMaps) {
     auto proxy = this->makeProxy(context);
     if (!proxy) {
         return nullptr;
@@ -144,7 +141,6 @@ sk_sp<GrTextureProxy> GrAHardwareBufferImageGenerator::onGenerateTexture(
     }
     return texProxy;
 }
-#endif
 
 sk_sp<GrTextureProxy> GrAHardwareBufferImageGenerator::makeProxy(GrContext* context) {
     if (context->abandoned() || kOpenGL_GrBackend != context->contextPriv().getBackend()) {
@@ -216,12 +212,14 @@ sk_sp<GrTextureProxy> GrAHardwareBufferImageGenerator::makeProxy(GrContext* cont
         return nullptr;
     }
 
-    GrBackendTexture backendTex(getInfo().width(), getInfo().height(), pixelConfig, textureInfo);
+    GrBackendTexture backendTex(getInfo().width(), getInfo().height(), GrMipMapped::kNo,
+                                textureInfo);
     if (backendTex.width() <= 0 || backendTex.height() <= 0) {
         glDeleteTextures(1, &texID);
         eglDestroyImageKHR(display, image);
         return nullptr;
     }
+    backendTex.fConfig = pixelConfig;
     sk_sp<GrTexture> tex = context->contextPriv().resourceProvider()->wrapBackendTexture(
                                                         backendTex, kAdopt_GrWrapOwnership);
     if (!tex) {

@@ -19,18 +19,16 @@ GrVkCaps::GrVkCaps(const GrContextOptions& contextOptions, const GrVkInterface* 
     : INHERITED(contextOptions) {
     fCanUseGLSLForShaderModule = false;
     fMustDoCopiesFromOrigin = false;
-    fSupportsCopiesAsDraws = true;
     fMustSubmitCommandsBeforeCopyOp = false;
     fMustSleepOnTearDown  = false;
     fNewCBOnPipelineChange = false;
-    fCanUseWholeSizeOnFlushMappedMemory = true;
+    fShouldAlwaysUseDedicatedImageMemory = false;
 
     /**************************************************************************
     * GrDrawTargetCaps fields
     **************************************************************************/
     fMipMapSupport = true;   // always available in Vulkan
     fSRGBSupport = true;   // always available in Vulkan
-    fSRGBDecodeDisableSupport = true;  // always available in Vulkan
     fNPOTTextureTileSupport = true;  // always available in Vulkan
     fDiscardRenderTargetSupport = true;
     fReuseScratchTextures = true; //TODO: figure this out
@@ -54,7 +52,8 @@ GrVkCaps::GrVkCaps(const GrContextOptions& contextOptions, const GrVkInterface* 
 }
 
 bool GrVkCaps::initDescForDstCopy(const GrRenderTargetProxy* src, GrSurfaceDesc* desc,
-                                  bool* rectsMustMatch, bool* disallowSubrect) const {
+                                  GrSurfaceOrigin* origin, bool* rectsMustMatch,
+                                  bool* disallowSubrect) const {
     // Vk doesn't use rectsMustMatch or disallowSubrect. Always return false.
     *rectsMustMatch = false;
     *disallowSubrect = false;
@@ -62,9 +61,9 @@ bool GrVkCaps::initDescForDstCopy(const GrRenderTargetProxy* src, GrSurfaceDesc*
     // We can always succeed here with either a CopyImage (none msaa src) or ResolveImage (msaa).
     // For CopyImage we can make a simple texture, for ResolveImage we require the dst to be a
     // render target as well.
-    desc->fOrigin = src->origin();
+    *origin = src->origin();
     desc->fConfig = src->config();
-    if (src->numColorSamples() > 1 || (src->asTextureProxy() && this->supportsCopiesAsDraws())) {
+    if (src->numColorSamples() > 1 || src->asTextureProxy()) {
         desc->fFlags = kRenderTarget_GrSurfaceFlag;
     } else {
         // Just going to use CopyImage here
@@ -72,6 +71,128 @@ bool GrVkCaps::initDescForDstCopy(const GrRenderTargetProxy* src, GrSurfaceDesc*
     }
 
     return true;
+}
+
+bool GrVkCaps::canCopyImage(GrPixelConfig dstConfig, int dstSampleCnt, GrSurfaceOrigin dstOrigin,
+                            GrPixelConfig srcConfig, int srcSampleCnt,
+                            GrSurfaceOrigin srcOrigin) const {
+    if ((dstSampleCnt > 1 || srcSampleCnt > 1) && dstSampleCnt != srcSampleCnt) {
+        return false;
+    }
+
+    // We require that all vulkan GrSurfaces have been created with transfer_dst and transfer_src
+    // as image usage flags.
+    if (srcOrigin != dstOrigin || GrBytesPerPixel(srcConfig) != GrBytesPerPixel(dstConfig)) {
+        return false;
+    }
+
+    if (this->shaderCaps()->configOutputSwizzle(srcConfig) !=
+        this->shaderCaps()->configOutputSwizzle(dstConfig)) {
+        return false;
+    }
+
+    return true;
+}
+
+bool GrVkCaps::canCopyAsBlit(GrPixelConfig dstConfig, int dstSampleCnt, bool dstIsLinear,
+                             GrPixelConfig srcConfig, int srcSampleCnt, bool srcIsLinear) const {
+    // We require that all vulkan GrSurfaces have been created with transfer_dst and transfer_src
+    // as image usage flags.
+    if (!this->configCanBeDstofBlit(dstConfig, dstIsLinear) ||
+        !this->configCanBeSrcofBlit(srcConfig, srcIsLinear)) {
+        return false;
+    }
+
+    if (this->shaderCaps()->configOutputSwizzle(srcConfig) !=
+        this->shaderCaps()->configOutputSwizzle(dstConfig)) {
+        return false;
+    }
+
+    // We cannot blit images that are multisampled. Will need to figure out if we can blit the
+    // resolved msaa though.
+    if (dstSampleCnt > 1 || srcSampleCnt > 1) {
+        return false;
+    }
+
+    return true;
+}
+
+bool GrVkCaps::canCopyAsResolve(GrPixelConfig dstConfig, int dstSampleCnt,
+                                GrSurfaceOrigin dstOrigin, GrPixelConfig srcConfig,
+                                int srcSampleCnt, GrSurfaceOrigin srcOrigin) const {
+    // The src surface must be multisampled.
+    if (srcSampleCnt <= 1) {
+        return false;
+    }
+
+    // The dst must not be multisampled.
+    if (dstSampleCnt > 1) {
+        return false;
+    }
+
+    // Surfaces must have the same format.
+    if (dstConfig != srcConfig) {
+        return false;
+    }
+
+    // Surfaces must have the same origin.
+    if (srcOrigin != dstOrigin) {
+        return false;
+    }
+
+    return true;
+}
+
+bool GrVkCaps::canCopyAsDraw(GrPixelConfig dstConfig, bool dstIsRenderable,
+                             GrPixelConfig srcConfig, bool srcIsTextureable) const {
+    // TODO: Make copySurfaceAsDraw handle the swizzle
+    if (this->shaderCaps()->configOutputSwizzle(srcConfig) !=
+        this->shaderCaps()->configOutputSwizzle(dstConfig)) {
+        return false;
+    }
+
+    // Make sure the dst is a render target and the src is a texture.
+    if (!dstIsRenderable || !srcIsTextureable) {
+        return false;
+    }
+
+    return true;
+}
+
+bool GrVkCaps::canCopySurface(const GrSurfaceProxy* dst, const GrSurfaceProxy* src,
+                              const SkIRect& srcRect, const SkIPoint& dstPoint) const {
+    GrSurfaceOrigin dstOrigin = dst->origin();
+    GrSurfaceOrigin srcOrigin = src->origin();
+
+    GrPixelConfig dstConfig = dst->config();
+    GrPixelConfig srcConfig = src->config();
+
+    // TODO: Figure out a way to track if we've wrapped a linear texture in a proxy (e.g.
+    // PromiseImage which won't get instantiated right away. Does this need a similar thing like the
+    // tracking of external or rectangle textures in GL? For now we don't create linear textures
+    // internally, and I don't believe anyone is wrapping them.
+    bool srcIsLinear = false;
+    bool dstIsLinear = false;
+
+    int dstSampleCnt = 0;
+    int srcSampleCnt = 0;
+    if (const GrRenderTargetProxy* rtProxy = dst->asRenderTargetProxy()) {
+        dstSampleCnt = rtProxy->numColorSamples();
+    }
+    if (const GrRenderTargetProxy* rtProxy = src->asRenderTargetProxy()) {
+        srcSampleCnt = rtProxy->numColorSamples();
+    }
+    SkASSERT((dstSampleCnt > 0) == SkToBool(dst->asRenderTargetProxy()));
+    SkASSERT((srcSampleCnt > 0) == SkToBool(src->asRenderTargetProxy()));
+
+    return this->canCopyImage(dstConfig, dstSampleCnt, dstOrigin,
+                              srcConfig, srcSampleCnt, srcOrigin) ||
+           this->canCopyAsBlit(dstConfig, dstSampleCnt, dstIsLinear,
+                               srcConfig, srcSampleCnt, srcIsLinear) ||
+           this->canCopyAsResolve(dstConfig, dstSampleCnt, dstOrigin,
+                                  srcConfig, srcSampleCnt, srcOrigin) ||
+           this->canCopyAsDraw(dstConfig, dstSampleCnt > 0,
+                               srcConfig, SkToBool(src->asTextureProxy()));
 }
 
 void GrVkCaps::init(const GrContextOptions& contextOptions, const GrVkInterface* vkInterface,
@@ -102,6 +223,12 @@ void GrVkCaps::init(const GrContextOptions& contextOptions, const GrVkInterface*
         this->applyDriverCorrectnessWorkarounds(properties);
     }
 
+    // On nexus player we disable suballocating VkImage memory since we've seen large slow downs on
+    // bot run times.
+    if (kImagination_VkVendor == properties.vendorID) {
+        fShouldAlwaysUseDedicatedImageMemory = true;
+    }
+
     this->applyOptionsOverrides(contextOptions);
     fShaderCaps->applyOptionsOverrides(contextOptions);
 }
@@ -113,13 +240,6 @@ void GrVkCaps::applyDriverCorrectnessWorkarounds(const VkPhysicalDevicePropertie
 
     if (kNvidia_VkVendor == properties.vendorID) {
         fMustSubmitCommandsBeforeCopyOp = true;
-    }
-
-    if (kQualcomm_VkVendor == properties.vendorID ||
-        kARM_VkVendor == properties.vendorID) {
-        fSupportsCopiesAsDraws = false;
-        // We require copies as draws to support cross context textures.
-        fCrossContextTextureSupport = false;
     }
 
 #if defined(SK_BUILD_FOR_WIN)
@@ -138,6 +258,11 @@ void GrVkCaps::applyDriverCorrectnessWorkarounds(const VkPhysicalDevicePropertie
         fNewCBOnPipelineChange = true;
     }
 
+    // On Mali galaxy s7 we see lots of rendering issues when we suballocate VkImages.
+    if (kARM_VkVendor == properties.vendorID) {
+        fShouldAlwaysUseDedicatedImageMemory = true;
+    }
+
     ////////////////////////////////////////////////////////////////////////////
     // GrCaps workarounds
     ////////////////////////////////////////////////////////////////////////////
@@ -149,10 +274,6 @@ void GrVkCaps::applyDriverCorrectnessWorkarounds(const VkPhysicalDevicePropertie
     // AMD advertises support for MAX_UINT vertex input attributes, but in reality only supports 32.
     if (kAMD_VkVendor == properties.vendorID) {
         fMaxVertexAttributes = SkTMin(fMaxVertexAttributes, 32);
-    }
-
-    if (kIntel_VkVendor == properties.vendorID) {
-        fCanUseWholeSizeOnFlushMappedMemory = false;
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -202,6 +323,12 @@ void GrVkCaps::initGrCaps(const VkPhysicalDeviceProperties& properties,
     // give the minimum max size across all configs. So for simplicity we will use that for now.
     fMaxRenderTargetSize = SkTMin(properties.limits.maxImageDimension2D, (uint32_t)INT_MAX);
     fMaxTextureSize = SkTMin(properties.limits.maxImageDimension2D, (uint32_t)INT_MAX);
+    if (fDriverBugWorkarounds.max_texture_size_limit_4096) {
+        fMaxTextureSize = SkTMin(fMaxTextureSize, 4096);
+    }
+    // Our render targets are always created with textures as the color
+    // attachment, hence this min:
+    fMaxRenderTargetSize = SkTMin(fMaxTextureSize, fMaxRenderTargetSize);
 
     // TODO: check if RT's larger than 4k incur a performance cost on ARM.
     fMaxPreferredRenderTargetSize = fMaxRenderTargetSize;
@@ -265,13 +392,15 @@ void GrVkCaps::initShaderCaps(const VkPhysicalDeviceProperties& properties, uint
     shaderCaps->fDualSourceBlendingSupport = SkToBool(featureFlags & kDualSrcBlend_GrVkFeatureFlag);
 
     shaderCaps->fIntegerSupport = true;
-    shaderCaps->fTexelBufferSupport = true;
-    shaderCaps->fTexelFetchSupport = true;
     shaderCaps->fVertexIDSupport = true;
+    shaderCaps->fFPManipulationSupport = true;
 
     // Assume the minimum precisions mandated by the SPIR-V spec.
     shaderCaps->fFloatIs32Bits = true;
     shaderCaps->fHalfIs32Bits = false;
+
+    // SPIR-V supports unsigned integers.
+    shaderCaps->fUnsignedSupport = true;
 
     shaderCaps->fMaxVertexSamplers =
     shaderCaps->fMaxGeometrySamplers =
@@ -355,15 +484,13 @@ void GrVkCaps::ConfigInfo::initSampleCounts(const GrVkInterface* interface,
                               VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                               VK_IMAGE_USAGE_SAMPLED_BIT |
                               VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    VkImageCreateFlags createFlags = GrVkFormatIsSRGB(format, nullptr)
-        ? VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT : 0;
     VkImageFormatProperties properties;
     GR_VK_CALL(interface, GetPhysicalDeviceImageFormatProperties(physDev,
                                                                  format,
                                                                  VK_IMAGE_TYPE_2D,
                                                                  VK_IMAGE_TILING_OPTIMAL,
                                                                  usage,
-                                                                 createFlags,
+                                                                 0,  // createFlags
                                                                  &properties));
     VkSampleCountFlags flags = properties.sampleCounts;
     if (flags & VK_SAMPLE_COUNT_1_BIT) {
@@ -473,6 +600,7 @@ bool validate_image_info(VkFormat format, SkColorType ct, GrPixelConfig* config)
             }
             break;
         case kRGB_888x_SkColorType:
+            // TODO: VK_FORMAT_R8G8B8_UNORM
             return false;
         case kBGRA_8888_SkColorType:
             if (VK_FORMAT_B8G8R8A8_UNORM == format) {
@@ -498,6 +626,11 @@ bool validate_image_info(VkFormat format, SkColorType ct, GrPixelConfig* config)
                 *config = kRGBA_half_GrPixelConfig;
             }
             break;
+        case kRGBA_F32_SkColorType:
+            if (VK_FORMAT_R32G32B32A32_SFLOAT == format) {
+                *config = kRGBA_float_GrPixelConfig;
+            }
+            break;
     }
 
     return kUnknown_GrPixelConfig != *config;
@@ -505,22 +638,22 @@ bool validate_image_info(VkFormat format, SkColorType ct, GrPixelConfig* config)
 
 bool GrVkCaps::validateBackendTexture(const GrBackendTexture& tex, SkColorType ct,
                                       GrPixelConfig* config) const {
-    const GrVkImageInfo* imageInfo = tex.getVkImageInfo();
-    if (!imageInfo) {
+    GrVkImageInfo imageInfo;
+    if (!tex.getVkImageInfo(&imageInfo)) {
         return false;
     }
 
-    return validate_image_info(imageInfo->fFormat, ct, config);
+    return validate_image_info(imageInfo.fFormat, ct, config);
 }
 
 bool GrVkCaps::validateBackendRenderTarget(const GrBackendRenderTarget& rt, SkColorType ct,
                                            GrPixelConfig* config) const {
-    const GrVkImageInfo* imageInfo = rt.getVkImageInfo();
-    if (!imageInfo) {
+    GrVkImageInfo imageInfo;
+    if (!rt.getVkImageInfo(&imageInfo)) {
         return false;
     }
 
-    return validate_image_info(imageInfo->fFormat, ct, config);
+    return validate_image_info(imageInfo.fFormat, ct, config);
 }
 
 bool GrVkCaps::getConfigFromBackendFormat(const GrBackendFormat& format, SkColorType ct,
@@ -531,4 +664,13 @@ bool GrVkCaps::getConfigFromBackendFormat(const GrBackendFormat& format, SkColor
     }
     return validate_image_info(*vkFormat, ct, config);
 }
+
+#ifdef GR_TEST_UTILS
+GrBackendFormat GrVkCaps::onCreateFormatFromBackendTexture(
+        const GrBackendTexture& backendTex) const {
+    GrVkImageInfo vkInfo;
+    SkAssertResult(backendTex.getVkImageInfo(&vkInfo));
+    return GrBackendFormat::MakeVk(vkInfo.fFormat);
+}
+#endif
 

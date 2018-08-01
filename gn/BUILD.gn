@@ -96,7 +96,7 @@ config("default") {
       "-fPIC",
       "-Werror",
     ]
-    cflags_cc += [ "-std=c++11" ]
+    cflags_cc += [ "-std=c++14" ]
 
     # The main idea is to slim the exported API, but these flags also improve link time on Mac.
     # These would make stack traces worse on Linux, so we don't just set them willy-nilly.
@@ -112,6 +112,17 @@ config("default") {
       "-mfpu=neon",
       "-mthumb",
     ]
+  } else if (current_cpu == "loongson3a") {
+    asmflags += [ "-march=loongson3a" ]
+    cflags += [
+      "-march=loongson3a",
+
+      # Causes an internal compiler error.
+      "-DSKCMS_PORTABLE",
+    ]
+  } else if (current_cpu == "mips64el") {
+    asmflags += [ "-march=mips64" ]
+    cflags += [ "-march=mips64" ]
   } else if (current_cpu == "x86" && !is_win) {
     asmflags += [ "-m32" ]
     cflags += [
@@ -158,8 +169,10 @@ config("default") {
     libs += [
       "c++_static",
       "c++abi",
-      "android_support",
     ]
+    if (ndk_api < 21) {
+      libs += [ "android_support" ]
+    }
   }
 
   if (is_ios) {
@@ -196,6 +209,9 @@ config("default") {
 
   if (is_linux) {
     libs += [ "pthread" ]
+    if (is_debug && sanitize == "") {
+      defines += [ "_GLIBCXX_DEBUG" ]
+    }
   }
   if (is_mac) {
     # Disable linker warnings.  They're usually just annoyances like,
@@ -210,9 +226,17 @@ config("default") {
     # You can either pass the sanitizers directly, e.g. "address,undefined",
     # or pass one of the couple common aliases used by the bots.
     sanitizers = sanitize
+
+    # fyi_sanitizers only print out stacktraces of their issues
+    fyi_sanitizers = fyi_sanitize
     if (sanitize == "ASAN" || sanitize == "UBSAN") {
       # ASAN implicitly runs all UBSAN checks also.
-      sanitizers = "bool,float-cast-overflow,integer-divide-by-zero,nonnull-attribute,null,return,returns-nonnull-attribute,shift,signed-integer-overflow,unreachable,vla-bound"
+      sanitizers = "bool,float-cast-overflow,integer-divide-by-zero,nonnull-attribute,null,pointer-overflow,return,returns-nonnull-attribute,shift,signed-integer-overflow,unreachable,vla-bound"
+
+      if (fyi_sanitize == "" && !is_android) {
+        fyi_sanitizers = "float-divide-by-zero"
+      }
+
       if (!is_mac && !is_win) {
         sanitizers += ",function"  # Not supported on Mac or Win.
       }
@@ -243,7 +267,7 @@ config("default") {
     }
 
     cflags += [
-      "-fsanitize=$sanitizers",
+      "-fsanitize=$sanitizers,$fyi_sanitizers",
       "-fno-sanitize-recover=$sanitizers",
     ]
     if (!is_win) {
@@ -297,7 +321,10 @@ config("warnings") {
       "-Wno-deprecated-declarations",
       "-Wno-maybe-uninitialized",
     ]
-    cflags_cc += [ "-Wnon-virtual-dtor" ]
+    cflags_cc += [
+      "-Wnon-virtual-dtor",
+      "-Wno-noexcept-type",
+    ]
   }
 
   if (is_clang) {
@@ -361,6 +388,7 @@ config("warnings") {
 
     # We are unlikely to want to fix these.
     cflags += [
+      "-Wno-bad-function-cast",
       "-Wno-covered-switch-default",
       "-Wno-deprecated",
       "-Wno-missing-noreturn",

@@ -7,14 +7,14 @@
 
 #include "Test.h"
 
-#include "SkPath.h"
-
-#if SK_SUPPORT_GPU
 #include "GrClip.h"
 #include "GrContext.h"
 #include "GrContextPriv.h"
 #include "GrResourceCache.h"
+#include "GrShape.h"
 #include "GrSoftwarePathRenderer.h"
+#include "GrStyle.h"
+#include "SkPath.h"
 #include "effects/GrPorterDuffXferProcessor.h"
 #include "ops/GrTessellatingPathRenderer.h"
 
@@ -79,7 +79,7 @@ static void test_path(skiatest::Reporter* reporter,
     ctx->setResourceCacheLimits(100, 8000000);
     GrResourceCache* cache = ctx->contextPriv().getResourceCache();
 
-    sk_sp<GrRenderTargetContext> rtc(ctx->makeDeferredRenderTargetContext(
+    sk_sp<GrRenderTargetContext> rtc(ctx->contextPriv().makeDeferredRenderTargetContext(
             SkBackingFit::kApprox, 800, 800, kRGBA_8888_GrPixelConfig, nullptr, 1, GrMipMapped::kNo,
             kTopLeft_GrSurfaceOrigin));
     if (!rtc) {
@@ -150,5 +150,3 @@ DEF_GPUTEST(SoftwarePathRendererCacheTest, reporter, /* options */) {
     test_path(reporter, create_concave_path, createPR, kExpectedResources, GrAAType::kCoverage,
               style);
 }
-
-#endif

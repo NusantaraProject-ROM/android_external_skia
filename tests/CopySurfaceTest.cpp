@@ -5,31 +5,31 @@
  * found in the LICENSE file.
  */
 
-#include <initializer_list>
-#include "Test.h"
+#include "SkTypes.h"
 
-#if SK_SUPPORT_GPU
 #include "GrContext.h"
+#include "GrContextFactory.h"
 #include "GrContextPriv.h"
-#include "GrProxyProvider.h"
-#include "GrResourceProvider.h"
 #include "GrSurfaceContext.h"
 #include "GrSurfaceProxy.h"
 #include "GrTextureProxy.h"
-
+#include "GrTypes.h"
+#include "ProxyUtils.h"
+#include "SkImageInfo.h"
+#include "SkPoint.h"
+#include "SkRect.h"
+#include "SkRefCnt.h"
+#include "SkTemplates.h"
 #include "SkUtils.h"
+#include "Test.h"
+
+#include <utility>
 
 DEF_GPUTEST_FOR_RENDERING_CONTEXTS(CopySurface, reporter, ctxInfo) {
     GrContext* context = ctxInfo.grContext();
-    GrProxyProvider* proxyProvider = context->contextPriv().proxyProvider();
     static const int kW = 10;
     static const int kH = 10;
     static const size_t kRowBytes = sizeof(uint32_t) * kW;
-
-    GrSurfaceDesc baseDesc;
-    baseDesc.fConfig = kRGBA_8888_GrPixelConfig;
-    baseDesc.fWidth = kW;
-    baseDesc.fHeight = kH;
 
     SkAutoTMalloc<uint32_t> srcPixels(kW * kH);
     for (int i = 0; i < kW * kH; ++i) {
@@ -64,21 +64,16 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(CopySurface, reporter, ctxInfo) {
 
     for (auto sOrigin : {kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin}) {
         for (auto dOrigin : {kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin}) {
-            for (auto sFlags: {kRenderTarget_GrSurfaceFlag, kNone_GrSurfaceFlags}) {
-                for (auto dFlags: {kRenderTarget_GrSurfaceFlag, kNone_GrSurfaceFlags}) {
+            for (auto sRT : {true, false}) {
+                for (auto dRT : {true, false}) {
                     for (auto srcRect : kSrcRects) {
                         for (auto dstPoint : kDstPoints) {
-                            GrSurfaceDesc srcDesc = baseDesc;
-                            srcDesc.fOrigin = sOrigin;
-                            srcDesc.fFlags = sFlags;
-                            GrSurfaceDesc dstDesc = baseDesc;
-                            dstDesc.fOrigin = dOrigin;
-                            dstDesc.fFlags = dFlags;
-
-                            sk_sp<GrTextureProxy> src = proxyProvider->createTextureProxy(
-                                             srcDesc, SkBudgeted::kNo, srcPixels.get(), kRowBytes);
-                            sk_sp<GrTextureProxy> dst = proxyProvider->createTextureProxy(
-                                             dstDesc, SkBudgeted::kNo, dstPixels.get(), kRowBytes);
+                            auto src = sk_gpu_test::MakeTextureProxyFromData(
+                                    context, sRT, kW, kH, ii.colorType(), sOrigin, srcPixels.get(),
+                                    kRowBytes);
+                            auto dst = sk_gpu_test::MakeTextureProxyFromData(
+                                    context, dRT, kW, kH, ii.colorType(), dOrigin, dstPixels.get(),
+                                    kRowBytes);
                             if (!src || !dst) {
                                 ERRORF(reporter,
                                        "Could not create surfaces for copy surface test.");
@@ -166,4 +161,3 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(CopySurface, reporter, ctxInfo) {
         }
     }
 }
-#endif

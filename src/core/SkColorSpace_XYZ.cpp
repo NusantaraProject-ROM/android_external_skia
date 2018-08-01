@@ -7,7 +7,7 @@
 
 #include "SkColorSpace_XYZ.h"
 #include "SkColorSpacePriv.h"
-#include "SkColorSpaceXform_Base.h"
+#include "SkColorSpaceXformPriv.h"
 #include "SkOpts.h"
 
 SkColorSpace_XYZ::SkColorSpace_XYZ(SkGammaNamed gammaNamed, const SkMatrix44& toXYZD50)
@@ -42,7 +42,6 @@ const SkMatrix44* SkColorSpace_XYZ::onFromXYZD50() const {
         if (!fToXYZD50.invert(&fFromXYZD50)) {
             // If a client gives us a dst gamut with a transform that we can't invert, we will
             // simply give them back a transform to sRGB gamut.
-            SkDEBUGFAIL("Non-invertible XYZ matrix, defaulting to sRGB");
             SkMatrix44 srgbToxyzD50(SkMatrix44::kUninitialized_Constructor);
             srgbToxyzD50.set3x3RowMajorf(gSRGB_toXYZD50);
             srgbToxyzD50.invert(&fFromXYZD50);
@@ -100,22 +99,6 @@ sk_sp<SkColorSpace> SkColorSpace_XYZ::makeColorSpin() const {
     SkMatrix44 spin(SkMatrix44::kUninitialized_Constructor);
     spin.set3x3(0, 1, 0, 0, 0, 1, 1, 0, 0);
     spin.postConcat(fToXYZD50);
+    (void)spin.getType();  // Pre-cache spin matrix type to avoid races in future getType() calls.
     return sk_sp<SkColorSpace>(new SkColorSpace_XYZ(fGammaNamed, fGammas, spin, fProfileData));
-}
-
-void SkColorSpace_XYZ::toDstGammaTables(const uint8_t* tables[3], sk_sp<SkData>* storage,
-                                         int numTables) const {
-    fToDstGammaOnce([this, numTables] {
-        const bool gammasAreMatching = numTables <= 1;
-        fDstStorage =
-                SkData::MakeUninitialized(numTables * SkColorSpaceXform_Base::kDstGammaTableSize);
-        SkColorSpaceXform_Base::BuildDstGammaTables(fToDstGammaTables,
-                                                    (uint8_t*) fDstStorage->writable_data(), this,
-                                                    gammasAreMatching);
-    });
-
-    *storage = fDstStorage;
-    tables[0] = fToDstGammaTables[0];
-    tables[1] = fToDstGammaTables[1];
-    tables[2] = fToDstGammaTables[2];
 }

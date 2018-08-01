@@ -15,6 +15,8 @@
 #include "GrOpList.h"
 #include "GrProxyProvider.h"
 #include "GrSWMaskHelper.h"
+#include "GrShape.h"
+#include "GrSurfaceContextPriv.h"
 #include "SkMakeUnique.h"
 #include "SkSemaphore.h"
 #include "SkTaskGroup.h"
@@ -94,9 +96,10 @@ void GrSoftwarePathRenderer::DrawNonAARect(GrRenderTargetContext* renderTargetCo
                                            const SkMatrix& viewMatrix,
                                            const SkRect& rect,
                                            const SkMatrix& localMatrix) {
+    GrContext* context = renderTargetContext->surfPriv().getContext();
     renderTargetContext->addDrawOp(clip,
                                    GrRectOpFactory::MakeNonAAFillWithLocalMatrix(
-                                           std::move(paint), viewMatrix, localMatrix, rect,
+                                           context, std::move(paint), viewMatrix, localMatrix, rect,
                                            GrAAType::kNone, &userStencilSettings));
 }
 
@@ -172,15 +175,14 @@ static sk_sp<GrTextureProxy> make_deferred_mask_texture_proxy(GrContext* context
     GrProxyProvider* proxyProvider = context->contextPriv().proxyProvider();
 
     GrSurfaceDesc desc;
-    desc.fOrigin = kTopLeft_GrSurfaceOrigin;
     desc.fWidth = width;
     desc.fHeight = height;
     desc.fConfig = kAlpha_8_GrPixelConfig;
 
     // MDB TODO: We're going to fill this proxy with an ASAP upload (which is out of order wrt to
     // ops), so it can't have any pending IO.
-    return proxyProvider->createProxy(desc, fit, SkBudgeted::kYes,
-                                      GrResourceProvider::kNoPendingIO_Flag);
+    return proxyProvider->createProxy(desc, kTopLeft_GrSurfaceOrigin, fit, SkBudgeted::kYes,
+                                      GrInternalSurfaceFlags::kNoPendingIO);
 }
 
 namespace {
@@ -214,7 +216,9 @@ private:
 // When the SkPathRef genID changes, invalidate a corresponding GrResource described by key.
 class PathInvalidator : public SkPathRef::GenIDChangeListener {
 public:
-    explicit PathInvalidator(const GrUniqueKey& key) : fMsg(key) {}
+    PathInvalidator(const GrUniqueKey& key, uint32_t contextUniqueID)
+            : fMsg(key, contextUniqueID) {}
+
 private:
     GrUniqueKeyInvalidatedMessage fMsg;
 
@@ -364,7 +368,8 @@ bool GrSoftwarePathRenderer::onDrawPath(const DrawPathArgs& args) {
         if (useCache) {
             SkASSERT(proxy->origin() == kTopLeft_GrSurfaceOrigin);
             fProxyProvider->assignUniqueKeyToProxy(maskKey, proxy.get());
-            args.fShape->addGenIDChangeListener(new PathInvalidator(maskKey));
+            args.fShape->addGenIDChangeListener(
+                    sk_make_sp<PathInvalidator>(maskKey, args.fContext->uniqueID()));
         }
     }
     if (inverseFilled) {

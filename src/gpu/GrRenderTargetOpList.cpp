@@ -10,6 +10,7 @@
 #include "GrCaps.h"
 #include "GrGpu.h"
 #include "GrGpuCommandBuffer.h"
+#include "GrMemoryPool.h"
 #include "GrRect.h"
 #include "GrRenderTargetContext.h"
 #include "GrResourceAllocator.h"
@@ -24,22 +25,37 @@
 static const int kMaxOpLookback = 10;
 static const int kMaxOpLookahead = 10;
 
-GrRenderTargetOpList::GrRenderTargetOpList(GrRenderTargetProxy* proxy,
-                                           GrResourceProvider* resourceProvider,
+GrRenderTargetOpList::GrRenderTargetOpList(GrResourceProvider* resourceProvider,
+                                           sk_sp<GrOpMemoryPool> opMemoryPool,
+                                           GrRenderTargetProxy* proxy,
                                            GrAuditTrail* auditTrail)
-        : INHERITED(resourceProvider, proxy, auditTrail)
+        : INHERITED(resourceProvider, std::move(opMemoryPool), proxy, auditTrail)
         , fLastClipStackGenID(SK_InvalidUniqueID)
         SkDEBUGCODE(, fNumClips(0)) {
 }
 
+void GrRenderTargetOpList::RecordedOp::deleteOp(GrOpMemoryPool* opMemoryPool) {
+    opMemoryPool->release(std::move(fOp));
+}
+
+void GrRenderTargetOpList::deleteOps() {
+    for (int i = 0; i < fRecordedOps.count(); ++i) {
+        if (fRecordedOps[i].fOp) {
+            fRecordedOps[i].deleteOp(fOpMemoryPool.get());
+        }
+    }
+    fRecordedOps.reset();
+}
+
 GrRenderTargetOpList::~GrRenderTargetOpList() {
+    this->deleteOps();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 #ifdef SK_DEBUG
-void GrRenderTargetOpList::dump() const {
-    INHERITED::dump();
+void GrRenderTargetOpList::dump(bool printDependencies) const {
+    INHERITED::dump(printDependencies);
 
     SkDebugf("ops (%d):\n", fRecordedOps.count());
     for (int i = 0; i < fRecordedOps.count(); ++i) {
@@ -133,14 +149,19 @@ static inline void finish_command_buffer(GrGpuRTCommandBuffer* buffer) {
 // is at flush time). However, we need to store the RenderTargetProxy in the
 // Ops and instantiate them here.
 bool GrRenderTargetOpList::onExecute(GrOpFlushState* flushState) {
-    if (0 == fRecordedOps.count() && GrLoadOp::kClear != fColorLoadOp) {
+    // TODO: Forcing the execution of the discard here isn't ideal since it will cause us to do a
+    // discard and then store the data back in memory so that the load op on future draws doesn't
+    // think the memory is unitialized. Ideally we would want a system where we are tracking whether
+    // the proxy itself has valid data or not, and then use that as a signal on whether we should be
+    // loading or discarding. In that world we wouldni;t need to worry about executing oplists with
+    // no ops just to do a discard.
+    if (0 == fRecordedOps.count() && GrLoadOp::kClear != fColorLoadOp &&
+        GrLoadOp::kDiscard != fColorLoadOp) {
         return false;
     }
 
     SkASSERT(fTarget.get()->priv().peekRenderTarget());
-#ifdef SK_BUILD_FOR_ANDROID_FRAMEWORK
     TRACE_EVENT0("skia", TRACE_FUNC);
-#endif
 
     // TODO: at the very least, we want the stencil store op to always be discard (at this
     // level). In Vulkan, sub-command buffers would still need to load & store the stencil buffer.
@@ -182,7 +203,7 @@ bool GrRenderTargetOpList::onExecute(GrOpFlushState* flushState) {
 
 void GrRenderTargetOpList::endFlush() {
     fLastClipStackGenID = SK_InvalidUniqueID;
-    fRecordedOps.reset();
+    this->deleteOps();
     fClipAllocator.reset();
     INHERITED::endFlush();
 }
@@ -196,7 +217,7 @@ void GrRenderTargetOpList::discard() {
     }
 }
 
-void GrRenderTargetOpList::fullClear(const GrCaps& caps, GrColor color) {
+void GrRenderTargetOpList::fullClear(GrContext* context, GrColor color) {
 
     // This is conservative. If the opList is marked as needing a stencil buffer then there
     // may be a prior op that writes to the stencil buffer. Although the clear will ignore the
@@ -204,37 +225,38 @@ void GrRenderTargetOpList::fullClear(const GrCaps& caps, GrColor color) {
     // Beware! If we ever add any ops that have a side effect beyond modifying the stencil
     // buffer we will need a more elaborate tracking system (skbug.com/7002).
     if (this->isEmpty() || !fTarget.get()->asRenderTargetProxy()->needsStencil()) {
-        fRecordedOps.reset();
+        this->deleteOps();
         fDeferredProxies.reset();
         fColorLoadOp = GrLoadOp::kClear;
         fLoadClearColor = color;
         return;
     }
 
-    std::unique_ptr<GrClearOp> op(GrClearOp::Make(GrFixedClip::Disabled(), color, fTarget.get()));
+    std::unique_ptr<GrClearOp> op(GrClearOp::Make(context, GrFixedClip::Disabled(),
+                                                  color, fTarget.get()));
     if (!op) {
         return;
     }
 
-    this->recordOp(std::move(op), caps);
+    this->recordOp(std::move(op), *context->contextPriv().caps());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
 // This closely parallels GrTextureOpList::copySurface but renderTargetOpLists
 // also store the applied clip and dest proxy with the op
-bool GrRenderTargetOpList::copySurface(const GrCaps& caps,
+bool GrRenderTargetOpList::copySurface(GrContext* context,
                                        GrSurfaceProxy* dst,
                                        GrSurfaceProxy* src,
                                        const SkIRect& srcRect,
                                        const SkIPoint& dstPoint) {
     SkASSERT(dst->asRenderTargetProxy() == fTarget.get());
-    std::unique_ptr<GrOp> op = GrCopySurfaceOp::Make(dst, src, srcRect, dstPoint);
+    std::unique_ptr<GrOp> op = GrCopySurfaceOp::Make(context, dst, src, srcRect, dstPoint);
     if (!op) {
         return false;
     }
 
-    this->addOp(std::move(op), caps);
+    this->addOp(std::move(op), *context->contextPriv().caps());
     return true;
 }
 
@@ -247,10 +269,12 @@ void GrRenderTargetOpList::purgeOpsWithUninstantiatedProxies() {
     };
     for (RecordedOp& recordedOp : fRecordedOps) {
         hasUninstantiatedProxy = false;
-        recordedOp.visitProxies(checkInstantiation);
+        if (recordedOp.fOp) {
+            recordedOp.visitProxies(checkInstantiation);
+        }
         if (hasUninstantiatedProxy) {
             // When instantiation of the proxy fails we drop the Op
-            recordedOp.fOp = nullptr;
+            recordedOp.deleteOp(fOpMemoryPool.get());
         }
     }
 }
@@ -317,10 +341,10 @@ bool GrRenderTargetOpList::combineIfPossible(const RecordedOp& a, GrOp* b,
     return a.fOp->combineIfPossible(b, caps);
 }
 
-void GrRenderTargetOpList::recordOp(std::unique_ptr<GrOp> op,
-                                    const GrCaps& caps,
-                                    GrAppliedClip* clip,
-                                    const DstProxy* dstProxy) {
+uint32_t GrRenderTargetOpList::recordOp(std::unique_ptr<GrOp> op,
+                                        const GrCaps& caps,
+                                        GrAppliedClip* clip,
+                                        const DstProxy* dstProxy) {
     SkASSERT(fTarget.get());
 
     // A closed GrOpList should never receive new/more ops
@@ -353,7 +377,8 @@ void GrRenderTargetOpList::recordOp(std::unique_ptr<GrOp> op,
                 GrOP_INFO("\t\t\tBackward: Combined op info:\n");
                 GrOP_INFO(SkTabString(candidate.fOp->dumpInfo(), 4).c_str());
                 GR_AUDIT_TRAIL_OPS_RESULT_COMBINED(fAuditTrail, candidate.fOp.get(), op.get());
-                return;
+                fOpMemoryPool->release(std::move(op));
+                return SK_InvalidUniqueID;
             }
             // Stop going backwards if we would cause a painter's order violation.
             if (!can_reorder(fRecordedOps.fromBack(i).fOp->bounds(), op->bounds())) {
@@ -376,7 +401,7 @@ void GrRenderTargetOpList::recordOp(std::unique_ptr<GrOp> op,
         SkDEBUGCODE(fNumClips++;)
     }
     fRecordedOps.emplace_back(std::move(op), clip, dstProxy);
-    fRecordedOps.back().fOp->wasRecorded(this);
+    return this->uniqueID();
 }
 
 void GrRenderTargetOpList::forwardCombine(const GrCaps& caps) {
@@ -398,6 +423,7 @@ void GrRenderTargetOpList::forwardCombine(const GrCaps& caps) {
                           i, op->name(), op->uniqueID(),
                           candidate.fOp->name(), candidate.fOp->uniqueID());
                 GR_AUDIT_TRAIL_OPS_RESULT_COMBINED(fAuditTrail, op, candidate.fOp.get());
+                fOpMemoryPool->release(std::move(fRecordedOps[j].fOp));
                 fRecordedOps[j].fOp = std::move(fRecordedOps[i].fOp);
                 break;
             }

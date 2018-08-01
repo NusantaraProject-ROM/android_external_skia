@@ -32,7 +32,8 @@ private:
     using DstProxy = GrXferProcessor::DstProxy;
 
 public:
-    GrRenderTargetOpList(GrRenderTargetProxy*, GrResourceProvider*, GrAuditTrail*);
+    GrRenderTargetOpList(GrResourceProvider*, sk_sp<GrOpMemoryPool>,
+                         GrRenderTargetProxy*, GrAuditTrail*);
 
     ~GrRenderTargetOpList() override;
 
@@ -60,6 +61,10 @@ public:
     void onPrepare(GrOpFlushState* flushState) override;
     bool onExecute(GrOpFlushState* flushState) override;
 
+    /**
+     * Returns this opList's id if the Op was recorded, or SK_InvalidUniqueID if it was combined
+     * into an existing Op or otherwise deleted.
+     */
     uint32_t addOp(std::unique_ptr<GrOp> op, const GrCaps& caps) {
         auto addDependency = [ &caps, this ] (GrSurfaceProxy* p) {
             this->addDependency(p, caps);
@@ -67,11 +72,13 @@ public:
 
         op->visitProxies(addDependency);
 
-        this->recordOp(std::move(op), caps);
-
-        return this->uniqueID();
+        return this->recordOp(std::move(op), caps);
     }
 
+    /**
+     * Returns this opList's id if the Op was recorded, or SK_InvalidUniqueID if it was combined
+     * into an existing Op or otherwise deleted.
+     */
     uint32_t addOp(std::unique_ptr<GrOp> op, const GrCaps& caps,
                    GrAppliedClip&& clip, const DstProxy& dstProxy) {
         auto addDependency = [ &caps, this ] (GrSurfaceProxy* p) {
@@ -81,15 +88,13 @@ public:
         op->visitProxies(addDependency);
         clip.visitProxies(addDependency);
 
-        this->recordOp(std::move(op), caps, clip.doesClip() ? &clip : nullptr, &dstProxy);
-
-        return this->uniqueID();
+        return this->recordOp(std::move(op), caps, clip.doesClip() ? &clip : nullptr, &dstProxy);
     }
 
     void discard();
 
     /** Clears the entire render target */
-    void fullClear(const GrCaps& caps, GrColor color);
+    void fullClear(GrContext*, GrColor color);
 
     /**
      * Copies a pixel rectangle from one surface to another. This call may finalize
@@ -101,7 +106,7 @@ public:
      * depending on the type of surface, configs, etc, and the backend-specific
      * limitations.
      */
-    bool copySurface(const GrCaps& caps,
+    bool copySurface(GrContext*,
                      GrSurfaceProxy* dst,
                      GrSurfaceProxy* src,
                      const SkIRect& srcRect,
@@ -109,7 +114,7 @@ public:
 
     GrRenderTargetOpList* asRenderTargetOpList() override { return this; }
 
-    SkDEBUGCODE(void dump() const override;)
+    SkDEBUGCODE(void dump(bool printDependencies) const override;)
 
     SkDEBUGCODE(int numOps() const override { return fRecordedOps.count(); })
     SkDEBUGCODE(int numClips() const override { return fNumClips; })
@@ -118,6 +123,8 @@ public:
 private:
     friend class GrRenderTargetContextPriv; // for stencil clip state. TODO: this is invasive
 
+    void deleteOps();
+
     struct RecordedOp {
         RecordedOp(std::unique_ptr<GrOp> op, GrAppliedClip* appliedClip, const DstProxy* dstProxy)
                 : fOp(std::move(op)), fAppliedClip(appliedClip) {
@@ -125,6 +132,13 @@ private:
                 fDstProxy = *dstProxy;
             }
         }
+
+        ~RecordedOp() {
+            // The ops are stored in a GrMemoryPool so had better have been handled separately
+            SkASSERT(!fOp);
+        }
+
+        void deleteOp(GrOpMemoryPool* opMemoryPool);
 
         void visitProxies(const GrOp::VisitProxyFunc& func) const {
             if (fOp) {
@@ -139,16 +153,18 @@ private:
         }
 
         std::unique_ptr<GrOp> fOp;
-        DstProxy fDstProxy;
-        GrAppliedClip* fAppliedClip;
+        DstProxy              fDstProxy;
+        GrAppliedClip*        fAppliedClip;
     };
 
     void purgeOpsWithUninstantiatedProxies() override;
 
     void gatherProxyIntervals(GrResourceAllocator*) const override;
 
-    void recordOp(std::unique_ptr<GrOp>, const GrCaps& caps,
-                  GrAppliedClip* = nullptr, const DstProxy* = nullptr);
+    // Returns this opList's id if the Op was recorded, or SK_InvalidUniqueID if it was combined
+    // into an existing Op or otherwise deleted.
+    uint32_t recordOp(std::unique_ptr<GrOp>, const GrCaps& caps,
+                      GrAppliedClip* = nullptr, const DstProxy* = nullptr);
 
     void forwardCombine(const GrCaps&);
 

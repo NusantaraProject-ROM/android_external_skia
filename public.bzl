@@ -246,9 +246,9 @@ BASE_SRCS_ALL = struct(
         "src/pdf/SkDocument_PDF_None.cpp",  # We use src/pdf/SkPDFDocument.cpp.
         "src/gpu/gl/GrGLMakeNativeInterface_none.cpp",
 
-        # Exclude files that don't compile with the current DEFINES.
-        "src/svg/**/*",  # Depends on XML.
-        "src/xml/**/*",
+        # Exclude files that don't compile everywhere.
+        "src/svg/**/*",  # Depends on xml, SkJpegCodec, and SkPngCodec.
+        "src/xml/**/*",  # Avoid dragging in expat when not needed.
 
         # Conflicting dependencies among Lua versions. See cl/107087297.
         "src/utils/SkLua*",
@@ -267,6 +267,12 @@ BASE_SRCS_ALL = struct(
 
         # Atlas text
         "src/atlastext/*",
+
+        # Not time for skcms in Google3 yet.
+        "src/core/SkColorSpaceXform_skcms.cpp",
+
+        # Compute backend not yet even hooked into Skia.
+	"src/compute/**/*",
     ],
 )
 
@@ -305,6 +311,7 @@ BASE_SRCS_UNIX = struct(
         "src/ports/SkFontMgr_fontconfig.cpp",
         "src/ports/SkFontMgr_fontconfig_factory.cpp",
         "src/ports/SkGlobalInitialization_none.cpp",
+        "src/ports/SkGlobalInitialization_none_imagefilters.cpp",
         "src/ports/SkImageGenerator_none.cpp",
         "src/ports/SkTLS_none.cpp",
     ],
@@ -334,6 +341,7 @@ BASE_SRCS_ANDROID = struct(
         "src/ports/SkFontMgr_custom_empty_factory.cpp",
         "src/ports/SkFontMgr_empty_factory.cpp",
         "src/ports/SkGlobalInitialization_none.cpp",
+        "src/ports/SkGlobalInitialization_none_imagefilters.cpp",
         "src/ports/SkImageGenerator_none.cpp",
         "src/ports/SkTLS_none.cpp",
     ],
@@ -366,6 +374,7 @@ BASE_SRCS_IOS = struct(
         "src/ports/SkFontMgr_custom_empty_factory.cpp",
         "src/ports/SkFontMgr_empty_factory.cpp",
         "src/ports/SkGlobalInitialization_none.cpp",
+        "src/ports/SkGlobalInitialization_none_imagefilters.cpp",
         "src/ports/SkImageGenerator_none.cpp",
         "src/ports/SkTLS_none.cpp",
     ],
@@ -393,23 +402,17 @@ def skia_srcs(os_conditions):
 INCLUDES = [
     "include/android",
     "include/c",
-    "include/client/android",
     "include/codec",
     "include/config",
     "include/core",
     "include/effects",
     "include/encode",
     "include/gpu",
-    "include/images",
     "include/pathops",
-    "include/pipe",
     "include/ports",
     "include/private",
     "include/utils",
     "include/utils/mac",
-    "include/utils/win",
-    "include/svg",
-    "include/xml",
     "src/codec",
     "src/core",
     "src/gpu",
@@ -417,8 +420,8 @@ INCLUDES = [
     "src/images",
     "src/lazy",
     "src/opts",
-    "src/ports",
     "src/pdf",
+    "src/ports",
     "src/sfnt",
     "src/shaders",
     "src/sksl",
@@ -434,16 +437,26 @@ DM_SRCS_ALL = struct(
     include = [
         "dm/*.cpp",
         "dm/*.h",
-        "gm/*.c",
+        "experimental/svg/model/*.cpp",
+        "experimental/svg/model/*.h",
         "gm/*.cpp",
         "gm/*.h",
+        "src/xml/*.cpp",
         "tests/*.cpp",
         "tests/*.h",
+        "tools/ios_utils.h",
+        "tools/BinaryAsset.h",
         "tools/BigPathBench.inc",
         "tools/CrashHandler.cpp",
         "tools/CrashHandler.h",
+        "tools/DDLPromiseImageHelper.cpp",
+        "tools/DDLPromiseImageHelper.h",
+        "tools/DDLTileHelper.cpp",
+        "tools/DDLTileHelper.h",
         "tools/ProcStats.cpp",
         "tools/ProcStats.h",
+        "tools/Registry.h",
+        "tools/ResourceFactory.h",
         "tools/Resources.cpp",
         "tools/Resources.h",
         "tools/SkJSONCPP.h",
@@ -457,8 +470,10 @@ DM_SRCS_ALL = struct(
         "tools/fonts/SkRandomScalerContext.h",
         "tools/fonts/SkTestFontMgr.cpp",
         "tools/fonts/SkTestFontMgr.h",
-        "tools/fonts/SkTestScalerContext.cpp",
-        "tools/fonts/SkTestScalerContext.h",
+        "tools/fonts/SkTestSVGTypeface.cpp",
+        "tools/fonts/SkTestSVGTypeface.h",
+        "tools/fonts/SkTestTypeface.cpp",
+        "tools/fonts/SkTestTypeface.h",
         "tools/fonts/sk_tool_utils_font.cpp",
         "tools/fonts/test_font_monospace.inc",
         "tools/fonts/test_font_sans_serif.inc",
@@ -470,6 +485,7 @@ DM_SRCS_ALL = struct(
         "tools/picture_utils.h",
         "tools/random_parse_path.cpp",
         "tools/random_parse_path.h",
+        "tools/sk_pixel_iter.h",
         "tools/sk_tool_utils.cpp",
         "tools/sk_tool_utils.h",
         "tools/timer/*.cpp",
@@ -478,9 +494,10 @@ DM_SRCS_ALL = struct(
         "tools/trace/*.h",
     ],
     exclude = [
+        "gm/cgms.cpp",
         "tests/FontMgrAndroidParserTest.cpp",  # Android-only.
+        "tests/FontMgrFontConfigTest.cpp",  # FontConfig-only.
         "tests/skia_test.cpp",  # Old main.
-        "tests/SVGDeviceTest.cpp",
         "tools/gpu/atlastext/*",
         "tools/gpu/gl/angle/*",
         "tools/gpu/gl/egl/*",
@@ -544,15 +561,10 @@ DM_INCLUDES = [
 def DM_ARGS(asan):
   source = ["tests", "gm", "image"]
   # TODO(benjaminwagner): f16, pic-8888, serialize-8888, and tiles_rt-8888 fail.
-  config = ["565", "8888", "pdf", "srgb"]
-  # TODO(mtklein): maybe investigate why these fail?
-  match = [
-      "~^FontHostStream$$",
-      "~^FontMgr$$",
-      "~^PaintBreakText$$",
-      "~^RecordDraw_TextBounds$$",
-  ]
-  return ["--src"] + source + ["--config"] + config + ["--match"] + match
+  config = ["565", "8888", "pdf"]
+  match = ["~Codec_78329453"]
+  return (["--src"] + source + ["--config"] + config + ["--nonativeFonts"] +
+          ["--match"] + match)
 
 ################################################################################
 ## COPTS
@@ -567,6 +579,8 @@ def base_copts(os_conditions):
               "-Wno-implicit-fallthrough",  # Some intentional fallthrough.
               # Internal use of deprecated methods. :(
               "-Wno-deprecated-declarations",
+              # TODO(kjlubick)
+              "-Wno-self-assign",  # Spurious warning in tests/PathOpsDVectorTest.cpp?
           ],
           # ANDROID
           [

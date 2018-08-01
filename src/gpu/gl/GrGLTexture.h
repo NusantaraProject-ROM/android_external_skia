@@ -24,7 +24,6 @@ public:
         GrGLenum fWrapT;
         GrGLenum fMaxMipMapLevel;
         GrGLenum fSwizzleRGBA[4];
-        GrGLenum fSRGBDecode;
         void invalidate() { memset(this, 0xff, sizeof(TexParams)); }
     };
 
@@ -39,7 +38,6 @@ public:
         SkASSERT(!fReleaseHelper);
     }
 
-    GrBackendObject getTextureHandle() const override;
     GrBackendTexture getBackendTexture() const override;
 
     void textureParamsModified() override { fTexParams.invalidate(); }

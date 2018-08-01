@@ -9,6 +9,7 @@
 #include "SkColorSpace_XYZ.h"
 #include "SkColorSpacePriv.h"
 #include "SkPoint3.h"
+#include <new>
 
 bool SkColorSpacePrimaries::toXYZD50(SkMatrix44* toXYZ_D50) const {
     if (!is_zero_to_one(fRX) || !is_zero_to_one(fRY) ||
@@ -114,15 +115,6 @@ sk_sp<SkColorSpace> SkColorSpace::MakeRGB(SkGammaNamed gammaNamed, const SkMatri
                 return SkColorSpace::MakeSRGB();
             }
             break;
-#ifdef SK_SUPPORT_LEGACY_ADOBE_XYZ
-        case k2Dot2Curve_SkGammaNamed:
-            if (xyz_almost_equal(toXYZD50, gAdobeRGB_toXYZD50)) {
-                SkMatrix44 adobe44(SkMatrix44::kUninitialized_Constructor);
-                adobe44.set3x3RowMajorf(gAdobeRGB_toXYZD50);
-                return sk_sp<SkColorSpace>(new SkColorSpace_XYZ(k2Dot2Curve_SkGammaNamed, adobe44));
-            }
-            break;
-#endif
         case kLinear_SkGammaNamed:
             if (xyz_almost_equal(toXYZD50, gSRGB_toXYZD50)) {
                 return SkColorSpace::MakeSRGBLinear();

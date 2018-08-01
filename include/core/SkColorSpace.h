@@ -12,6 +12,7 @@
 #include "SkRefCnt.h"
 
 class SkData;
+struct skcms_ICCProfile;
 
 enum SkGammaNamed {
     kLinear_SkGammaNamed,
@@ -24,10 +25,14 @@ enum SkGammaNamed {
  *  Describes a color gamut with primaries and a white point.
  */
 struct SK_API SkColorSpacePrimaries {
-    float fRX, fRY;
-    float fGX, fGY;
-    float fBX, fBY;
-    float fWX, fWY;
+    float fRX;
+    float fRY;
+    float fGX;
+    float fGY;
+    float fBX;
+    float fBY;
+    float fWX;
+    float fWY;
 
     /**
      *  Convert primaries and a white point to a toXYZD50 matrix, the preferred color gamut
@@ -66,7 +71,7 @@ struct SK_API SkColorSpaceTransferFn {
      * Transform a single float by this transfer function.
      * For negative inputs, returns sign(x) * f(abs(x)).
      */
-    float operator()(float x) {
+    float operator()(float x) const {
         SkScalar s = SkScalarSignAsScalar(x);
         x = sk_float_abs(x);
         if (x >= fD) {
@@ -125,6 +130,16 @@ public:
      *  Create an SkColorSpace from an ICC profile.
      */
     static sk_sp<SkColorSpace> MakeICC(const void*, size_t);
+
+    /**
+     *  Create an SkColorSpace from a parsed (skcms) ICC profile.
+     */
+    static sk_sp<SkColorSpace> Make(const skcms_ICCProfile&);
+
+    /**
+     *  Convert this color space to an skcms ICC profile struct.
+     */
+    void toProfile(skcms_ICCProfile*) const;
 
     /**
      *  Types of colorspaces.
@@ -255,19 +270,6 @@ private:
     virtual const SkData* onProfileData() const { return nullptr; }
 
     using INHERITED = SkRefCnt;
-};
-
-enum class SkTransferFunctionBehavior {
-    /**
-     *  Converts to a linear space before premultiplying, unpremultiplying, or blending.
-     */
-    kRespect,
-
-    /**
-     *  Premultiplies, unpremultiplies, and blends ignoring the transfer function.  Pixels are
-     *  treated as if they are linear, regardless of their transfer function encoding.
-     */
-    kIgnore,
 };
 
 #endif

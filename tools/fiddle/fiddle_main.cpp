@@ -23,9 +23,8 @@ DEFINE_double(frame, 1.0, "A double value in [0, 1] that specifies the point in 
 #include "GrBackendSurface.h"
 #include "GrContextPriv.h"
 #include "GrGpu.h"
-
 #include "GrTest.h"
-
+#include "gl/GLTestContext.h"
 
 // Globals externed in fiddle_main.h
 sk_sp<GrTexture>      backingTexture;  // not externed
@@ -128,7 +127,6 @@ static bool setup_backend_objects(GrContext* context,
 
     GrSurfaceDesc backingDesc;
     backingDesc.fFlags = kNone_GrSurfaceFlags;
-    backingDesc.fOrigin = kTopLeft_GrSurfaceOrigin;
     backingDesc.fWidth = bm.width();
     backingDesc.fHeight = bm.height();
     // This config must match the SkColorType used in draw.cpp in the SkImage and Surface factories
@@ -165,9 +163,8 @@ static bool setup_backend_objects(GrContext* context,
             texels[i].fRowBytes = 0;
         }
 
-        backingTexture = resourceProvider->createTexture(backingDesc, SkBudgeted::kNo,
-                                                         texels.get(), mipLevelCount,
-                                                         SkDestinationSurfaceColorMode::kLegacy);
+        backingTexture = resourceProvider->createTexture(backingDesc, SkBudgeted::kNo, texels.get(),
+                                                         mipLevelCount);
         if (!backingTexture) {
             return false;
         }
@@ -193,10 +190,8 @@ static bool setup_backend_objects(GrContext* context,
         // We use this fact to initialize it with data but don't allow mipmaps
         GrMipLevel level0 = { data.get(), backingDesc.fWidth*sizeof(uint32_t) };
 
-        sk_sp<GrTexture> tmp = resourceProvider->createTexture(
-                                                            backingDesc, SkBudgeted::kNo,
-                                                            &level0, 1,
-                                                            SkDestinationSurfaceColorMode::kLegacy);
+        sk_sp<GrTexture> tmp = resourceProvider->createTexture(backingDesc, SkBudgeted::kNo,
+                                                               &level0, 1);
         if (!tmp || !tmp->asRenderTarget()) {
             return false;
         }
@@ -223,10 +218,8 @@ static bool setup_backend_objects(GrContext* context,
             texels[i].fRowBytes = 0;
         }
 
-        backingTextureRenderTarget = resourceProvider->createTexture(
-                                                            backingDesc, SkBudgeted::kNo,
-                                                            texels.get(), mipLevelCount,
-                                                            SkDestinationSurfaceColorMode::kLegacy);
+        backingTextureRenderTarget = resourceProvider->createTexture(backingDesc, SkBudgeted::kNo,
+                                                                     texels.get(), mipLevelCount);
         if (!backingTextureRenderTarget || !backingTextureRenderTarget->asRenderTarget()) {
             return false;
         }
@@ -287,7 +280,8 @@ int main(int argc, char** argv) {
         rasterData = encode_snapshot(rasterSurface);
     }
     if (options.gpu) {
-        sk_sp<GrContext> grContext = create_grcontext(gGLDriverInfo);
+        std::unique_ptr<sk_gpu_test::GLTestContext> glContext;
+        sk_sp<GrContext> grContext = create_grcontext(gGLDriverInfo, &glContext);
         if (!grContext) {
             fputs("Unable to get GrContext.\n", stderr);
         } else {

@@ -23,10 +23,8 @@ declare_args() {
 }
 
 if (host_os == "win") {
-  python = "python.bat"
   stamp = "cmd.exe /c echo >"
 } else {
-  python = "python"
   stamp = "touch"
 }
 
@@ -34,7 +32,11 @@ toolchain("msvc") {
   lib_dir_switch = "/LIBPATH:"
 
   if (msvc == 2015) {
-    bin = "$win_vc/bin/amd64"
+    if (target_cpu == "x86") {
+      bin = "$win_vc/bin"
+    } else {
+      bin = "$win_vc/bin/amd64"
+    }
   } else {
     bin = "$win_vc/Tools/MSVC/$win_toolchain_version/bin/HostX64/$target_cpu"
   }
@@ -46,7 +48,14 @@ toolchain("msvc") {
     env_setup = "cmd /c $win_sdk/bin/SetEnv.cmd /x86 && "
   }
 
+  cl_m32_flag = ""
   if (clang_win != "") {
+    if (target_cpu == "x86") {
+      # cl.exe knows implicitly by the choice of executable that it's targeting
+      # x86, but clang-cl.exe needs to be told when targeting non-host
+      # platforms. (All our builders are x86-64, so x86 is always non-host.)
+      cl_m32_flag = "-m32"
+    }
     cl = "$clang_win/bin/clang-cl.exe"
   } else {
     cl = "$bin/cl.exe"
@@ -57,7 +66,7 @@ toolchain("msvc") {
     if (target_cpu == "x64") {
       _ml += "64"
     }
-    command = "$env_setup $bin/$_ml.exe /nologo /c /Fo {{output}} {{source}}"
+    command = "$env_setup $bin/$_ml.exe {{asmflags}} /nologo /c /Fo {{output}} {{source}}"
     outputs = [
       "{{source_out_dir}}/{{target_output_name}}.{{source_name_part}}.obj",
     ]
@@ -75,7 +84,8 @@ toolchain("msvc") {
     outputs = [
       "{{source_out_dir}}/{{target_output_name}}.{{source_name_part}}.obj",
     ]
-    rspfile_content = "{{defines}} {{include_dirs}} {{cflags}} {{cflags_c}}"
+    rspfile_content =
+        "{{defines}} {{include_dirs}} {{cflags}} $cl_m32_flag {{cflags_c}}"
     description = "compile {{source}}"
   }
 
@@ -90,7 +100,8 @@ toolchain("msvc") {
     outputs = [
       "{{source_out_dir}}/{{target_output_name}}.{{source_name_part}}.obj",
     ]
-    rspfile_content = "{{defines}} {{include_dirs}} {{cflags}} {{cflags_cc}}"
+    rspfile_content =
+        "{{defines}} {{include_dirs}} {{cflags}} $cl_m32_flag {{cflags_cc}}"
     description = "compile {{source}}"
   }
 
@@ -167,7 +178,7 @@ toolchain("msvc") {
 
   tool("copy") {
     cp_py = rebase_path("../cp.py")
-    command = "$python $cp_py {{source}} {{output}}"
+    command = "python $cp_py {{source}} {{output}}"
     description = "copy {{source}} {{output}}"
   }
 }
@@ -234,7 +245,7 @@ template("gcc_like_toolchain") {
       rspfile = "{{output}}.rsp"
       rspfile_content = "{{inputs}}"
       ar_py = rebase_path("../ar.py")
-      command = "$python $ar_py $ar {{output}} $rspfile"
+      command = "python $ar_py $ar {{output}} $rspfile"
       outputs = [
         "{{root_out_dir}}/{{target_output_name}}{{output_extension}}",
       ]
@@ -279,13 +290,13 @@ template("gcc_like_toolchain") {
 
     tool("copy") {
       cp_py = rebase_path("../cp.py")
-      command = "$python $cp_py {{source}} {{output}}"
+      command = "python $cp_py {{source}} {{output}}"
       description = "copy {{source}} {{output}}"
     }
 
     tool("copy_bundle_data") {
       cp_py = rebase_path("../cp.py")
-      command = "$python $cp_py {{source}} {{output}}"
+      command = "python $cp_py {{source}} {{output}}"
       description = "copy_bundle_data {{source}} {{output}}"
     }
 

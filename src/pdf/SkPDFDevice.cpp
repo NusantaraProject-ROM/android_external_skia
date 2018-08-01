@@ -13,10 +13,10 @@
 #include "SkBitmapKey.h"
 #include "SkCanvas.h"
 #include "SkClipOpPriv.h"
+#include "SkClusterator.h"
 #include "SkColor.h"
 #include "SkColorFilter.h"
 #include "SkDraw.h"
-#include "SkDrawFilter.h"
 #include "SkGlyphCache.h"
 #include "SkImageFilterCache.h"
 #include "SkJpegEncoder.h"
@@ -44,6 +44,7 @@
 #include "SkTemplates.h"
 #include "SkTextBlobRunIterator.h"
 #include "SkTextFormatParams.h"
+#include "SkTo.h"
 #include "SkUtils.h"
 #include "SkXfermodeInterpretation.h"
 
@@ -209,8 +210,7 @@ public:
         fEntries[0].fClipStack = existingClipStack;
     }
 
-    void updateClip(const SkClipStack& clipStack,
-                    const SkPoint& translation, const SkRect& bounds);
+    void updateClip(const SkClipStack& clipStack, const SkIRect& bounds);
     void updateMatrix(const SkMatrix& matrix);
     void updateDrawingState(const SkPDFDevice::GraphicStateEntry& state);
 
@@ -283,56 +283,83 @@ bool apply_clip(SkClipOp op, const SkPath& u, const SkPath& v, SkPath* r)  {
     }
 }
 
-/* Uses Path Ops to calculate a vector SkPath clip from a clip stack.
- * Returns true if successful, or false if not successful.
- * If successful, the resulting clip is stored in outClipPath.
- * If not successful, outClipPath is undefined, and a fallback method
- * should be used.
- */
-static bool get_clip_stack_path(const SkMatrix& transform,
-                                const SkClipStack& clipStack,
-                                const SkRect& bounds,
-                                SkPath* outClipPath) {
-    outClipPath->reset();
-    outClipPath->setFillType(SkPath::kInverseWinding_FillType);
+static SkRect rect_intersect(SkRect u, SkRect v) {
+    if (u.isEmpty() || v.isEmpty()) { return {0, 0, 0, 0}; }
+    return u.intersect(v) ? u : SkRect{0, 0, 0, 0};
+}
 
-    const SkClipStack::Element* clipEntry;
-    SkClipStack::Iter iter;
-    iter.reset(clipStack, SkClipStack::Iter::kBottom_IterStart);
-    for (clipEntry = iter.next(); clipEntry; clipEntry = iter.next()) {
-        SkPath entryPath;
-        if (SkClipStack::Element::DeviceSpaceType::kEmpty == clipEntry->getDeviceSpaceType()) {
-            outClipPath->reset();
-            outClipPath->setFillType(SkPath::kInverseWinding_FillType);
-            continue;
-        } else {
-            clipEntry->asDeviceSpacePath(&entryPath);
+// Test to see if the clipstack is a simple rect, If so, we can avoid all PathOps code
+// and speed thing up.
+static bool is_rect(const SkClipStack& clipStack, const SkRect& bounds, SkRect* dst) {
+    SkRect currentClip = bounds;
+    SkClipStack::Iter iter(clipStack, SkClipStack::Iter::kBottom_IterStart);
+    while (const SkClipStack::Element* element = iter.next()) {
+        SkRect elementRect{0, 0, 0, 0};
+        switch (element->getDeviceSpaceType()) {
+            case SkClipStack::Element::DeviceSpaceType::kEmpty:
+                break;
+            case SkClipStack::Element::DeviceSpaceType::kRect:
+                elementRect = element->getDeviceSpaceRect();
+                break;
+            default:
+                return false;
         }
-        entryPath.transform(transform);
-        if (!apply_clip(clipEntry->getOp(), *outClipPath, entryPath, outClipPath)) {
-            return false;
+        switch (element->getOp()) {
+            case kReplace_SkClipOp:
+                currentClip = rect_intersect(bounds, elementRect);
+                break;
+            case SkClipOp::kIntersect:
+                currentClip = rect_intersect(currentClip, elementRect);
+                break;
+            default:
+                return false;
         }
     }
-
-    if (outClipPath->isInverseFillType()) {
-        // The bounds are slightly outset to ensure this is correct in the
-        // face of floating-point accuracy and possible SkRegion bitmap
-        // approximations.
-        SkRect clipBounds = bounds;
-        clipBounds.outset(SK_Scalar1, SK_Scalar1);
-        if (!calculate_inverse_path(clipBounds, *outClipPath, outClipPath)) {
-            return false;
-        }
-    }
+    *dst = currentClip;
     return true;
+}
+
+static void append_clip(const SkClipStack& clipStack,
+                        const SkIRect& bounds,
+                        SkWStream* wStream) {
+    // The bounds are slightly outset to ensure this is correct in the
+    // face of floating-point accuracy and possible SkRegion bitmap
+    // approximations.
+    SkRect outsetBounds = SkRect::Make(bounds.makeOutset(1, 1));
+
+    SkRect clipStackRect;
+    if (is_rect(clipStack, outsetBounds, &clipStackRect)) {
+        SkPDFUtils::AppendRectangle(clipStackRect, wStream);
+        wStream->writeText("W* n\n");
+        return;
+    }
+
+    SkPath clipPath;
+    (void)clipStack.asPath(&clipPath);
+
+    SkPath clipBoundsPath;
+    clipBoundsPath.addRect(outsetBounds);
+
+    if (Op(clipPath, clipBoundsPath, kIntersect_SkPathOp, &clipPath)) {
+        SkPDFUtils::EmitPath(clipPath, SkPaint::kFill_Style, wStream);
+        SkPath::FillType clipFill = clipPath.getFillType();
+        NOT_IMPLEMENTED(clipFill == SkPath::kInverseEvenOdd_FillType, false);
+        NOT_IMPLEMENTED(clipFill == SkPath::kInverseWinding_FillType, false);
+        if (clipFill == SkPath::kEvenOdd_FillType) {
+            wStream->writeText("W* n\n");
+        } else {
+            wStream->writeText("W n\n");
+        }
+    }
+    // If Op() fails (pathological case; e.g. input values are
+    // extremely large or NaN), emit no clip at all.
 }
 
 // TODO(vandebo): Take advantage of SkClipStack::getSaveCount(), the PDF
 // graphic state stack, and the fact that we can know all the clips used
 // on the page to optimize this.
 void GraphicStackState::updateClip(const SkClipStack& clipStack,
-                                   const SkPoint& translation,
-                                   const SkRect& bounds) {
+                                   const SkIRect& bounds) {
     if (clipStack == currentEntry()->fClipStack) {
         return;
     }
@@ -346,24 +373,7 @@ void GraphicStackState::updateClip(const SkClipStack& clipStack,
     push();
 
     currentEntry()->fClipStack = clipStack;
-
-    SkMatrix transform;
-    transform.setTranslate(translation.fX, translation.fY);
-
-    SkPath clipPath;
-    if (get_clip_stack_path(transform, clipStack, bounds, &clipPath)) {
-        SkPDFUtils::EmitPath(clipPath, SkPaint::kFill_Style, fContentStream);
-        SkPath::FillType clipFill = clipPath.getFillType();
-        NOT_IMPLEMENTED(clipFill == SkPath::kInverseEvenOdd_FillType, false);
-        NOT_IMPLEMENTED(clipFill == SkPath::kInverseWinding_FillType, false);
-        if (clipFill == SkPath::kEvenOdd_FillType) {
-            fContentStream->writeText("W* n\n");
-        } else {
-            fContentStream->writeText("W n\n");
-        }
-    }
-    // If Op() fails (pathological case; e.g. input values are
-    // extremely large or NaN), emit no clip at all.
+    append_clip(clipStack, bounds, fContentStream);
 }
 
 void GraphicStackState::updateMatrix(const SkMatrix& matrix) {
@@ -548,8 +558,9 @@ void SkPDFDevice::setFlip() {
     // natively has the origin at the bottom left. This matrix
     // corrects for that.  But that only needs to be done once, we
     // don't do it when layering.
-    fInitialTransform.setTranslate(0, SkIntToScalar(fPageSize.fHeight));
-    fInitialTransform.preScale(SK_Scalar1, -SK_Scalar1);
+    SkScalar rasterScale = SkPDFUtils::kDpiForRasterScaleOne / fDocument->rasterDpi();
+    fInitialTransform.setConcat(SkMatrix::MakeScale(rasterScale, -rasterScale),
+                                SkMatrix::MakeTrans(0, -fPageSize.fHeight));
 }
 
 SkPDFDevice::~SkPDFDevice() {
@@ -599,6 +610,9 @@ void SkPDFDevice::drawAnnotation(const SkRect& rect, const char key[], SkData* v
 }
 
 void SkPDFDevice::drawPaint(const SkPaint& srcPaint) {
+    if (this->hasEmptyClip()) {
+        return;
+    }
     SkPaint newPaint = srcPaint;
     remove_color_filter(&newPaint);
     replace_srcmode_on_opaque_paint(&newPaint);
@@ -636,6 +650,9 @@ void SkPDFDevice::drawPoints(SkCanvas::PointMode mode,
                              size_t count,
                              const SkPoint* points,
                              const SkPaint& srcPaint) {
+    if (this->hasEmptyClip()) {
+        return;
+    }
     SkPaint passedPaint = srcPaint;
     remove_color_filter(&passedPaint);
     replace_srcmode_on_opaque_paint(&passedPaint);
@@ -650,9 +667,6 @@ void SkPDFDevice::drawPoints(SkCanvas::PointMode mode,
     // We only use this when there's a path effect because of the overhead
     // of multiple calls to setUpContentEntry it causes.
     if (passedPaint.getPathEffect()) {
-        if (this->cs().isEmpty(this->bounds())) {
-            return;
-        }
         draw_points(mode, count, points, passedPaint,
                     this->devClipBounds(), this->ctm(), this);
         return;
@@ -760,6 +774,9 @@ static sk_sp<SkPDFDict> create_link_named_dest(const SkData* nameData,
 
 void SkPDFDevice::drawRect(const SkRect& rect,
                            const SkPaint& srcPaint) {
+    if (this->hasEmptyClip()) {
+        return;
+    }
     SkPaint paint = srcPaint;
     remove_color_filter(&paint);
     replace_srcmode_on_opaque_paint(&paint);
@@ -767,9 +784,6 @@ void SkPDFDevice::drawRect(const SkRect& rect,
     r.sort();
 
     if (paint.getPathEffect() || paint.getMaskFilter()) {
-        if (this->cs().isEmpty(this->bounds())) {
-            return;
-        }
         SkPath path;
         path.addRect(r);
         this->drawPath(path, paint, nullptr, true);
@@ -786,6 +800,9 @@ void SkPDFDevice::drawRect(const SkRect& rect,
 
 void SkPDFDevice::drawRRect(const SkRRect& rrect,
                             const SkPaint& srcPaint) {
+    if (this->hasEmptyClip()) {
+        return;
+    }
     SkPaint paint = srcPaint;
     remove_color_filter(&paint);
     replace_srcmode_on_opaque_paint(&paint);
@@ -796,6 +813,9 @@ void SkPDFDevice::drawRRect(const SkRRect& rrect,
 
 void SkPDFDevice::drawOval(const SkRect& oval,
                            const SkPaint& srcPaint) {
+    if (this->hasEmptyClip()) {
+        return;
+    }
     SkPaint paint = srcPaint;
     remove_color_filter(&paint);
     replace_srcmode_on_opaque_paint(&paint);
@@ -828,9 +848,6 @@ void SkPDFDevice::internalDrawPathWithFilter(const SkClipStack& clipStack,
                                      : SkStrokeRec::kHairline_InitStyle;
     path.transform(ctm, &path);
 
-    // TODO(halcanary): respect fDocument->rasterDpi().
-    //        SkScalar rasterScale = (float)rasterDpi / SkPDFUtils::kDpiForRasterScaleOne;
-    // Would it be easier to just change the device size (and pre-scale the canvas)?
     SkIRect bounds = clipStack.bounds(this->bounds()).roundOut();
     SkMask sourceMask;
     if (!SkDraw::DrawToMask(path, &bounds, paint->getMaskFilter(), &SkMatrix::I(),
@@ -850,7 +867,7 @@ void SkPDFDevice::internalDrawPathWithFilter(const SkClipStack& clipStack,
     // Must mask with a Form XObject.
     sk_sp<SkPDFDevice> maskDevice = this->makeCongruentDevice();
     {
-        SkCanvas canvas(maskDevice.get());
+        SkCanvas canvas(maskDevice);
         canvas.drawImage(mask, dstMaskBounds.x(), dstMaskBounds.y());
     }
     if (!ctm.isIdentity() && paint->getShader()) {
@@ -890,6 +907,9 @@ void SkPDFDevice::internalDrawPath(const SkClipStack& clipStack,
                                    const SkPaint& srcPaint,
                                    const SkMatrix* prePathMatrix,
                                    bool pathIsMutable) {
+    if (clipStack.isEmpty(this->bounds())) {
+        return;
+    }
     SkPaint paint = srcPaint;
     remove_color_filter(&paint);
     replace_srcmode_on_opaque_paint(&paint);
@@ -1047,7 +1067,7 @@ public:
             SkPoint position = xy - fCurrentMatrixOrigin;
             if (position != SkPoint{fXAdvance, 0}) {
                 this->flush();
-                SkPDFUtils::AppendScalar(position.x(), fContent);
+                SkPDFUtils::AppendScalar(position.x() - position.y() * fTextSkewX, fContent);
                 fContent->writeText(" ");
                 SkPDFUtils::AppendScalar(-position.y(), fContent);
                 fContent->writeText(" Td ");
@@ -1078,207 +1098,10 @@ private:
     bool fInitialized = false;
     const bool fDefaultPositioning;
 };
-
-/** Given the m-to-n glyph-to-character mapping data (as returned by
-    harfbuzz), iterate over the clusters. */
-class Clusterator {
-public:
-    Clusterator() : fClusters(nullptr), fUtf8Text(nullptr), fGlyphCount(0), fTextByteLength(0) {}
-    explicit Clusterator(uint32_t glyphCount)
-        : fClusters(nullptr)
-        , fUtf8Text(nullptr)
-        , fGlyphCount(glyphCount)
-        , fTextByteLength(0) {}
-    // The clusters[] array is an array of offsets into utf8Text[],
-    // one offset for each glyph.  See SkTextBlobBuilder for more info.
-    Clusterator(const uint32_t* clusters,
-                const char* utf8Text,
-                uint32_t glyphCount,
-                uint32_t textByteLength)
-        : fClusters(clusters)
-        , fUtf8Text(utf8Text)
-        , fGlyphCount(glyphCount)
-        , fTextByteLength(textByteLength) {
-        // This is a cheap heuristic for /ReversedChars which seems to
-        // work for clusters produced by HarfBuzz, which either
-        // increase from zero (LTR) or decrease to zero (RTL).
-        // "ReversedChars" is how PDF deals with RTL text.
-        fReversedChars =
-            fUtf8Text && fClusters && fGlyphCount && fClusters[0] != 0;
-    }
-    struct Cluster {
-        const char* fUtf8Text;
-        uint32_t fTextByteLength;
-        uint32_t fGlyphIndex;
-        uint32_t fGlyphCount;
-        explicit operator bool() const { return fGlyphCount != 0; }
-    };
-    // True if this looks like right-to-left text.
-    bool reversedChars() const { return fReversedChars; }
-    Cluster next() {
-        if ((!fUtf8Text || !fClusters) && fGlyphCount) {
-            // These glyphs have no text.  Treat as one "cluster".
-            uint32_t glyphCount = fGlyphCount;
-            fGlyphCount = 0;
-            return Cluster{nullptr, 0, 0, glyphCount};
-        }
-        if (fGlyphCount == 0 || fTextByteLength == 0) {
-            return Cluster{nullptr, 0, 0, 0};  // empty
-        }
-        SkASSERT(fUtf8Text);
-        SkASSERT(fClusters);
-        uint32_t cluster = fClusters[0];
-        if (cluster >= fTextByteLength) {
-            return Cluster{nullptr, 0, 0, 0};  // bad input.
-        }
-        uint32_t glyphsInCluster = 1;
-        while (glyphsInCluster < fGlyphCount &&
-               fClusters[glyphsInCluster] == cluster) {
-            ++glyphsInCluster;
-        }
-        SkASSERT(glyphsInCluster <= fGlyphCount);
-        uint32_t textLength = 0;
-        if (glyphsInCluster == fGlyphCount) {
-            // consumes rest of glyphs and rest of text
-            if (kInvalidCluster == fPreviousCluster) { // LTR text or single cluster
-                textLength = fTextByteLength - cluster;
-            } else { // RTL text; last cluster.
-                SkASSERT(fPreviousCluster < fTextByteLength);
-                if (fPreviousCluster <= cluster) {  // bad input.
-                    return Cluster{nullptr, 0, 0, 0};
-                }
-                textLength = fPreviousCluster - cluster;
-            }
-            fGlyphCount = 0;
-            return Cluster{fUtf8Text + cluster,
-                           textLength,
-                           fGlyphIndex,
-                           glyphsInCluster};
-        }
-        SkASSERT(glyphsInCluster < fGlyphCount);
-        uint32_t nextCluster = fClusters[glyphsInCluster];
-        if (nextCluster >= fTextByteLength) {
-            return Cluster{nullptr, 0, 0, 0};  // bad input.
-        }
-        if (nextCluster > cluster) { // LTR text
-            if (kInvalidCluster != fPreviousCluster) {
-                return Cluster{nullptr, 0, 0, 0};  // bad input.
-            }
-            textLength = nextCluster - cluster;
-        } else { // RTL text
-            SkASSERT(nextCluster < cluster);
-            if (kInvalidCluster == fPreviousCluster) { // first cluster
-                textLength = fTextByteLength - cluster;
-            } else { // later cluster
-                if (fPreviousCluster <= cluster) {
-                    return Cluster{nullptr, 0, 0, 0}; // bad input.
-                }
-                textLength = fPreviousCluster - cluster;
-            }
-            fPreviousCluster = cluster;
-        }
-        uint32_t glyphIndex = fGlyphIndex;
-        fGlyphCount -= glyphsInCluster;
-        fGlyphIndex += glyphsInCluster;
-        fClusters   += glyphsInCluster;
-        return Cluster{fUtf8Text + cluster,
-                       textLength,
-                       glyphIndex,
-                       glyphsInCluster};
-    }
-
-private:
-    static constexpr uint32_t kInvalidCluster = 0xFFFFFFFF;
-    const uint32_t* fClusters;
-    const char* fUtf8Text;
-    uint32_t fGlyphCount;
-    uint32_t fTextByteLength;
-    uint32_t fGlyphIndex = 0;
-    uint32_t fPreviousCluster = kInvalidCluster;
-    bool fReversedChars = false;
-};
-
-struct TextStorage {
-    SkAutoTMalloc<char> fUtf8textStorage;
-    SkAutoTMalloc<uint32_t> fClusterStorage;
-    SkAutoTMalloc<SkGlyphID> fGlyphStorage;
-};
 }  // namespace
 
-/** Given some unicode text (as passed to drawText(), convert to
-    glyphs (via primitive shaping), while preserving
-    glyph-to-character mapping information. */
-static Clusterator make_clusterator(
-        const void* sourceText,
-        size_t sourceByteCount,
-        const SkPaint& paint,
-        TextStorage* storage,
-        int glyphCount) {
-    SkASSERT(SkPaint::kGlyphID_TextEncoding != paint.getTextEncoding());
-    SkASSERT(glyphCount == paint.textToGlyphs(sourceText, sourceByteCount, nullptr));
-    SkASSERT(glyphCount > 0);
-    storage->fGlyphStorage.reset(SkToSizeT(glyphCount));
-    (void)paint.textToGlyphs(sourceText, sourceByteCount, storage->fGlyphStorage.get());
-    storage->fClusterStorage.reset(SkToSizeT(glyphCount));
-    uint32_t* clusters = storage->fClusterStorage.get();
-    uint32_t utf8ByteCount = 0;
-    const char* utf8Text = nullptr;
-    switch (paint.getTextEncoding()) {
-        case SkPaint::kUTF8_TextEncoding: {
-            const char* txtPtr = (const char*)sourceText;
-            for (int i = 0; i < glyphCount; ++i) {
-                clusters[i] = SkToU32(txtPtr - (const char*)sourceText);
-                txtPtr += SkUTF8_LeadByteToCount(*(const unsigned char*)txtPtr);
-                SkASSERT(txtPtr <= (const char*)sourceText + sourceByteCount);
-            }
-            SkASSERT(txtPtr == (const char*)sourceText + sourceByteCount);
-            utf8ByteCount = SkToU32(sourceByteCount);
-            utf8Text = (const char*)sourceText;
-            break;
-        }
-        case SkPaint::kUTF16_TextEncoding: {
-            const uint16_t* utf16ptr = (const uint16_t*)sourceText;
-            int utf16count = SkToInt(sourceByteCount / sizeof(uint16_t));
-            utf8ByteCount = SkToU32(SkUTF16_ToUTF8(utf16ptr, utf16count));
-            storage->fUtf8textStorage.reset(utf8ByteCount);
-            char* txtPtr = storage->fUtf8textStorage.get();
-            utf8Text = txtPtr;
-            int clusterIndex = 0;
-            while (utf16ptr < (const uint16_t*)sourceText + utf16count) {
-                clusters[clusterIndex++] = SkToU32(txtPtr - utf8Text);
-                SkUnichar uni = SkUTF16_NextUnichar(&utf16ptr);
-                txtPtr += SkUTF8_FromUnichar(uni, txtPtr);
-            }
-            SkASSERT(clusterIndex == glyphCount);
-            SkASSERT(txtPtr == storage->fUtf8textStorage.get() + utf8ByteCount);
-            SkASSERT(utf16ptr == (const uint16_t*)sourceText + utf16count);
-            break;
-        }
-        case SkPaint::kUTF32_TextEncoding: {
-            const SkUnichar* utf32 = (const SkUnichar*)sourceText;
-            int utf32count = SkToInt(sourceByteCount / sizeof(SkUnichar));
-            SkASSERT(glyphCount == utf32count);
-            for (int i = 0; i < utf32count; ++i) {
-                utf8ByteCount += SkToU32(SkUTF8_FromUnichar(utf32[i]));
-            }
-            storage->fUtf8textStorage.reset(SkToSizeT(utf8ByteCount));
-            char* txtPtr = storage->fUtf8textStorage.get();
-            utf8Text = txtPtr;
-            for (int i = 0; i < utf32count; ++i) {
-                clusters[i] = SkToU32(txtPtr - utf8Text);
-                txtPtr += SkUTF8_FromUnichar(utf32[i], txtPtr);
-            }
-            break;
-        }
-        default:
-            SkDEBUGFAIL("");
-            break;
-    }
-    return Clusterator(clusters, utf8Text, SkToU32(glyphCount), utf8ByteCount);
-}
-
-static SkUnichar map_glyph(const SkTDArray<SkUnichar>& glyphToUnicode, SkGlyphID glyph) {
-    return SkToInt(glyph) < glyphToUnicode.count() ? glyphToUnicode[SkToInt(glyph)] : -1;
+static SkUnichar map_glyph(const std::vector<SkUnichar>& glyphToUnicode, SkGlyphID glyph) {
+    return glyph < glyphToUnicode.size() ? glyphToUnicode[SkToInt(glyph)] : -1;
 }
 
 static void update_font(SkWStream* wStream, int fontIndex, SkScalar textSize) {
@@ -1389,7 +1212,7 @@ void SkPDFDevice::internalDrawText(
     if (0 == sourceByteCount || !sourceText || srcPaint.getTextSize() <= 0) {
         return;
     }
-    if (this->cs().isEmpty(this->bounds())) {
+    if (this->hasEmptyClip()) {
         return;
     }
     NOT_IMPLEMENTED(srcPaint.isVerticalText(), false);
@@ -1425,43 +1248,22 @@ void SkPDFDevice::internalDrawText(
     if (!metrics) {
         return;
     }
-    int glyphCount = paint.textToGlyphs(sourceText, sourceByteCount, nullptr);
-    if (glyphCount <= 0) {
+    const std::vector<SkUnichar>& glyphToUnicode = SkPDFFont::GetUnicodeMap(
+        typeface, fDocument->canon());
+
+    SkClusterator clusterator(sourceText, sourceByteCount, paint,
+                              clusters, textByteLength, utf8Text);
+    const SkGlyphID* glyphs = clusterator.glyphs();
+    uint32_t glyphCount = clusterator.glyphCount();
+    if (glyphCount == 0) {
         return;
     }
 
-    // These three heap buffers are only used in the case where no glyphs
-    // are passed to drawText() (most clients pass glyphs or a textblob).
-    TextStorage storage;
-    const SkGlyphID* glyphs = nullptr;
-    Clusterator clusterator;
-    if (textByteLength > 0) {
-        SkASSERT(glyphCount == SkToInt(sourceByteCount / sizeof(SkGlyphID)));
-        glyphs = (const SkGlyphID*)sourceText;
-        clusterator = Clusterator(clusters, utf8Text, SkToU32(glyphCount), textByteLength);
-        SkASSERT(clusters);
-        SkASSERT(utf8Text);
-        SkASSERT(srcPaint.getTextEncoding() == SkPaint::kGlyphID_TextEncoding);
-        SkASSERT(glyphCount == paint.textToGlyphs(sourceText, sourceByteCount, nullptr));
-    } else if (SkPaint::kGlyphID_TextEncoding == srcPaint.getTextEncoding()) {
-        SkASSERT(glyphCount == SkToInt(sourceByteCount / sizeof(SkGlyphID)));
-        glyphs = (const SkGlyphID*)sourceText;
-        clusterator = Clusterator(SkToU32(glyphCount));
-        SkASSERT(glyphCount == paint.textToGlyphs(sourceText, sourceByteCount, nullptr));
-        SkASSERT(nullptr == clusters);
-        SkASSERT(nullptr == utf8Text);
-    } else {
-        SkASSERT(nullptr == clusters);
-        SkASSERT(nullptr == utf8Text);
-        clusterator = make_clusterator(sourceText, sourceByteCount, srcPaint,
-                                       &storage, glyphCount);
-        glyphs = storage.fGlyphStorage;
-    }
     bool defaultPositioning = (positioning == SkTextBlob::kDefault_Positioning);
     paint.setHinting(SkPaint::kNo_Hinting);
 
     int emSize;
-    SkAutoGlyphCache glyphCache = SkPDFFont::MakeVectorCache(typeface, &emSize);
+    auto glyphCache = SkPDFFont::MakeVectorCache(typeface, &emSize);
 
     SkScalar textSize = paint.getTextSize();
     SkScalar advanceScale = textSize * paint.getTextScaleX() / emSize;
@@ -1476,7 +1278,7 @@ void SkPDFDevice::internalDrawText(
                             /* SkPaint::kRight_Align */           -1.0f;
     if (defaultPositioning && alignment != SkPaint::kLeft_Align) {
         SkScalar advance = 0;
-        for (int i = 0; i < glyphCount; ++i) {
+        for (uint32_t i = 0; i < glyphCount; ++i) {
             advance += advanceScale * glyphCache->getGlyphIDAdvance(glyphs[i]).fAdvanceX;
         }
         offset.offset(alignmentFactor * advance, 0);
@@ -1493,7 +1295,6 @@ void SkPDFDevice::internalDrawText(
             return;
         }
         SkDynamicMemoryWStream* out = content.stream();
-        const SkTDArray<SkUnichar>& glyphToUnicode = metrics->fGlyphToUnicode;
 
         out->writeText("BT\n");
         SK_AT_SCOPE_EXIT(out->writeText("ET\n"));
@@ -1512,7 +1313,7 @@ void SkPDFDevice::internalDrawText(
                                         offset);
         SkPDFFont* font = nullptr;
 
-        while (Clusterator::Cluster c = clusterator.next()) {
+        while (SkClusterator::Cluster c = clusterator.next()) {
             int index = c.fGlyphIndex;
             int glyphLimit = index + c.fGlyphCount;
 
@@ -1617,7 +1418,7 @@ void SkPDFDevice::internalDrawText(
         scaledGlyphCachePaint.setTextScaleX(paint.getTextScaleX());
         scaledGlyphCachePaint.setTextSkewX(paint.getTextSkewX());
         scaledGlyphCachePaint.setTypeface(sk_ref_sp(typeface));
-        SkAutoGlyphCache scaledGlyphCache(scaledGlyphCachePaint, nullptr, nullptr);
+        auto scaledGlyphCache = SkStrikeCache::FindOrCreateStrikeExclusive(scaledGlyphCachePaint);
         SkTHashMap<SkPDFCanon::BitmapGlyphKey, SkPDFCanon::BitmapGlyph>* map =
             &this->getCanon()->fBitmapGlyphImages;
         for (PositionedGlyph positionedGlyph : fMissingGlyphs) {
@@ -1649,12 +1450,6 @@ void SkPDFDevice::internalDrawText(
     }
 }
 
-void SkPDFDevice::drawText(const void* text, size_t len,
-                           SkScalar x, SkScalar y, const SkPaint& paint) {
-    this->internalDrawText(text, len, nullptr, SkTextBlob::kDefault_Positioning,
-                           SkPoint{x, y}, paint, nullptr, 0, nullptr);
-}
-
 void SkPDFDevice::drawPosText(const void* text, size_t len,
                               const SkScalar pos[], int scalarsPerPos,
                               const SkPoint& offset, const SkPaint& paint) {
@@ -1662,15 +1457,23 @@ void SkPDFDevice::drawPosText(const void* text, size_t len,
                            offset, paint, nullptr, 0, nullptr);
 }
 
+void SkPDFDevice::drawGlyphRunList(SkGlyphRunList* glyphRunList) {
+    auto blob = glyphRunList->blob();
+
+    if (blob == nullptr) {
+        glyphRunList->temporaryShuntToDrawPosText(this, SkPoint::Make(0, 0));
+    } else {
+        auto origin = glyphRunList->origin();
+        auto paint = glyphRunList->paint();
+        this->drawTextBlob(blob, origin.x(), origin.y(), paint);
+    }
+}
+
 void SkPDFDevice::drawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
-                               const SkPaint &paint, SkDrawFilter* drawFilter) {
+                               const SkPaint &paint) {
     for (SkTextBlobRunIterator it(blob); !it.done(); it.next()) {
         SkPaint runPaint(paint);
         it.applyFontToPaint(&runPaint);
-        if (drawFilter && !drawFilter->filter(&runPaint, SkDrawFilter::kText_Type)) {
-            continue;
-        }
-        runPaint.setFlags(this->filterTextFlags(runPaint));
         SkPoint offset = it.offset() + SkPoint{x, y};
         this->internalDrawText(it.glyphs(), sizeof(SkGlyphID) * it.glyphCount(),
                                it.pos(), it.positioning(), offset, runPaint,
@@ -1678,8 +1481,9 @@ void SkPDFDevice::drawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
     }
 }
 
-void SkPDFDevice::drawVertices(const SkVertices*, SkBlendMode, const SkPaint&) {
-    if (this->cs().isEmpty(this->bounds())) {
+void SkPDFDevice::drawVertices(const SkVertices*, const SkMatrix*, int, SkBlendMode,
+                               const SkPaint&) {
+    if (this->hasEmptyClip()) {
         return;
     }
     // TODO: implement drawVertices
@@ -1776,8 +1580,7 @@ std::unique_ptr<SkStreamAsset> SkPDFDevice::content() const {
 
     GraphicStackState gsState(fExistingClipStack, &buffer);
     for (const auto& entry : fContentEntries) {
-        gsState.updateClip(entry.fState.fClipStack,
-                {0, 0}, SkRect::Make(this->bounds()));
+        gsState.updateClip(entry.fState.fClipStack, this->bounds());
         gsState.updateMatrix(entry.fState.fMatrix);
         gsState.updateDrawingState(entry.fState);
 
@@ -1805,7 +1608,7 @@ bool SkPDFDevice::handleInversePath(const SkPath& origPath,
         return false;
     }
 
-    if (this->cs().isEmpty(this->bounds())) {
+    if (this->hasEmptyClip()) {
         return false;
     }
 
@@ -1861,12 +1664,12 @@ void SkPDFDevice::appendAnnotations(SkPDFArray* array) const {
     for (const RectWithData& rectWithURL : fLinkToURLs) {
         SkRect r;
         fInitialTransform.mapRect(&r, rectWithURL.rect);
-        array->appendObject(create_link_to_url(rectWithURL.data.get(), r));
+        array->appendObjRef(create_link_to_url(rectWithURL.data.get(), r));
     }
     for (const RectWithData& linkToDestination : fLinkToDestinations) {
         SkRect r;
         fInitialTransform.mapRect(&r, linkToDestination.rect);
-        array->appendObject(
+        array->appendObjRef(
                 create_link_named_dest(linkToDestination.data.get(), r));
     }
 }
@@ -2284,6 +2087,9 @@ void SkPDFDevice::internalDrawImageRect(SkKeyedImage imageSubset,
                                         const SkRect& dst,
                                         const SkPaint& srcPaint,
                                         const SkMatrix& ctm) {
+    if (this->hasEmptyClip()) {
+        return;
+    }
     if (!imageSubset) {
         return;
     }
@@ -2346,7 +2152,7 @@ void SkPDFDevice::internalDrawImageRect(SkKeyedImage imageSubset,
         // Must mask with a Form XObject.
         sk_sp<SkPDFDevice> maskDevice = this->makeCongruentDevice();
         {
-            SkCanvas canvas(maskDevice.get());
+            SkCanvas canvas(maskDevice);
             if (paint.getMaskFilter()) {
                 // This clip prevents the mask image shader from covering
                 // entire device if unnecessary.
@@ -2403,7 +2209,6 @@ void SkPDFDevice::internalDrawImageRect(SkKeyedImage imageSubset,
 
     // Rasterize the bitmap using perspective in a new bitmap.
     if (transform.hasPerspective()) {
-        SkASSERT(fDocument->rasterDpi() > 0);
         // Transform the bitmap in the new space, without taking into
         // account the initial transform.
         SkPath perspectiveOutline;
@@ -2419,9 +2224,6 @@ void SkPDFDevice::internalDrawImageRect(SkKeyedImage imageSubset,
         // account the initial transform.
         SkMatrix total = transform;
         total.postConcat(fInitialTransform);
-        SkScalar dpiScale = SkIntToScalar(fDocument->rasterDpi()) /
-                            SkIntToScalar(SkPDFUtils::kDpiForRasterScaleOne);
-        total.postScale(dpiScale, dpiScale);
 
         SkPath physicalPerspectiveOutline;
         physicalPerspectiveOutline.addRect(imageBounds);
@@ -2531,6 +2333,9 @@ void SkPDFDevice::internalDrawImageRect(SkKeyedImage imageSubset,
 
 void SkPDFDevice::drawSpecial(SkSpecialImage* srcImg, int x, int y, const SkPaint& paint,
                               SkImage* clipImage, const SkMatrix& clipMatrix) {
+    if (this->hasEmptyClip()) {
+        return;
+    }
     SkASSERT(!srcImg->isTextureBacked());
 
     //TODO: clipImage support
@@ -2545,9 +2350,9 @@ void SkPDFDevice::drawSpecial(SkSpecialImage* srcImg, int x, int y, const SkPain
         const SkIRect clipBounds =
             this->cs().bounds(this->bounds()).roundOut().makeOffset(-x, -y);
         sk_sp<SkImageFilterCache> cache(this->getImageFilterCache());
-        // TODO: Should PDF be operating in a specified color space? For now, run the filter
+        // TODO: Should PDF be operating in a specified color type/space? For now, run the filter
         // in the same color space as the source (this is different from all other backends).
-        SkImageFilter::OutputProperties outputProperties(srcImg->getColorSpace());
+        SkImageFilter::OutputProperties outputProperties(kN32_SkColorType, srcImg->getColorSpace());
         SkImageFilter::Context ctx(matrix, clipBounds, cache.get(), outputProperties);
 
         sk_sp<SkSpecialImage> resultImg(filter->filterImage(srcImg, ctx, &offset));

@@ -14,15 +14,22 @@ static void debug_out(int len, const char* data) {
     SkDebugf("%.*s", len, data);
 }
 
-bool ParserCommon::parseFile(const char* fileOrPath, const char* suffix) {
+bool ParserCommon::parseFile(const char* fileOrPath, const char* suffix, OneFile oneFile) {
     if (!sk_isdir(fileOrPath)) {
         if (!this->parseFromFile(fileOrPath)) {
             SkDebugf("failed to parse %s\n", fileOrPath);
             return false;
         }
-    } else {
+    } else if (OneFile::kNo == oneFile) {
         SkOSFile::Iter it(fileOrPath, suffix);
         for (SkString file; it.next(&file); ) {
+            // FIXME: skip difficult file for now
+            if (string::npos != string(file.c_str()).find("SkFontArguments")) {
+                continue;
+            }
+            if (string::npos != string(file.c_str()).find("SkFontStyle")) {
+                continue;
+            }
             SkString p = SkOSPath::Join(fileOrPath, file.c_str());
             const char* hunk = p.c_str();
             if (!SkStrEndsWith(hunk, suffix)) {
@@ -95,7 +102,8 @@ bool ParserCommon::parseSetup(const char* path) {
     return true;
 }
 
-void ParserCommon::writeBlockIndent(int size, const char* data) {
+bool ParserCommon::writeBlockIndent(int size, const char* data) {
+    bool wroteSomething = false;
     while (size && ' ' >= data[size - 1]) {
         --size;
     }
@@ -106,7 +114,10 @@ void ParserCommon::writeBlockIndent(int size, const char* data) {
             --size;
         }
         if (!size) {
-            return;
+            return wroteSomething;
+        }
+        if (fReturnOnWrite) {
+            return true;
         }
         if (newLine) {
             this->lf(1);
@@ -123,11 +134,14 @@ void ParserCommon::writeBlockIndent(int size, const char* data) {
         size -= len;
         data += len;
         newLine = true;
+        wroteSomething = true;
     }
+    return wroteSomething;
 }
 
 bool ParserCommon::writeBlockTrim(int size, const char* data) {
-    if (fOutdentNext) {
+    SkASSERT(size >= 0);
+    if (!fReturnOnWrite && fOutdentNext) {
         fIndent -= 4;
         fOutdentNext = false;
     }
@@ -139,10 +153,15 @@ bool ParserCommon::writeBlockTrim(int size, const char* data) {
         --size;
     }
     if (size <= 0) {
-        fLastChar = '\0';
+        if (!fReturnOnWrite) {
+            fLastChar = '\0';
+        }
         return false;
     }
-    SkASSERT(size < 16000);
+    if (fReturnOnWrite) {
+        return true;
+    }
+    SkASSERT(size < 20000);
     if (size > 3 && !strncmp("#end", data, 4)) {
         fMaxLF = 1;
     }
@@ -154,6 +173,7 @@ bool ParserCommon::writeBlockTrim(int size, const char* data) {
         debug_out(size, data);
     }
     fprintf(fOut, "%.*s", size, data);
+    fWroteSomething = true;
     int added = 0;
     fLastChar = data[size - 1];
     while (size > 0 && '\n' != data[--size]) {
@@ -171,6 +191,7 @@ bool ParserCommon::writeBlockTrim(int size, const char* data) {
 }
 
 void ParserCommon::writePending() {
+    SkASSERT(!fReturnOnWrite);
     fPendingLF = SkTMin(fPendingLF, fMaxLF);
     bool wroteLF = false;
     while (fLinefeeds < fPendingLF) {
@@ -203,6 +224,7 @@ void ParserCommon::writePending() {
 }
 
 void ParserCommon::writeString(const char* str) {
+    SkASSERT(!fReturnOnWrite);
     const size_t len = strlen(str);
     SkASSERT(len > 0);
     SkASSERT(' ' < str[0]);
@@ -223,7 +245,7 @@ void ParserCommon::writeString(const char* str) {
     fMaxLF = 2;
 }
 
-const char* ParserCommon::ReadToBuffer(string filename, int* size) {
+char* ParserCommon::ReadToBuffer(string filename, int* size) {
     FILE* file = fopen(filename.c_str(), "rb");
     if (!file) {
         return nullptr;
@@ -239,13 +261,27 @@ const char* ParserCommon::ReadToBuffer(string filename, int* size) {
     return buffer;
 }
 
+char* ParserCommon::FindDateTime(char* buffer, int size) {
+    int index = -1;
+    int lineCount = 8;
+    while (++index < size && ('\n' != buffer[index] || --lineCount))
+        ;
+    if (lineCount) {
+        return nullptr;
+    }
+    if (strncmp("\n   on 20", &buffer[index], 9)) {
+        return nullptr;
+    }
+    return &buffer[index];
+}
+
 bool ParserCommon::writtenFileDiffers(string filename, string readname) {
     int writtenSize, readSize;
-    const char* written = ReadToBuffer(filename, &writtenSize);
+    char* written = ReadToBuffer(filename, &writtenSize);
     if (!written) {
         return true;
     }
-    const char* read = ReadToBuffer(readname, &readSize);
+    char* read = ReadToBuffer(readname, &readSize);
     if (!read) {
         delete[] written;
         return true;
@@ -262,6 +298,12 @@ bool ParserCommon::writtenFileDiffers(string filename, string readname) {
 #endif
     if (readSize != writtenSize) {
         return true;
+    }
+    // force the date/time to be the same, if present in both
+    const char* newDateTime = FindDateTime(written, writtenSize);
+    char* oldDateTime = FindDateTime(read, readSize);
+    if (newDateTime && oldDateTime) {
+        memcpy(oldDateTime, newDateTime, 26);
     }
     bool result = !!memcmp(written, read, writtenSize);
     delete[] written;

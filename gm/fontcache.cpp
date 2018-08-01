@@ -10,9 +10,8 @@
 
 #include "gm.h"
 
-#if SK_SUPPORT_GPU
-
 #include "GrContext.h"
+#include "GrContextPriv.h"
 #include "GrContextOptions.h"
 #include "SkCanvas.h"
 #include "SkGraphics.h"
@@ -74,7 +73,7 @@ protected:
         static const bool kShowAtlas = false;
         if (kShowAtlas) {
             if (auto ctx = canvas->getGrContext()) {
-                auto img = ctx->getFontAtlasImage_ForTesting(kA8_GrMaskFormat);
+                auto img = ctx->contextPriv().getFontAtlasImage_ForTesting(kA8_GrMaskFormat);
                 canvas->drawImage(img, 0, 0);
             }
         }
@@ -141,5 +140,3 @@ constexpr SkScalar FontCacheGM::kSize;
 
 DEF_GM(return new FontCacheGM(GrContextOptions::Enable::kNo))
 DEF_GM(return new FontCacheGM(GrContextOptions::Enable::kYes))
-
-#endif

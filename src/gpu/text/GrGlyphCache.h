@@ -12,6 +12,7 @@
 #include "GrGlyph.h"
 #include "SkArenaAlloc.h"
 #include "SkGlyphCache.h"
+#include "SkMasks.h"
 #include "SkTDynamicHash.h"
 
 class GrGlyphCache;
@@ -63,9 +64,10 @@ public:
     // happen.
     // TODO we can handle some of these cases if we really want to, but the long term solution is to
     // get the actual glyph image itself when we get the glyph metrics.
-    bool addGlyphToAtlas(GrResourceProvider*, GrDeferredUploadTarget*, GrGlyphCache*,
-                         GrAtlasManager*, GrGlyph*,
-                         SkGlyphCache*, GrMaskFormat expectedMaskFormat);
+    GrDrawOpAtlas::ErrorCode addGlyphToAtlas(GrResourceProvider*, GrDeferredUploadTarget*,
+                                             GrGlyphCache*, GrAtlasManager*, GrGlyph*,
+                                             SkGlyphCache*, GrMaskFormat expectedMaskFormat,
+                                             bool isScaledGlyph);
 
     // testing
     int countGlyphs() const { return fCache.count(); }
@@ -107,10 +109,9 @@ private:
  */
 class GrGlyphCache {
 public:
-    GrGlyphCache();
+    GrGlyphCache(const GrCaps* caps, size_t maxTextureBytes);
     ~GrGlyphCache();
 
-    void setGlyphSizeLimit(SkScalar sizeLimit) { fGlyphSizeLimit = sizeLimit; }
     SkScalar getGlyphSizeLimit() const { return fGlyphSizeLimit; }
 
     void setStrikeToPreserve(GrTextStrike* strike) { fPreserveStrike = strike; }
@@ -127,9 +128,12 @@ public:
         return strike;
     }
 
+    const SkMasks& getMasks() const { return *f565Masks; }
+
     void freeAll();
 
     static void HandleEviction(GrDrawOpAtlas::AtlasID, void*);
+    static SkScalar ComputeGlyphSizeLimit(int maxTextureSize, size_t maxTextureBytes);
 
 private:
     sk_sp<GrTextStrike> generateStrike(const SkGlyphCache* cache) {
@@ -144,6 +148,7 @@ private:
     StrikeHash fCache;
     GrTextStrike* fPreserveStrike;
     SkScalar fGlyphSizeLimit;
+    std::unique_ptr<const SkMasks> f565Masks;
 };
 
 #endif

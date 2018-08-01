@@ -6,10 +6,11 @@
  */
 
 #include "SkColorSpaceXformer.h"
-#include "SkReadBuffer.h"
-#include "SkSweepGradient.h"
+#include "SkFloatingPoint.h"
 #include "SkPM4fPriv.h"
 #include "SkRasterPipeline.h"
+#include "SkReadBuffer.h"
+#include "SkSweepGradient.h"
 #include "SkWriteBuffer.h"
 
 SkSweepGradient::SkSweepGradient(const SkPoint& center, SkScalar t0, SkScalar t1,
@@ -31,7 +32,7 @@ SkShader::GradientType SkSweepGradient::asAGradient(GradientInfo* info) const {
 }
 
 static std::tuple<SkScalar, SkScalar> angles_from_t_coeff(SkScalar tBias, SkScalar tScale) {
-    return std::make_tuple(-tBias * 360, (1 / tScale - tBias) * 360);
+    return std::make_tuple(-tBias * 360, (sk_ieee_float_divide(1, tScale) - tBias) * 360);
 }
 
 sk_sp<SkFlattenable> SkSweepGradient::CreateProc(SkReadBuffer& buffer) {
@@ -216,21 +217,14 @@ void GrSweepGradient::GLSLSweepProcessor::emitCode(EmitArgs& args) {
 std::unique_ptr<GrFragmentProcessor> SkSweepGradient::asFragmentProcessor(
         const GrFPArgs& args) const {
     SkMatrix matrix;
-    if (!this->getLocalMatrix().invert(&matrix)) {
+    if (!this->totalLocalMatrix(args.fPreLocalMatrix, args.fPostLocalMatrix)->invert(&matrix)) {
         return nullptr;
-    }
-    if (args.fLocalMatrix) {
-        SkMatrix inv;
-        if (!args.fLocalMatrix->invert(&inv)) {
-            return nullptr;
-        }
-        matrix.postConcat(inv);
     }
     matrix.postConcat(fPtsToUnit);
 
     return GrSweepGradient::Make(
             GrGradientEffect::CreateArgs(args.fContext, this, &matrix, fTileMode,
-                                         args.fDstColorSpaceInfo->colorSpace()),
+                                         args.fDstColorSpaceInfo),
             fTBias, fTScale);
 }
 
@@ -247,21 +241,6 @@ sk_sp<SkShader> SkSweepGradient::onMakeColorSpace(SkColorSpaceXformer* xformer) 
                                        fGradFlags, &this->getLocalMatrix());
 }
 
-#ifndef SK_IGNORE_TO_STRING
-void SkSweepGradient::toString(SkString* str) const {
-    str->append("SkSweepGradient: (");
-
-    str->append("center: (");
-    str->appendScalar(fCenter.fX);
-    str->append(", ");
-    str->appendScalar(fCenter.fY);
-    str->append(") ");
-
-    this->INHERITED::toString(str);
-
-    str->append(")");
-}
-
 void SkSweepGradient::appendGradientStages(SkArenaAlloc* alloc, SkRasterPipeline* p,
                                            SkRasterPipeline*) const {
     p->append(SkRasterPipeline::xy_to_unit_angle);
@@ -269,4 +248,3 @@ void SkSweepGradient::appendGradientStages(SkArenaAlloc* alloc, SkRasterPipeline
                                              SkMatrix::MakeTrans(fTBias , 0)));
 }
 
-#endif

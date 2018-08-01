@@ -16,6 +16,7 @@
 #include "GrSurfaceContext.h"
 #include "GrTypesPriv.h"
 #include "GrXferProcessor.h"
+#include "SkCanvas.h"
 #include "SkRefCnt.h"
 #include "SkSurfaceProps.h"
 #include "text/GrTextUtils.h"
@@ -35,7 +36,6 @@ class GrShape;
 class GrStyle;
 class GrTextureProxy;
 struct GrUserStencilSettings;
-class SkDrawFilter;
 struct SkDrawShadowRec;
 struct SkIPoint;
 struct SkIRect;
@@ -63,17 +63,13 @@ public:
     //      we could use GrPaint except that
     //    * SkPaint->GrPaint conversion depends upon whether the glyphs are color or grayscale and
     //      this can vary within a text run.
-    virtual void drawText(const GrClip&, const SkPaint&, const SkMatrix& viewMatrix,
-                          const char text[], size_t byteLength, SkScalar x, SkScalar y,
-                          const SkIRect& clipBounds);
     virtual void drawPosText(const GrClip&, const SkPaint&, const SkMatrix& viewMatrix,
                              const char text[], size_t byteLength, const SkScalar pos[],
                              int scalarsPerPosition, const SkPoint& offset,
                              const SkIRect& clipBounds);
     virtual void drawTextBlob(const GrClip&, const SkPaint&,
                               const SkMatrix& viewMatrix, const SkTextBlob*,
-                              SkScalar x, SkScalar y,
-                              SkDrawFilter*, const SkIRect& clipBounds);
+                              SkScalar x, SkScalar y, const SkIRect& clipBounds);
 
     /**
      * Provides a perfomance hint that the render target's contents are allowed
@@ -146,11 +142,12 @@ public:
      * Creates an op that draws a subrectangle of a texture. The passed color is modulated by the
      * texture's color. 'srcRect' specifies the rectangle of the texture to draw. 'dstRect'
      * specifies the rectangle to draw in local coords which will be transformed by 'viewMatrix' to
-     * device space. This asserts that the view matrix does not have perspective.
+     * device space.
      */
-    void drawTextureAffine(const GrClip& clip, sk_sp<GrTextureProxy>, GrSamplerState::Filter,
-                           GrColor, const SkRect& srcRect, const SkRect& dstRect, GrAA aa,
-                           const SkMatrix& viewMatrix, sk_sp<GrColorSpaceXform>);
+    void drawTexture(const GrClip& clip, sk_sp<GrTextureProxy>, GrSamplerState::Filter, GrColor,
+                     const SkRect& srcRect, const SkRect& dstRect, GrAA aa,
+                     SkCanvas::SrcRectConstraint, const SkMatrix& viewMatrix,
+                     sk_sp<GrColorSpaceXform>);
 
     /**
      * Draw a roundrect using a paint.
@@ -220,12 +217,16 @@ public:
      * @param   paint            describes how to color pixels.
      * @param   viewMatrix       transformation matrix
      * @param   vertices         specifies the mesh to draw.
+     * @param   bones            bone deformation matrices.
+     * @param   boneCount        number of bone matrices.
      * @param   overridePrimType primitive type to draw. If NULL, derive prim type from vertices.
      */
     void drawVertices(const GrClip&,
                       GrPaint&& paint,
                       const SkMatrix& viewMatrix,
                       sk_sp<SkVertices> vertices,
+                      const SkMatrix bones[],
+                      int boneCount,
                       GrPrimitiveType* overridePrimType = nullptr);
 
     /**
@@ -333,7 +334,7 @@ public:
     void insertEventMarker(const SkString&);
 
     GrFSAAType fsaaType() const { return fRenderTargetProxy->fsaaType(); }
-    const GrCaps* caps() const { return fContext->caps(); }
+    const GrCaps* caps() const { return fContext->contextPriv().caps(); }
     int width() const { return fRenderTargetProxy->width(); }
     int height() const { return fRenderTargetProxy->height(); }
     int numColorSamples() const { return fRenderTargetProxy->numColorSamples(); }
@@ -404,13 +405,14 @@ private:
     friend class GrAALinearizingConvexPathRenderer;  // for access to add[Mesh]DrawOp
     friend class GrSmallPathRenderer;                // for access to add[Mesh]DrawOp
     friend class GrDefaultPathRenderer;              // for access to add[Mesh]DrawOp
-    friend class GrMSAAPathRenderer;                 // for access to add[Mesh]DrawOp
     friend class GrStencilAndCoverPathRenderer;      // for access to add[Mesh]DrawOp
     friend class GrTessellatingPathRenderer;         // for access to add[Mesh]DrawOp
-    friend class GrCCAtlas;                          // for access to addDrawOp
+    friend class GrCCPerFlushResources;              // for access to addDrawOp
     friend class GrCoverageCountingPathRenderer;     // for access to addDrawOp
     // for a unit test
-    friend void test_draw_op(GrRenderTargetContext*, std::unique_ptr<GrFragmentProcessor>,
+    friend void test_draw_op(GrContext*,
+                             GrRenderTargetContext*,
+                             std::unique_ptr<GrFragmentProcessor>,
                              sk_sp<GrTextureProxy>);
 
     void internalClear(const GrFixedClip&, const GrColor, CanClearFullscreen);
@@ -436,7 +438,7 @@ private:
 
     // These perform processing specific to Gr[Mesh]DrawOp-derived ops before recording them into
     // the op list. They return the id of the opList to which the op was added, or 0, if it was
-    // dropped (e.g., due to clipping).
+    // dropped (e.g., due to clipping or being combined).
     uint32_t addDrawOp(const GrClip&, std::unique_ptr<GrDrawOp>);
 
     // Makes a copy of the proxy if it is necessary for the draw and places the texture that should

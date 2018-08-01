@@ -8,8 +8,6 @@
 #ifndef SK_COMMON_FLAGS_GPU_H
 #define SK_COMMON_FLAGS_GPU_H
 
-#if SK_SUPPORT_GPU
-
 #include "GrTypesPriv.h"
 #include "SkCommandLineFlags.h"
 #include "SkTypes.h"
@@ -28,8 +26,6 @@ inline GpuPathRenderers get_named_pathrenderers_flags(const char* name) {
         return GpuPathRenderers::kDashLine;
     } else if (!strcmp(name, "nvpr")) {
         return GpuPathRenderers::kStencilAndCover;
-    } else if (!strcmp(name, "msaa")) {
-        return GpuPathRenderers::kMSAA;
     } else if (!strcmp(name, "aaconvex")) {
         return GpuPathRenderers::kAAConvex;
     } else if (!strcmp(name, "aalinearizing")) {
@@ -68,7 +64,5 @@ inline GpuPathRenderers CollectGpuPathRenderersFromFlags() {
  *  Helper to set GrContextOptions from common GPU flags.
  */
 void SetCtxOptionsFromCommonFlags(struct GrContextOptions*);
-
-#endif // SK_SUPPORT_GPU
 
 #endif
