@@ -4,6 +4,7 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#include "SkDWriteNTDDI_VERSION.h"
 
 #include "SkTypes.h"
 #if defined(SK_BUILD_FOR_WIN)
@@ -175,14 +176,14 @@ private:
 };
 
 SkTypeface::LocalizedStrings* DWriteFontTypeface::onCreateFamilyNameIterator() const {
-    SkTypeface::LocalizedStrings* nameIter =
-        SkOTUtils::LocalizedStrings_NameTable::CreateForFamilyNames(*this);
-    if (nullptr == nameIter) {
+    sk_sp<SkTypeface::LocalizedStrings> nameIter =
+        SkOTUtils::LocalizedStrings_NameTable::MakeForFamilyNames(*this);
+    if (!nameIter) {
         SkTScopedComPtr<IDWriteLocalizedStrings> familyNames;
         HRNM(fDWriteFontFamily->GetFamilyNames(&familyNames), "Could not obtain family names.");
-        nameIter = new LocalizedStrings_IDWriteLocalizedStrings(familyNames.release());
+        nameIter = sk_make_sp<LocalizedStrings_IDWriteLocalizedStrings>(familyNames.release());
     }
-    return nameIter;
+    return nameIter.release();
 }
 
 int DWriteFontTypeface::onGetVariationDesignPosition(
@@ -484,7 +485,7 @@ std::unique_ptr<SkAdvancedTypefaceMetrics> DWriteFontTypeface::onGetAdvancedMetr
             !exists ||
             FAILED(sk_get_locale_string(postScriptNames.get(), nullptr, &info->fPostScriptName)))
         {
-            SkDEBUGF(("Unable to get postscript name for typeface %p\n", this));
+            SkDEBUGF("Unable to get postscript name for typeface %p\n", this);
         }
     }
 
@@ -493,7 +494,7 @@ std::unique_ptr<SkAdvancedTypefaceMetrics> DWriteFontTypeface::onGetAdvancedMetr
     if (FAILED(fDWriteFontFamily->GetFamilyNames(&familyNames)) ||
         FAILED(sk_get_locale_string(familyNames.get(), nullptr, &info->fFontName)))
     {
-        SkDEBUGF(("Unable to get family name for typeface 0x%p\n", this));
+        SkDEBUGF("Unable to get family name for typeface 0x%p\n", this);
     }
     if (info->fPostScriptName.isEmpty()) {
         info->fPostScriptName = info->fFontName;

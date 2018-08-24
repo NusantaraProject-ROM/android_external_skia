@@ -39,7 +39,11 @@ def RunSteps(api):
       api.flavor.copy_file_to_device('file.txt', 'file.txt')
       api.flavor.create_clean_host_dir('results_dir')
       api.flavor.create_clean_device_dir('device_results_dir')
-      api.flavor.install_everything()
+      if 'Lottie' in api.properties['buildername']:
+        api.flavor.install(lotties=True)
+      else:
+        api.flavor.install(skps=True, images=True, lotties=False, svgs=True,
+                           resources=True)
       if 'Test' in api.properties['buildername']:
         api.flavor.step('dm', ['dm', '--some-flag'])
         api.flavor.copy_directory_contents_to_host(
@@ -67,11 +71,12 @@ TEST_BUILDERS = [
   'Test-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-Android_ASAN',
   'Test-ChromeOS-Clang-SamsungChromebookPlus-GPU-MaliT860-arm-Release-All',
   'Test-Debian9-Clang-GCE-CPU-AVX2-x86_64-Debug-All-Coverage',
+  'Test-Debian9-Clang-GCE-CPU-AVX2-x86_64-Release-All-Lottie',
   'Test-Debian9-Clang-GCE-CPU-AVX2-x86_64-Release-All-TSAN',
   'Test-Debian9-Clang-GCE-GPU-SwiftShader-x86_64-Debug-All-SwiftShader',
   'Test-Debian9-Clang-NUC7i5BNK-GPU-IntelIris640-x86_64-Debug-All-OpenCL',
   'Test-Debian9-Clang-NUC7i5BNK-GPU-IntelIris640-x86_64-Debug-All-Vulkan',
-  'Test-Mac-Clang-MacMini7.1-CPU-AVX-x86_64-Debug-All-ASAN',
+  'Test-Mac-Clang-MacBookPro11.5-CPU-AVX2-x86_64-Debug-All-ASAN',
   ('Test-Ubuntu17-GCC-Golo-GPU-QuadroP400-x86_64-Release-All'
    '-Valgrind_AbandonGpuContext_SK_CPU_LIMIT_SSE41'),
   'Test-Win10-Clang-Golo-GPU-QuadroP400-x86_64-Release-All-Vulkan_ProcDump',

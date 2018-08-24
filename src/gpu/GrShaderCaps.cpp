@@ -38,6 +38,9 @@ GrShaderCaps::GrShaderCaps(const GrContextOptions& options) {
     fMustGuardDivisionEvenAfterExplicitZeroCheck = false;
     fCanUseFragCoord = true;
     fIncompleteShortIntPrecision = false;
+    fAddAndTrueToLoopCondition = false;
+    fUnfoldShortCircuitAsTernary = false;
+    fEmulateAbsIntFunction = false;
     fFlatInterpolationSupport = false;
     fPreferFlatInterpolation = false;
     fNoPerspectiveInterpolationSupport = false;
@@ -64,10 +67,6 @@ GrShaderCaps::GrShaderCaps(const GrContextOptions& options) {
     fMaxFragmentSamplers = 0;
     fMaxCombinedSamplers = 0;
     fAdvBlendEqInteraction = kNotSupported_AdvBlendEqInteraction;
-
-    // TODO: Default this to 0 and only enable image multitexturing when a "safe" threshold is
-    // known for a GPU class.
-    fDisableImageMultitexturingDstRectAreaThreshold = std::numeric_limits<size_t>::max();
 }
 
 void GrShaderCaps::dumpJSON(SkJSONWriter* writer) const {
@@ -108,6 +107,9 @@ void GrShaderCaps::dumpJSON(SkJSONWriter* writer) const {
                        fMustGuardDivisionEvenAfterExplicitZeroCheck);
     writer->appendBool("Can use gl_FragCoord", fCanUseFragCoord);
     writer->appendBool("Incomplete short int precision", fIncompleteShortIntPrecision);
+    writer->appendBool("Add and true to loops workaround", fAddAndTrueToLoopCondition);
+    writer->appendBool("Unfold short circuit as ternary", fUnfoldShortCircuitAsTernary);
+    writer->appendBool("Emulate abs(int) function", fEmulateAbsIntFunction);
     writer->appendBool("Flat interpolation support", fFlatInterpolationSupport);
     writer->appendBool("Prefer flat interpolation", fPreferFlatInterpolation);
     writer->appendBool("No perspective interpolation support", fNoPerspectiveInterpolationSupport);
@@ -123,8 +125,6 @@ void GrShaderCaps::dumpJSON(SkJSONWriter* writer) const {
     writer->appendS32("Max Combined Samplers", fMaxFragmentSamplers);
     writer->appendString("Advanced blend equation interaction",
                          kAdvBlendEqInteractionStr[fAdvBlendEqInteraction]);
-    writer->appendU64("Disable image multitexturing dst area threshold",
-                      fDisableImageMultitexturingDstRectAreaThreshold);
 
     writer->endObject();
 }
@@ -142,11 +142,11 @@ void GrShaderCaps::applyOptionsOverrides(const GrContextOptions& options) {
         SkASSERT(!fMustGuardDivisionEvenAfterExplicitZeroCheck);
         SkASSERT(fCanUseFragCoord);
         SkASSERT(!fIncompleteShortIntPrecision);
+        SkASSERT(!fAddAndTrueToLoopCondition);
+        SkASSERT(!fUnfoldShortCircuitAsTernary);
+        SkASSERT(!fEmulateAbsIntFunction);
     }
 #if GR_TEST_UTILS
     fDualSourceBlendingSupport = fDualSourceBlendingSupport && !options.fSuppressDualSourceBlending;
-    if (options.fDisableImageMultitexturing) {
-        fDisableImageMultitexturingDstRectAreaThreshold = 0;
-    }
 #endif
 }

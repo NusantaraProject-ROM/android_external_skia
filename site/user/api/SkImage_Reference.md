@@ -2300,7 +2300,7 @@ partial or full <a href='#Image'>Image</a>, or nullptr
 
 ### Example
 
-<div><fiddle-embed name="93669037c9eb9d142e7776b9f936fa96"></fiddle-embed></div>
+<div><fiddle-embed name="889e495ce3e3b3bacc96e8230932331c"></fiddle-embed></div>
 
 ### See Also
 
@@ -2645,7 +2645,7 @@ created <a href='#Image'>Image</a> in <a href='#SkImage_makeColorSpace_target'>t
 
 ### Example
 
-<div><fiddle-embed name="ab8bcb9acecbee444019a724d2b0503c"></fiddle-embed></div>
+<div><fiddle-embed name="dbf5f75c1275a3013672f896767140fb"></fiddle-embed></div>
 
 ### See Also
 

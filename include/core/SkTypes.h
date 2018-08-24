@@ -58,7 +58,7 @@ SK_API extern void sk_abort_no_print(void);
     #define SkDEBUGFAIL(message)        SK_ABORT(message)
     #define SkDEBUGFAILF(fmt, ...)      SkASSERTF(false, fmt, ##__VA_ARGS__)
     #define SkDEBUGCODE(...)            __VA_ARGS__
-    #define SkDEBUGF(args       )       SkDebugf args
+    #define SkDEBUGF(...)               SkDebugf(__VA_ARGS__)
     #define SkAssertResult(cond)        SkASSERT(cond)
 #else
     #define SkASSERT(cond)            static_cast<void>(0)
@@ -66,7 +66,7 @@ SK_API extern void sk_abort_no_print(void);
     #define SkDEBUGFAIL(message)
     #define SkDEBUGFAILF(fmt, ...)
     #define SkDEBUGCODE(...)
-    #define SkDEBUGF(args)
+    #define SkDEBUGF(...)
 
     // unlike SkASSERT, this macro executes its condition in the non-debug build.
     // The if is present so that this can be used with functions marked SK_WARN_UNUSED_RESULT.
@@ -205,13 +205,6 @@ template <typename T> constexpr const T& SkTMax(const T& a, const T& b) {
 
 template <typename T> constexpr const T& SkTClamp(const T& x, const T& lo, const T& hi) {
     return (x < lo) ? lo : SkTMin(x, hi);
-}
-
-static inline int32_t SkFastMin32(int32_t value, int32_t max) {
-    if (value > max) {
-        value = max;
-    }
-    return value;
 }
 
 /** @return value pinned (clamped) between min and max, inclusively.

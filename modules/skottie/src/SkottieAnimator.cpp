@@ -16,6 +16,7 @@
 #include <memory>
 
 namespace skottie {
+namespace internal {
 
 namespace {
 
@@ -187,10 +188,7 @@ public:
 
 protected:
     void onTick(float t) override {
-        T val;
-        this->eval(this->frame(t), t, &val);
-
-        fApplyFunc(val);
+        fApplyFunc(*this->eval(this->frame(t), t, &fScratch));
     }
 
 private:
@@ -202,8 +200,7 @@ private:
 
     int parseValue(const skjson::Value& jv) override {
         T val;
-        if (!Parse<T>(jv, &val) || (!fVs.empty() &&
-                ValueTraits<T>::Cardinality(val) != ValueTraits<T>::Cardinality(fVs.back()))) {
+        if (!Parse<T>(jv, &val) || (!fVs.empty() && !ValueTraits<T>::CanLerp(val, fVs.back()))) {
             return -1;
         }
 
@@ -214,23 +211,30 @@ private:
         return fVs.count() - 1;
     }
 
-    void eval(const KeyframeRec& rec, float t, T* v) const {
+    const T* eval(const KeyframeRec& rec, float t, T* v) const {
         SkASSERT(rec.isValid());
         if (rec.isConstant() || t <= rec.t0) {
-            *v = fVs[rec.vidx0];
+            return &fVs[rec.vidx0];
         } else if (t >= rec.t1) {
-            *v = fVs[rec.vidx1];
-        } else {
-            const auto lt = this->localT(rec, t);
-            const auto& v0 = fVs[rec.vidx0];
-            const auto& v1 = fVs[rec.vidx1];
-            *v = ValueTraits<T>::Lerp(v0, v1, lt);
+            return &fVs[rec.vidx1];
         }
+
+        const auto lt = this->localT(rec, t);
+        const auto& v0 = fVs[rec.vidx0];
+        const auto& v1 = fVs[rec.vidx1];
+        ValueTraits<T>::Lerp(v0, v1, lt, v);
+
+        return v;
     }
 
     const std::function<void(const T&)> fApplyFunc;
     SkTArray<T>                         fVs;
 
+    // LERP storage: we use this to temporarily store interpolation results.
+    // Alternatively, the temp result could live on the stack -- but for vector values that would
+    // involve dynamic allocations on each tick.  This a trade-off to avoid allocator pressure
+    // during animation.
+    T                                   fScratch; // lerp storage
 
     using INHERITED = KeyframeAnimatorBase;
 };
@@ -351,31 +355,32 @@ bool BindSplitPositionProperty(const skjson::Value& jv,
 
 template <>
 bool BindProperty(const skjson::Value& jv,
-                  sksg::AnimatorList* animators,
+                  AnimatorScope* ascope,
                   std::function<void(const ScalarValue&)>&& apply,
                   const ScalarValue* noop) {
-    return BindPropertyImpl(jv, animators, std::move(apply), noop);
+    return BindPropertyImpl(jv, ascope, std::move(apply), noop);
 }
 
 template <>
 bool BindProperty(const skjson::Value& jv,
-                  sksg::AnimatorList* animators,
+                  AnimatorScope* ascope,
                   std::function<void(const VectorValue&)>&& apply,
                   const VectorValue* noop) {
     if (!jv.is<skjson::ObjectValue>())
         return false;
 
     return ParseDefault<bool>(jv.as<skjson::ObjectValue>()["s"], false)
-        ? BindSplitPositionProperty(jv, animators, std::move(apply), noop)
-        : BindPropertyImpl(jv, animators, std::move(apply), noop);
+        ? BindSplitPositionProperty(jv, ascope, std::move(apply), noop)
+        : BindPropertyImpl(jv, ascope, std::move(apply), noop);
 }
 
 template <>
 bool BindProperty(const skjson::Value& jv,
-                  sksg::AnimatorList* animators,
+                  AnimatorScope* ascope,
                   std::function<void(const ShapeValue&)>&& apply,
                   const ShapeValue* noop) {
-    return BindPropertyImpl(jv, animators, std::move(apply), noop);
+    return BindPropertyImpl(jv, ascope, std::move(apply), noop);
 }
 
+} // namespace internal
 } // namespace skottie

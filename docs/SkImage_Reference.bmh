@@ -1758,8 +1758,8 @@ pixels in Image could not be read or copied.
 #Example
 #Image 3
     canvas->scale(.5f, .5f);
-    const int width = 32;
-    const int height = 32;
+    const int width = 64;
+    const int height = 64;
     for (int y = 0; y < 512; y += height ) {
         for (int x = 0; x < 512; x += width ) {
             sk_sp<SkImage> subset(image->makeSubset({x, y, x + width, y + height}));
@@ -2209,13 +2209,9 @@ If Image colorSpace returns nullptr, Image Color_Space is assumed to be sRGB.
              SkColorSpace::kSRGB_RenderTargetGamma, SkColorSpace::kSRGB_Gamut);
     sk_sp<SkColorSpace> wackyColorSpace = normalColorSpace->makeColorSpin();
     for (auto colorSpace : { normalColorSpace, wackyColorSpace  } ) {
-        for (auto transfer : { SkTransferFunctionBehavior::kRespect,
-                               SkTransferFunctionBehavior::kIgnore } ) {
-            sk_sp<SkImage> colorSpaced = image->makeColorSpace(colorSpace, transfer);
-            canvas->drawImage(colorSpaced, 0, 0);
-            canvas->translate(128, 0);
-        }
-        canvas->translate(-256, 128);
+        sk_sp<SkImage> colorSpaced = image->makeColorSpace(colorSpace);
+        canvas->drawImage(colorSpaced, 0, 0);
+        canvas->translate(128, 0);
     }
 ##
 

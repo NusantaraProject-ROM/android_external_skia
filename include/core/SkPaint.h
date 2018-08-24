@@ -25,12 +25,14 @@
 #include "SkMatrix.h"
 #include "SkRefCnt.h"
 
+class GrTextBlob;
 class SkAutoDescriptor;
 class SkColorFilter;
 class SkData;
 class SkDescriptor;
 class SkDrawLooper;
 class SkGlyph;
+class SkGlyphRunListPainter;
 struct SkRect;
 class SkGlyphCache;
 class SkImageFilter;
@@ -1455,7 +1457,7 @@ public:
                                       Style style) const;
 
 private:
-    typedef const SkGlyph& (*GlyphCacheProc)(SkGlyphCache*, const char**);
+    typedef const SkGlyph& (*GlyphCacheProc)(SkGlyphCache*, const char**, const char*);
 
     sk_sp<SkTypeface>     fTypeface;
     sk_sp<SkPathEffect>   fPathEffect;
@@ -1526,15 +1528,15 @@ private:
 
     static SkScalar MaxCacheSize2(SkScalar maxLimit);
 
-    friend class GrAtlasTextBlob;
+    friend class GrTextBlob;
     friend class GrTextContext;
     friend class GrGLPathRendering;
     friend class GrPathRendering;
-    friend class GrTextUtils;
     friend class SkAutoGlyphCacheNoGamma;
     friend class SkCanonicalizePaint;
     friend class SkCanvas;
     friend class SkDraw;
+    friend class SkGlyphRunListPainter;
     friend class SkPaintPriv;
     friend class SkPDFDevice;
     friend class SkScalerContext;  // for computeLuminanceColor()

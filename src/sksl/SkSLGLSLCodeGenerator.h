@@ -102,7 +102,9 @@ protected:
 
     void writeType(const Type& type);
 
-    void writeExtension(const Extension& ext);
+    void writeExtension(const String& name);
+
+    void writeExtension(const String& name, bool require);
 
     void writeInterfaceBlock(const InterfaceBlock& intf);
 
@@ -155,6 +157,8 @@ protected:
     static Precedence GetBinaryPrecedence(Token::Kind op);
 
     virtual void writeBinaryExpression(const BinaryExpression& b, Precedence parentPrecedence);
+    void writeShortCircuitWorkaroundExpression(const BinaryExpression& b,
+                                               Precedence parentPrecedence);
 
     void writeTernaryExpression(const TernaryExpression& t, Precedence parentPrecedence);
 
@@ -188,13 +192,14 @@ protected:
 
     virtual void writeSwitchStatement(const SwitchStatement& s);
 
-    void writeReturnStatement(const ReturnStatement& r);
+    virtual void writeReturnStatement(const ReturnStatement& r);
 
     virtual void writeProgramElement(const ProgramElement& e);
 
     const char* fLineEnding;
     const Context& fContext;
-    StringStream fHeader;
+    StringStream fExtensions;
+    StringStream fGlobals;
     StringStream fExtraFunctions;
     String fFunctionHeader;
     Program::Kind fProgramKind;
@@ -214,6 +219,23 @@ protected:
     bool fSetupFragPositionGlobal = false;
     bool fSetupFragPositionLocal = false;
     bool fSetupFragCoordWorkaround = false;
+
+    // We map function names to function class so we can quickly deal with function calls that need
+    // extra processing
+    enum class FunctionClass {
+        kAbs,
+        kAtan,
+        kDeterminant,
+        kDerivative,
+        kFract,
+        kInverse,
+        kInverseSqrt,
+        kMin,
+        kSaturate,
+        kTexture,
+        kTranspose
+    };
+    static std::unordered_map<StringFragment, FunctionClass>* fFunctionClasses;
 
     typedef CodeGenerator INHERITED;
 };

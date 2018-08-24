@@ -60,7 +60,7 @@ def nanobench_flags(api, bot):
     args.append('--nogpu')
     configs.extend(['8888', 'nonrendering'])
 
-    if '-GCE-' in bot:
+    if 'BonusConfigs' in bot or ('SAN' in bot and 'GCE' in bot):
       configs += [
           'f16',
           'srgb',
@@ -208,8 +208,6 @@ def nanobench_flags(api, bot):
     match.append('~top25desk_ebay_com.skp_1.1')
     match.append('~top25desk_ebay.skp_1.1')
     match.append('~top25desk_ebay.skp_1.1_mpd')
-  if 'Vulkan' in bot and 'NexusPlayer' in bot:
-    match.append('~blendmode_') # skia:6691
   if ('ASAN' in bot or 'UBSAN' in bot) and 'CPU' in bot:
     # floor2int_undef benches undefined behavior, so ASAN correctly complains.
     match.append('~^floor2int_undef$')
@@ -304,6 +302,7 @@ def perf_steps(api):
       '~desk_carsvg.skp',
       '~^path_text_clipped', # Bot times out; skia:7190
       '~shapes_rrect_inner_rrect_50_500x500', # skia:7551
+      '~compositing_images',
     ])
 
   if upload_perf_results(b):
@@ -352,7 +351,7 @@ def RunSteps(api):
       if 'Chromecast' in api.vars.builder_name:
         api.flavor.install(resources=True, skps=True)
       else:
-        api.flavor.install_everything()
+        api.flavor.install(skps=True, images=True, svgs=True, resources=True)
       perf_steps(api)
     finally:
       api.flavor.cleanup_steps()
@@ -363,11 +362,12 @@ TEST_BUILDERS = [
   'Perf-Android-Clang-Nexus5-GPU-Adreno330-arm-Debug-All-Android',
   ('Perf-Android-Clang-Nexus5x-GPU-Adreno418-arm64-Release-All-'
    'Android_NoGPUThreads'),
-  'Perf-Android-Clang-NexusPlayer-GPU-PowerVR-x86-Release-All-Android_Vulkan',
   'Perf-ChromeOS-Clang-ASUSChromebookFlipC100-GPU-MaliT764-arm-Release-All',
   'Perf-Chromecast-Clang-Chorizo-CPU-Cortex_A7-arm-Debug-All',
   'Perf-Chromecast-Clang-Chorizo-GPU-Cortex_A7-arm-Release-All',
+  'Perf-Debian9-Clang-GCE-CPU-AVX2-x86_64-Debug-All',
   'Perf-Debian9-Clang-GCE-CPU-AVX2-x86_64-Debug-All-ASAN',
+  'Perf-Debian9-Clang-GCE-CPU-AVX2-x86_64-Release-All-BonusConfigs',
   'Perf-Debian9-Clang-NUC5PPYH-GPU-IntelHD405-x86_64-Debug-All-Vulkan',
   'Perf-Debian9-Clang-NUC7i5BNK-GPU-IntelIris640-x86_64-Release-All',
   ('Perf-Mac-Clang-MacMini7.1-GPU-IntelIris5100-x86_64-Release-All-'
