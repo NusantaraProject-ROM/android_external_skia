@@ -7,10 +7,11 @@
 #ifndef SkPDFDocument_DEFINED
 #define SkPDFDocument_DEFINED
 
+#include "SkCanvas.h"
 #include "SkDocument.h"
 #include "SkPDFCanon.h"
-#include "SkPDFMetadata.h"
 #include "SkPDFFont.h"
+#include "SkPDFMetadata.h"
 
 class SkPDFDevice;
 
@@ -29,17 +30,19 @@ sk_sp<SkDocument> SkPDFMakeDocument(SkWStream* stream,
 
 // Logically part of SkPDFDocument (like SkPDFCanon), but separate to
 // keep similar functionality together.
-struct SkPDFObjectSerializer : SkNoncopyable {
+struct SkPDFObjectSerializer {
     SkPDFObjNumMap fObjNumMap;
-    SkTDArray<int32_t> fOffsets;
+    std::vector<int32_t> fOffsets;
     sk_sp<SkPDFObject> fInfoDict;
     size_t fBaseOffset;
-    int32_t fNextToBeSerialized;  // index in fObjNumMap
+    size_t fNextToBeSerialized;  // index in fObjNumMap
 
     SkPDFObjectSerializer();
     ~SkPDFObjectSerializer();
     SkPDFObjectSerializer(SkPDFObjectSerializer&&);
     SkPDFObjectSerializer& operator=(SkPDFObjectSerializer&&);
+    SkPDFObjectSerializer(const SkPDFObjectSerializer&) = delete;
+    SkPDFObjectSerializer& operator=(const SkPDFObjectSerializer&) = delete;
 
     void addObjectRecursively(const sk_sp<SkPDFObject>&);
     void serializeHeader(SkWStream*, const SkDocument::PDFMetadata&);
@@ -72,21 +75,22 @@ public:
      */
     void serialize(const sk_sp<SkPDFObject>&);
     SkPDFCanon* canon() { return &fCanon; }
-    SkScalar rasterDpi() const { return fMetadata.fRasterDPI; }
     void registerFont(SkPDFFont* f) { fFonts.add(f); }
     const PDFMetadata& metadata() const { return fMetadata; }
 
 private:
     SkPDFObjectSerializer fObjectSerializer;
     SkPDFCanon fCanon;
-    SkTArray<sk_sp<SkPDFDict>> fPages;
+    SkCanvas fCanvas;
+    std::vector<sk_sp<SkPDFDict>> fPages;
     SkTHashSet<SkPDFFont*> fFonts;
     sk_sp<SkPDFDict> fDests;
     sk_sp<SkPDFDevice> fPageDevice;
-    std::unique_ptr<SkCanvas> fCanvas;
     sk_sp<SkPDFObject> fID;
     sk_sp<SkPDFObject> fXMP;
     SkDocument::PDFMetadata fMetadata;
+    SkScalar fRasterScale = 1;
+    SkScalar fInverseRasterScale = 1;
 
     void reset();
 };

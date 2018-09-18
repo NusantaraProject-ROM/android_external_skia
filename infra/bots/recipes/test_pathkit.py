@@ -2,9 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-
 # Recipe which runs the PathKit tests using docker
-
 
 DEPS = [
   'checkout',
@@ -23,7 +21,6 @@ DOCKER_IMAGE = 'gcr.io/skia-public/gold-karma-chrome-tests:68.0.3440.106_v4'
 INNER_KARMA_SCRIPT = '/SRC/skia/infra/pathkit/docker/test_pathkit.sh'
 
 
-
 def RunSteps(api):
   api.vars.setup()
   checkout_root = api.checkout.default_checkout_root
@@ -35,10 +32,10 @@ def RunSteps(api):
 
   # The karma script is configured to look in ./npm-(asmjs|wasm)/bin/test/ for
   # the test files to load, so we must copy them there (see Set up for docker).
-  copy_dest = checkout_root.join('skia', 'experimental', 'pathkit',
+  copy_dest = checkout_root.join('skia', 'modules', 'pathkit',
                         'npm-wasm', 'bin', 'test')
   if 'asmjs' in api.vars.builder_name:
-    copy_dest = checkout_root.join('skia', 'experimental', 'pathkit',
+    copy_dest = checkout_root.join('skia', 'modules', 'pathkit',
                         'npm-asmjs', 'bin', 'test')
 
   base_dir = api.vars.build_dir
@@ -78,7 +75,7 @@ except OSError as e:
     raise
 
 # Copy binaries (pathkit.js and pathkit.wasm) to where the karma tests
-# expect them ($SKIA_ROOT/experimental/pathkit/npm-wasm/test/)
+# expect them ($SKIA_ROOT/modules/pathkit/npm-wasm/test/)
 dest = os.path.join(copy_dest, 'pathkit.js')
 shutil.copyfile(os.path.join(base_dir, 'pathkit.js'), dest)
 os.chmod(dest, 0o644) # important, otherwise non-privileged docker can't read.
@@ -88,7 +85,8 @@ if bundle_name:
   shutil.copyfile(os.path.join(base_dir, bundle_name), dest)
   os.chmod(dest, 0o644) # important, otherwise non-privileged docker can't read.
 
-# Prepare output folder
+# Prepare output folder, api.file.ensure_directory doesn't touch
+# the permissions of the out directory if it already exists.
 os.chmod(out_dir, 0o777) # important, otherwise non-privileged docker can't write.
 ''',
       args=[copy_dest, base_dir, bundle_name, out_dir],
@@ -103,7 +101,7 @@ os.chmod(out_dir, 0o777) # important, otherwise non-privileged docker can't writ
     cmd.extend(['-e', 'ASM_JS=1'])  # -e sets environment variables
 
   cmd.extend([
-         DOCKER_IMAGE,  INNER_KARMA_SCRIPT,
+         DOCKER_IMAGE,             INNER_KARMA_SCRIPT,
          '--builder',              api.vars.builder_name,
          '--git_hash',             api.properties['revision'],
          '--buildbucket_build_id', api.properties.get('buildbucket_build_id',
@@ -169,6 +167,8 @@ def GenTests(api):
                      revision='abc123',
                      path_config='kitchen',
                      swarm_out_dir='[SWARM_OUT_DIR]',
+                     patch_ref='89/456789/12',
+                     patch_repo='https://skia.googlesource.com/skia.git',
                      patch_storage='gerrit',
                      patch_set=7,
                      patch_issue=1234,

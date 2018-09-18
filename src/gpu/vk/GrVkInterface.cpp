@@ -198,6 +198,15 @@ GrVkInterface::GrVkInterface(GrVkGetProc getProc,
         ACQUIRE_PROC_SUFFIX(GetImageSparseMemoryRequirements2, KHR, VK_NULL_HANDLE, device);
     }
 
+    // Functions for VK_KHR_bind_memory2
+    if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0)) {
+        ACQUIRE_PROC(BindBufferMemory2, VK_NULL_HANDLE, device);
+        ACQUIRE_PROC(BindImageMemory2, VK_NULL_HANDLE, device);
+    } else if (extensions->hasExtension(VK_KHR_BIND_MEMORY_2_EXTENSION_NAME, 1)) {
+        ACQUIRE_PROC_SUFFIX(BindBufferMemory2, KHR, VK_NULL_HANDLE, device);
+        ACQUIRE_PROC_SUFFIX(BindImageMemory2, KHR, VK_NULL_HANDLE, device);
+    }
+
     // Functions for VK_KHR_maintenance1 or vulkan 1.1
     if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0)) {
         ACQUIRE_PROC(TrimCommandPool, VK_NULL_HANDLE, device);
@@ -211,6 +220,24 @@ GrVkInterface::GrVkInterface(GrVkGetProc getProc,
     } else if (extensions->hasExtension(VK_KHR_MAINTENANCE3_EXTENSION_NAME, 1)) {
         ACQUIRE_PROC_SUFFIX(GetDescriptorSetLayoutSupport, KHR, VK_NULL_HANDLE, device);
     }
+
+    // Functions for VK_KHR_external_memory_capabilities
+    if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0)) {
+        ACQUIRE_PROC(GetPhysicalDeviceExternalBufferProperties, instance, VK_NULL_HANDLE);
+    } else if (extensions->hasExtension(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME, 1)) {
+        ACQUIRE_PROC_SUFFIX(GetPhysicalDeviceExternalBufferProperties, KHR, instance,
+                            VK_NULL_HANDLE);
+    }
+
+#ifdef SK_BUILD_FOR_ANDROID
+    // Functions for VK_ANDROID_external_memory_android_hardware_buffer
+    if (extensions->hasExtension(
+            VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME, 2)) {
+        ACQUIRE_PROC_SUFFIX(GetAndroidHardwareBufferProperties, ANDROID, VK_NULL_HANDLE, device);
+        ACQUIRE_PROC_SUFFIX(GetMemoryAndroidHardwareBuffer, ANDROID, VK_NULL_HANDLE, device);
+    }
+#endif
+
 }
 
 #ifdef SK_DEBUG
@@ -388,6 +415,15 @@ bool GrVkInterface::validate(uint32_t instanceVersion, uint32_t physicalDeviceVe
         }
     }
 
+    // Functions for VK_KHR_bind_memory2
+    if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0) ||
+        extensions->hasExtension(VK_KHR_BIND_MEMORY_2_EXTENSION_NAME, 1)) {
+        if (nullptr == fFunctions.fBindBufferMemory2 ||
+            nullptr == fFunctions.fBindImageMemory2) {
+            RETURN_FALSE_INTERFACE
+        }
+    }
+
     // Functions for VK_KHR_maintenance1 or vulkan 1.1
     if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0) ||
         extensions->hasExtension(VK_KHR_MAINTENANCE1_EXTENSION_NAME, 1)) {
@@ -403,6 +439,25 @@ bool GrVkInterface::validate(uint32_t instanceVersion, uint32_t physicalDeviceVe
             RETURN_FALSE_INTERFACE
         }
     }
+
+    // Functions for VK_KHR_external_memory_capabilities
+    if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0) ||
+        extensions->hasExtension(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME, 1)) {
+        if (nullptr == fFunctions.fGetPhysicalDeviceExternalBufferProperties) {
+            RETURN_FALSE_INTERFACE
+        }
+    }
+
+#ifdef SK_BUILD_FOR_ANDROID
+    // Functions for VK_ANDROID_external_memory_android_hardware_buffer
+    if (extensions->hasExtension(
+            VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME, 2)) {
+        if (nullptr == fFunctions.fGetAndroidHardwareBufferProperties ||
+            nullptr == fFunctions.fGetMemoryAndroidHardwareBuffer) {
+            RETURN_FALSE_INTERFACE
+        }
+    }
+#endif
 
     return true;
 }

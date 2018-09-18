@@ -118,8 +118,10 @@ GrVkGpu::GrVkGpu(GrContext* context, const GrContextOptions& options,
         , fInterface(std::move(interface))
         , fMemoryAllocator(backendContext.fMemoryAllocator)
         , fInstance(backendContext.fInstance)
+        , fPhysicalDevice(backendContext.fPhysicalDevice)
         , fDevice(backendContext.fDevice)
         , fQueue(backendContext.fQueue)
+        , fQueueIndex(backendContext.fGraphicsQueueIndex)
         , fResourceProvider(this)
         , fDisconnected(false) {
     SkASSERT(!backendContext.fOwnsInstanceAndDevice);
@@ -252,7 +254,9 @@ void GrVkGpu::disconnect(DisconnectType type) {
         if (DisconnectType::kCleanup == type) {
             this->destroyResources();
         } else {
-            fCurrentCmdBuffer->unrefAndAbandon();
+            if (fCurrentCmdBuffer) {
+                fCurrentCmdBuffer->unrefAndAbandon();
+            }
             for (int i = 0; i < fSemaphoresToWaitOn.count(); ++i) {
                 fSemaphoresToWaitOn[i]->unrefAndAbandon();
             }
@@ -263,6 +267,8 @@ void GrVkGpu::disconnect(DisconnectType type) {
 
             // must call this just before we destroy the command pool and VkDevice
             fResourceProvider.abandonResources();
+
+            fMemoryAllocator.reset();
         }
         fSemaphoresToWaitOn.reset();
         fSemaphoresToSignal.reset();

@@ -9,6 +9,7 @@
 #include "GrBlurUtils.h"
 #include "GrClip.h"
 #include "GrContext.h"
+#include "GrShape.h"
 #include "GrStyle.h"
 #include "GrTextTarget.h"
 #include "SkColorFilter.h"
@@ -303,24 +304,33 @@ void GrTextBlob::flush(GrTextTarget* target, const SkSurfaceProps& props,
                 pathMatrix.postTranslate(pathGlyph.fX + transX, pathGlyph.fY + transY);
 
                 const SkPath* path = &pathGlyph.fPath;
-                bool pathIsMutable = false;
                 SkTLazy<SkPath> tmpPath;
 
                 GrStyle style(runPaint);
 
+                SkMaskFilter* mf = runPaint.getMaskFilter();
+
                 // Styling, blurs, and shading are supposed to be applied *after* the pathMatrix.
-                if (!runPaint.getMaskFilter() && !runPaint.getShader() && !style.applies()) {
-                    pathMatrix.postConcat(*ctm);
-                    ctm = &pathMatrix;
-                } else {
+                // However, if the mask filter is a blur and the pathMatrix contains no scale, then
+                // we can still fold the path matrix into the CTM
+                bool needToApply = runPaint.getShader() || style.applies() ||
+                                   (mf && (!as_MFB(mf)->asABlur(nullptr) ||
+                                           !SkScalarNearlyEqual(pathGlyph.fScale, 1.0f)));
+
+                if (needToApply) {
                     SkPath* result = tmpPath.init();
                     path->transform(pathMatrix, result);
                     result->setIsVolatile(true);
                     path = result;
-                    pathIsMutable = true;
+                } else {
+                    pathMatrix.postConcat(*ctm);
+                    ctm = &pathMatrix;
                 }
 
-                target->drawPath(clip, *path, runPaint, *ctm, pathIsMutable);
+                // TODO: we are losing the mutability of the path here
+                GrShape shape(*path, paint);
+
+                target->drawShape(clip, runPaint, *ctm, shape);
             }
         }
 

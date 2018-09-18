@@ -57,6 +57,10 @@ public:
         return k400_GrGLSLGeneration;
     }
 
+    bool atan2ImplementedAsAtanYOverX() const {
+        return false;
+    }
+
     bool canUseMinAndAbsTogether() const {
         return true;
     }
@@ -107,6 +111,10 @@ public:
 
     bool imageLoadStoreSupport() const {
         return true;
+    }
+
+    bool mustDoOpBetweenFloorAndAbs() const {
+        return false;
     }
 
     bool mustEnableAdvBlendEqs() const {
@@ -186,6 +194,14 @@ public:
     }
 
     bool emulateAbsIntFunction() const {
+        return false;
+    }
+
+    bool rewriteDoWhileLoops() const {
+        return false;
+    }
+
+    bool removePowWithConstantExponent() const {
         return false;
     }
 
@@ -351,6 +367,20 @@ public:
         sk_sp<GrShaderCaps> result = sk_make_sp<GrShaderCaps>(GrContextOptions());
         result->fVersionDeclString = "#version 400";
         result->fEmulateAbsIntFunction = true;
+        return result;
+    }
+
+    static sk_sp<GrShaderCaps> RewriteDoWhileLoops() {
+        sk_sp<GrShaderCaps> result = sk_make_sp<GrShaderCaps>(GrContextOptions());
+        result->fVersionDeclString = "#version 400";
+        result->fRewriteDoWhileLoops = true;
+        return result;
+    }
+
+    static sk_sp<GrShaderCaps> RemovePowWithConstantExponent() {
+        sk_sp<GrShaderCaps> result = sk_make_sp<GrShaderCaps>(GrContextOptions());
+        result->fVersionDeclString = "#version 400";
+        result->fRemovePowWithConstantExponent = true;
         return result;
     }
 };

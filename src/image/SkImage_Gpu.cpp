@@ -33,7 +33,6 @@
 #include "SkBitmapCache.h"
 #include "SkCanvas.h"
 #include "SkGr.h"
-#include "SkImageCacherator.h"
 #include "SkImageInfoPriv.h"
 #include "SkImage_Gpu.h"
 #include "SkMipMap.h"
@@ -124,7 +123,7 @@ sk_sp<GrTextureProxy> SkImage_Gpu::asTextureProxyRef(GrContext* context,
                                                      SkColorSpace* dstColorSpace,
                                                      sk_sp<SkColorSpace>* texColorSpace,
                                                      SkScalar scaleAdjust[2]) const {
-    if (context != fContext.get()) {
+    if (context->uniqueID() != fContext->uniqueID()) {
         SkASSERT(0);
         return nullptr;
     }
@@ -862,8 +861,9 @@ sk_sp<SkImage> SkImage::MakeCrossContextFromPixmap(GrContext* context,
 
 #if defined(SK_BUILD_FOR_ANDROID) && __ANDROID_API__ >= 26
 sk_sp<SkImage> SkImage::MakeFromAHardwareBuffer(AHardwareBuffer* graphicBuffer, SkAlphaType at,
-                                               sk_sp<SkColorSpace> cs) {
-    auto gen = GrAHardwareBufferImageGenerator::Make(graphicBuffer, at, cs);
+                                                sk_sp<SkColorSpace> cs,
+                                                GrSurfaceOrigin surfaceOrigin) {
+    auto gen = GrAHardwareBufferImageGenerator::Make(graphicBuffer, at, cs, surfaceOrigin);
     return SkImage::MakeFromGenerator(std::move(gen));
 }
 #endif
@@ -970,9 +970,11 @@ sk_sp<SkImage> SkImage_Gpu::onMakeColorSpace(sk_sp<SkColorSpace> target, SkColor
         return nullptr;
     }
 
+    SkAlphaType newAlphaType = (kUnpremul_SkAlphaType == fAlphaType) ? kPremul_SkAlphaType
+                                                                     : fAlphaType;
     // MDB: this call is okay bc we know 'renderTargetContext' was exact
     return sk_make_sp<SkImage_Gpu>(fContext, kNeedNewImageUniqueID,
-                                   fAlphaType, renderTargetContext->asTextureProxyRef(),
+                                   newAlphaType, renderTargetContext->asTextureProxyRef(),
                                    std::move(target), fBudgeted);
 
 }

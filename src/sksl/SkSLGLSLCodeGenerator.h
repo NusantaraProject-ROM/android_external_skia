@@ -77,7 +77,8 @@ public:
                       OutputStream* out)
     : INHERITED(program, errors, out)
     , fLineEnding("\n")
-    , fContext(*context) {}
+    , fContext(*context)
+    , fProgramKind(program->fKind) {}
 
     bool generateCode() override;
 
@@ -118,7 +119,7 @@ protected:
 
     void writeModifiers(const Modifiers& modifiers, bool globalContext);
 
-    void writeGlobalVars(const VarDeclaration& vs);
+    virtual void writeInputVars();
 
     virtual void writeVarInitializer(const Variable& var, const Expression& value);
 
@@ -150,7 +151,7 @@ protected:
 
     void writeConstructor(const Constructor& c, Precedence parentPrecedence);
 
-    void writeFieldAccess(const FieldAccess& f);
+    virtual void writeFieldAccess(const FieldAccess& f);
 
     virtual void writeSwizzle(const Swizzle& swizzle);
 
@@ -231,6 +232,7 @@ protected:
         kInverse,
         kInverseSqrt,
         kMin,
+        kPow,
         kSaturate,
         kTexture,
         kTranspose

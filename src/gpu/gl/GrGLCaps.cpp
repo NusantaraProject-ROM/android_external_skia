@@ -61,6 +61,7 @@ GrGLCaps::GrGLCaps(const GrContextOptions& contextOptions,
     fUseDrawInsteadOfAllRenderTargetWrites = false;
     fRequiresCullFaceEnableDisableWhenDrawingLinesAfterNonLines = false;
     fRequiresFlushBetweenNonAndInstancedDraws = false;
+    fDetachStencilFromMSAABuffersBeforeReadPixels = false;
     fProgramBinarySupport = false;
 
     fBlitFramebufferFlags = kNoSupport_BlitFramebufferFlag;
@@ -289,6 +290,10 @@ void GrGLCaps::init(const GrContextOptions& contextOptions,
     } else if (ctxInfo.hasExtension("GL_EXT_clear_texture")) {
         fClearTextureSupport = true;
     }
+
+#if defined(SK_BUILD_FOR_ANDROID) && __ANDROID_API__ >= 26
+    fSupportsAHardwareBufferImages = true;
+#endif
 
     /**************************************************************************
     * GrShaderCaps fields
@@ -571,7 +576,15 @@ void GrGLCaps::init(const GrContextOptions& contextOptions,
     // Safely moving textures between contexts requires fences.
     fCrossContextTextureSupport = fFenceSyncSupport;
 
-    fDynamicStateArrayGeometryProcessorTextureSupport = true;
+    // Half float vertex attributes requires GL3 or ES3
+    // It can also work with OES_VERTEX_HALF_FLOAT, but that requires a different enum.
+    if (kGL_GrGLStandard == standard) {
+        if (version >= GR_GL_VER(3, 0)) {
+            fHalfFloatVertexAttributeSupport = true;
+        }
+    } else if (version >= GR_GL_VER(3, 0)) {
+        fHalfFloatVertexAttributeSupport = true;
+    }
 
     if (kGL_GrGLStandard == standard) {
         if (version >= GR_GL_VER(4, 1)) {
@@ -1185,9 +1198,12 @@ bool GrGLCaps::getReadPixelsFormat(GrPixelConfig surfaceConfig, GrPixelConfig ex
     return true;
 }
 
-bool GrGLCaps::getRenderbufferFormat(GrPixelConfig config, GrGLenum* internalFormat) const {
+void GrGLCaps::getRenderbufferFormat(GrPixelConfig config, GrGLenum* internalFormat) const {
     *internalFormat = fConfigTable[config].fFormats.fInternalFormatRenderbuffer;
-    return true;
+}
+
+void GrGLCaps::getSizedInternalFormat(GrPixelConfig config, GrGLenum* internalFormat) const {
+    *internalFormat = fConfigTable[config].fFormats.fSizedInternalFormat;
 }
 
 bool GrGLCaps::getExternalFormat(GrPixelConfig surfaceConfig, GrPixelConfig memoryConfig,
@@ -1354,6 +1370,9 @@ void GrGLCaps::initConfigTable(const GrContextOptions& contextOptions,
     } else {
         texStorageSupported = version >= GR_GL_VER(3,0) ||
                               ctxInfo.hasExtension("GL_EXT_texture_storage");
+    }
+    if (fDriverBugWorkarounds.disable_texture_storage) {
+        texStorageSupported = false;
     }
 
     bool textureRedSupport = false;
@@ -2426,6 +2445,13 @@ void GrGLCaps::applyDriverCorrectnessWorkarounds(const GrGLContextInfo& ctxInfo,
         fRequiresFlushBetweenNonAndInstancedDraws = true;
     }
 
+    // This was reproduced on a Pixel 1, but the unit test + config + options that exercise it are
+    // only tested on very specific bots. The driver claims that ReadPixels is an invalid operation
+    // when reading from an auto-resolving MSAA framebuffer that has stencil attached.
+    if (kQualcomm_GrGLDriver == ctxInfo.driver()) {
+        fDetachStencilFromMSAABuffersBeforeReadPixels = true;
+    }
+
     // Our Chromebook with kPowerVRRogue_GrGLRenderer seems to crash when glDrawArraysInstanced is
     // given 1 << 15 or more instances.
     if (kPowerVRRogue_GrGLRenderer == ctxInfo.renderer()) {
@@ -2581,6 +2607,14 @@ void GrGLCaps::applyDriverCorrectnessWorkarounds(const GrGLContextInfo& ctxInfo,
         shaderCaps->fEmulateAbsIntFunction = true;
     }
 
+    if (fDriverBugWorkarounds.rewrite_do_while_loops) {
+        shaderCaps->fRewriteDoWhileLoops = true;
+    }
+
+    if (fDriverBugWorkarounds.remove_pow_with_constant_exponent) {
+        shaderCaps->fRemovePowWithConstantExponent = true;
+    }
+
     // Disabling advanced blend on various platforms with major known issues. We also block Chrome
     // for now until its own blacklists can be updated.
     if (kAdreno430_GrGLRenderer == ctxInfo.renderer() ||
@@ -2688,6 +2722,7 @@ void GrGLCaps::onApplyOptionsOverrides(const GrContextOptions& options) {
         SkASSERT(!fUseDrawInsteadOfAllRenderTargetWrites);
         SkASSERT(!fRequiresCullFaceEnableDisableWhenDrawingLinesAfterNonLines);
         SkASSERT(!fRequiresFlushBetweenNonAndInstancedDraws);
+        SkASSERT(!fDetachStencilFromMSAABuffersBeforeReadPixels);
     }
     if (GrContextOptions::Enable::kNo == options.fUseDrawInsteadOfGLClear) {
         fUseDrawToClearColor = false;

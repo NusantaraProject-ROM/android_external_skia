@@ -152,7 +152,7 @@ DEF_TEST(SkSLOperators, r) {
          "    x = -6.0;\n"
          "    y = -1.0;\n"
          "    z = 8;\n"
-         "    bool b = false == true || 2.0 >= sqrt(2.0) && true;\n"
+         "    bool b = false == true || 2.0 >= sqrt(2.0);\n"
          "    x += 12.0;\n"
          "    x -= 12.0;\n"
          "    x *= (y /= float(z = 10));\n"
@@ -748,6 +748,58 @@ DEF_TEST(SkSLBoolFolding, r) {
          "}\n");
 }
 
+DEF_TEST(SkSLShortCircuitBoolFolding, r) {
+    test(r,
+         "void main() {"
+         "bool expr1 = sk_FragCoord.x > 0;"
+         "bool expr2 = sk_FragCoord.y > 0;"
+         "    if (true && expr1) {"          // -> if (expr1)
+         "        sk_FragColor.r = 1;"
+         "    } else if (false && expr1) {"  // -> if (false) -> block removed
+         "        sk_FragColor.r = -2;"
+         "    } else if (false || expr2) {"  // -> if (expr2)
+         "        sk_FragColor.r = 3;"
+         "    } else if (true || expr2) {"   // -> if (true) -> replaces unreachable else
+         "        sk_FragColor.r = 4;"
+         "    } else {"                      // removed
+         "        sk_FragColor.r = -5;"
+         "    }"
+         // Test short-circuiting of right hand side boolean literals
+         "    if (expr1 && true) {"          // -> if (expr1)
+         "        sk_FragColor.r = 1;"
+         "    } else if (expr1 && false) {"  // -> if (false) -> block removed
+         "        sk_FragColor.r = -2;"
+         "    } else if (expr2 || false) {"  // -> if (expr2)
+         "        sk_FragColor.r = 3;"
+         "    } else if (expr2 || true) {"   // -> if (true) -> replaces unreachable else
+         "        sk_FragColor.r = 4;"
+         "    } else {"                      // removed
+         "        sk_FragColor.r = -5;"
+         "    }"
+         "}",
+         *SkSL::ShaderCapsFactory::Default(),
+         "#version 400\n"
+         "out vec4 sk_FragColor;\n"
+         "void main() {\n"
+         "    bool expr1 = gl_FragCoord.x > 0.0;\n"
+         "    bool expr2 = gl_FragCoord.y > 0.0;\n"
+         "    if (expr1) {\n"
+         "        sk_FragColor.x = 1.0;\n"
+         "    } else if (expr2) {\n"
+         "        sk_FragColor.x = 3.0;\n"
+         "    } else {\n"
+         "        sk_FragColor.x = 4.0;\n"
+         "    }\n"
+         "    if (expr1) {\n"
+         "        sk_FragColor.x = 1.0;\n"
+         "    } else if (expr2) {\n"
+         "        sk_FragColor.x = 3.0;\n"
+         "    } else {\n"
+         "        sk_FragColor.x = 4.0;\n"
+         "    }\n"
+         "}\n");
+}
+
 DEF_TEST(SkSLVecFolding, r) {
     test(r,
          "void main() {"
@@ -1152,6 +1204,38 @@ DEF_TEST(SkSLFragCoord, r) {
          "    sk_FragCoord_Resolved.xy = floor(sk_FragCoord_Resolved.xy) + vec2(.5);\n"
          "    sk_FragColor.xy = sk_FragCoord_Resolved.xy;\n"
          "}\n");
+}
+
+DEF_TEST(SkSLWidthAndHeight, r) {
+    SkSL::Program::Settings settings;
+    sk_sp<GrShaderCaps> caps = SkSL::ShaderCapsFactory::Default();
+    settings.fCaps = caps.get();
+    SkSL::Program::Inputs inputs;
+    test(r,
+         "void main() { sk_FragColor.r = sk_FragCoord.x / sk_Width; }",
+         settings,
+         "#version 400\n"
+         "uniform float u_skRTWidth;\n"
+         "out vec4 sk_FragColor;\n"
+         "void main() {\n"
+         "    sk_FragColor.x = gl_FragCoord.x / u_skRTWidth;\n"
+         "}\n",
+         &inputs);
+    REPORTER_ASSERT(r, inputs.fRTWidth);
+    REPORTER_ASSERT(r, !inputs.fRTHeight);
+
+    test(r,
+         "void main() { sk_FragColor.r = sk_FragCoord.y / sk_Height; }",
+         settings,
+         "#version 400\n"
+         "uniform float u_skRTHeight;\n"
+         "out vec4 sk_FragColor;\n"
+         "void main() {\n"
+         "    sk_FragColor.x = gl_FragCoord.y / u_skRTHeight;\n"
+         "}\n",
+         &inputs);
+    REPORTER_ASSERT(r, !inputs.fRTWidth);
+    REPORTER_ASSERT(r, inputs.fRTHeight);
 }
 
 DEF_TEST(SkSLClockwise, r) {
@@ -2043,6 +2127,74 @@ DEF_TEST(SkSLWorkaroundEmulateAbsIntFunction, r) {
          "void main() {\n"
          "    float output = abs(f) + float(_absemulation(i));\n"
          "    sk_FragColor = vec4(output);\n"
+         "}\n",
+         SkSL::Program::kFragment_Kind
+         );
+}
+
+DEF_TEST(SkSLWorkaroundRewriteDoWhileLoops, r) {
+    test(r,
+         "void main() {"
+         "    int i = 0;"
+         "    do {"
+         "      ++i;"
+         "      do {"
+         "        i++;"
+         "      } while (true);"
+         "    } while (i < 10);"
+         "    sk_FragColor = float4(i);"
+         "}",
+         *SkSL::ShaderCapsFactory::RewriteDoWhileLoops(),
+         "#version 400\n"
+         "out vec4 sk_FragColor;\n"
+         "void main() {\n"
+         "    int i = 0;\n"
+         "    bool _tmpLoopSeenOnce0 = false;\n"
+         "    while (true) {\n"
+         "        if (_tmpLoopSeenOnce0) {\n"
+         "            if (!(i < 10)) {\n"
+         "                break;\n"
+         "            }\n"
+         "        }\n"
+         "        _tmpLoopSeenOnce0 = true;\n"
+         "        {\n"
+         "            ++i;\n"
+         "            bool _tmpLoopSeenOnce1 = false;\n"
+         "            while (true) {\n"
+         "                if (_tmpLoopSeenOnce1) {\n"
+         "                    if (!true) {\n"
+         "                        break;\n"
+         "                    }\n"
+         "                }\n"
+         "                _tmpLoopSeenOnce1 = true;\n"
+         "                {\n"
+         "                    i++;\n"
+         "                }\n"
+         "            }\n"
+         "        }\n"
+         "    }\n"
+         "    sk_FragColor = vec4(float(i));\n"
+         "}\n",
+         SkSL::Program::kFragment_Kind
+         );
+}
+
+DEF_TEST(SkSLWorkaroundRemovePowWithConstantExponent, r) {
+    test(r,
+         "uniform float x;"
+         "uniform float y;"
+         "void main() {"
+         "    float z = pow(x + 1.0, y + 2.0);"
+         "    sk_FragColor = float4(z);"
+         "}",
+         *SkSL::ShaderCapsFactory::RemovePowWithConstantExponent(),
+         "#version 400\n"
+         "out vec4 sk_FragColor;\n"
+         "uniform float x;\n"
+         "uniform float y;\n"
+         "void main() {\n"
+         "    float z = exp2((y + 2.0) * log2(x + 1.0));\n"
+         "    sk_FragColor = vec4(z);\n"
          "}\n",
          SkSL::Program::kFragment_Kind
          );

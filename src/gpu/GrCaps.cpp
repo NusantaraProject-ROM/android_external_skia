@@ -58,10 +58,11 @@ GrCaps::GrCaps(const GrContextOptions& options) {
     fPreferClientSideDynamicBuffers = false;
     fPreferFullscreenClears = false;
     fMustClearUploadedBufferData = false;
+    fSupportsAHardwareBufferImages = false;
     fSampleShadingSupport = false;
     fFenceSyncSupport = false;
     fCrossContextTextureSupport = false;
-    fDynamicStateArrayGeometryProcessorTextureSupport = false;
+    fHalfFloatVertexAttributeSupport = false;
 
     fBlendEquationSupport = kBasic_BlendEquationSupport;
     fAdvBlendEqBlacklist = 0;
@@ -170,11 +171,11 @@ void GrCaps::dumpJSON(SkJSONWriter* writer) const {
     writer->appendBool("Prefer client-side dynamic buffers", fPreferClientSideDynamicBuffers);
     writer->appendBool("Prefer fullscreen clears", fPreferFullscreenClears);
     writer->appendBool("Must clear buffer memory", fMustClearUploadedBufferData);
+    writer->appendBool("Supports importing AHardwareBuffers", fSupportsAHardwareBufferImages);
     writer->appendBool("Sample shading support", fSampleShadingSupport);
     writer->appendBool("Fence sync support", fFenceSyncSupport);
     writer->appendBool("Cross context texture support", fCrossContextTextureSupport);
-    writer->appendBool("Specify GeometryProcessor textures as a dynamic state array",
-                       fDynamicStateArrayGeometryProcessorTextureSupport);
+    writer->appendBool("Half float vertex attribute support", fHalfFloatVertexAttributeSupport);
 
     writer->appendBool("Blacklist Coverage Counting Path Renderer [workaround]",
                        fBlacklistCoverageCounting);

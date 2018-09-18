@@ -19,17 +19,6 @@ GrVkCaps::GrVkCaps(const GrContextOptions& contextOptions, const GrVkInterface* 
                    VkPhysicalDevice physDev, const VkPhysicalDeviceFeatures2& features,
                    uint32_t instanceVersion, const GrVkExtensions& extensions)
     : INHERITED(contextOptions) {
-    fMustDoCopiesFromOrigin = false;
-    fMustSubmitCommandsBeforeCopyOp = false;
-    fMustSleepOnTearDown  = false;
-    fNewCBOnPipelineChange = false;
-    fShouldAlwaysUseDedicatedImageMemory = false;
-
-    fSupportsPhysicalDeviceProperties2 = false;
-    fSupportsMemoryRequirements2 = false;
-    fSupportsMaintenance1 = false;
-    fSupportsMaintenance2 = false;
-    fSupportsMaintenance3 = false;
 
     /**************************************************************************
     * GrDrawTargetCaps fields
@@ -46,6 +35,7 @@ GrVkCaps::GrVkCaps(const GrContextOptions& contextOptions, const GrVkInterface* 
     fBlacklistCoverageCounting = true; // blacklisting ccpr until we work through a few issues.
     fFenceSyncSupport = true;   // always available in Vulkan
     fCrossContextTextureSupport = true;
+    fHalfFloatVertexAttributeSupport = true;
 
     fMapBufferFlags = kNone_MapFlags; //TODO: figure this out
     fBufferMapThreshold = SK_MaxS32;  //TODO: figure this out
@@ -225,6 +215,11 @@ void GrVkCaps::init(const GrContextOptions& contextOptions, const GrVkInterface*
     }
 
     if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0) ||
+        extensions.hasExtension(VK_KHR_BIND_MEMORY_2_EXTENSION_NAME, 1)) {
+        fSupportsBindMemory2 = true;
+    }
+
+    if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0) ||
         extensions.hasExtension(VK_KHR_MAINTENANCE1_EXTENSION_NAME, 1)) {
         fSupportsMaintenance1 = true;
     }
@@ -238,6 +233,33 @@ void GrVkCaps::init(const GrContextOptions& contextOptions, const GrVkInterface*
         extensions.hasExtension(VK_KHR_MAINTENANCE3_EXTENSION_NAME, 1)) {
         fSupportsMaintenance3 = true;
     }
+
+    if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0) ||
+        (extensions.hasExtension(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME, 1) &&
+         this->supportsMemoryRequirements2())) {
+        fSupportsDedicatedAllocation = true;
+    }
+
+    if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0) ||
+        (extensions.hasExtension(VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME, 1) &&
+         this->supportsPhysicalDeviceProperties2() &&
+         extensions.hasExtension(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME, 1) &&
+         this->supportsDedicatedAllocation())) {
+        fSupportsExternalMemory = true;
+    }
+
+#ifdef SK_BUILD_FOR_ANDROID
+    // Currently Adreno devices are not supporting the QUEUE_FAMILY_FOREIGN_EXTENSION, so until they
+    // do we don't explicitly require it here even the spec says it is required.
+    if (extensions.hasExtension(
+            VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME, 2) &&
+       /* extensions.hasExtension(VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME, 1) &&*/
+        this->supportsExternalMemory() &&
+        this->supportsBindMemory2()) {
+        fSupportsAndroidHWBExternalMemory = true;
+        fSupportsAHardwareBufferImages = true;
+    }
+#endif
 
     this->initGrCaps(vkInterface, physDev, properties, memoryProperties, features, extensions);
     this->initShaderCaps(properties, features);
@@ -278,7 +300,7 @@ void GrVkCaps::applyDriverCorrectnessWorkarounds(const VkPhysicalDevicePropertie
     }
 
 #if defined(SK_BUILD_FOR_WIN)
-    if (kNvidia_VkVendor == properties.vendorID) {
+    if (kNvidia_VkVendor == properties.vendorID || kIntel_VkVendor == properties.vendorID) {
         fMustSleepOnTearDown = true;
     }
 #elif defined(SK_BUILD_FOR_ANDROID)

@@ -106,10 +106,12 @@ void GrVkPipelineState::freeGPUResources(const GrVkGpu* gpu) {
 
     if (fGeometryUniformBuffer) {
         fGeometryUniformBuffer->release(gpu);
+        fGeometryUniformBuffer.reset();
     }
 
     if (fFragmentUniformBuffer) {
         fFragmentUniformBuffer->release(gpu);
+        fFragmentUniformBuffer.reset();
     }
 
     if (fUniformDescriptorSet) {
@@ -136,8 +138,15 @@ void GrVkPipelineState::abandonGPUResources() {
         fPipelineLayout = nullptr;
     }
 
-    fGeometryUniformBuffer->abandon();
-    fFragmentUniformBuffer->abandon();
+    if (fGeometryUniformBuffer) {
+        fGeometryUniformBuffer->abandon();
+        fGeometryUniformBuffer.reset();
+    }
+
+    if (fFragmentUniformBuffer) {
+        fFragmentUniformBuffer->abandon();
+        fFragmentUniformBuffer.reset();
+    }
 
     for (int i = 0; i < fSamplers.count(); ++i) {
         fSamplers[i]->unrefAndAbandon();
@@ -181,12 +190,10 @@ void GrVkPipelineState::setData(GrVkGpu* gpu,
 
     fGeometryProcessor->setData(fDataManager, primProc,
                                 GrFragmentProcessor::CoordTransformIter(pipeline));
-    if (primProcTextures) {
-        for (int i = 0; i < primProc.numTextureSamplers(); ++i) {
-            const auto& sampler = primProc.textureSampler(i);
-            auto texture = static_cast<GrVkTexture*>(primProcTextures[i]->peekTexture());
-            samplerBindings[currTextureBinding++] = {sampler.samplerState(), texture};
-        }
+    for (int i = 0; i < primProc.numTextureSamplers(); ++i) {
+        const auto& sampler = primProc.textureSampler(i);
+        auto texture = static_cast<GrVkTexture*>(primProcTextures[i]->peekTexture());
+        samplerBindings[currTextureBinding++] = {sampler.samplerState(), texture};
     }
 
     GrFragmentProcessor::Iter iter(pipeline);

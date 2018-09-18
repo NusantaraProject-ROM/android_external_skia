@@ -24,17 +24,18 @@ void SkRRect::setRectXY(const SkRect& rect, SkScalar xRad, SkScalar yRad) {
     if (!SkScalarsAreFinite(xRad, yRad)) {
         xRad = yRad = 0;    // devolve into a simple rect
     }
-    if (xRad <= 0 || yRad <= 0) {
-        // all corners are square in this case
-        this->setRect(rect);
-        return;
-    }
 
     if (fRect.width() < xRad+xRad || fRect.height() < yRad+yRad) {
         SkScalar scale = SkMinScalar(fRect.width() / (xRad + xRad), fRect.height() / (yRad + yRad));
         SkASSERT(scale < SK_Scalar1);
         xRad *= scale;
         yRad *= scale;
+    }
+
+    if (xRad <= 0 || yRad <= 0) {
+        // all corners are square in this case
+        this->setRect(rect);
+        return;
     }
 
     for (int i = 0; i < 4; ++i) {
@@ -371,12 +372,6 @@ void SkRRect::computeType() {
     SkASSERT(this->isValid());
 }
 
-static bool matrix_only_scale_and_translate(const SkMatrix& matrix) {
-    const SkMatrix::TypeMask m = (SkMatrix::TypeMask) (SkMatrix::kAffine_Mask
-                                    | SkMatrix::kPerspective_Mask);
-    return (matrix.getType() & m) == 0;
-}
-
 bool SkRRect::transform(const SkMatrix& matrix, SkRRect* dst) const {
     if (nullptr == dst) {
         return false;
@@ -394,7 +389,7 @@ bool SkRRect::transform(const SkMatrix& matrix, SkRRect* dst) const {
 
     // If transform supported 90 degree rotations (which it could), we could
     // use SkMatrix::rectStaysRect() to check for a valid transformation.
-    if (!matrix_only_scale_and_translate(matrix)) {
+    if (!matrix.isScaleTranslate()) {
         return false;
     }
 

@@ -314,7 +314,7 @@ func kitchenTask(name, recipe, isolate, serviceAccount string, dimensions []stri
 		Dependencies: []string{BUNDLE_RECIPES_NAME},
 		Dimensions:   dimensions,
 		EnvPrefixes: map[string][]string{
-			"PATH":                    []string{"cipd_bin_packages", "cipd_bin_packages/bin"},
+			"PATH": []string{"cipd_bin_packages", "cipd_bin_packages/bin"},
 			"VPYTHON_VIRTUALENV_ROOT": []string{"cache/vpython"},
 		},
 		ExtraTags: map[string]string{
@@ -439,7 +439,7 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 			"Ubuntu14":   DEFAULT_OS_UBUNTU,
 			"Ubuntu17":   "Ubuntu-17.04",
 			"Win":        DEFAULT_OS_WIN,
-			"Win10":      "Windows-10-17134.191",
+			"Win10":      "Windows-10-17134.228",
 			"Win2k8":     "Windows-2008ServerR2-SP1",
 			"Win2016":    DEFAULT_OS_WIN,
 			"Win7":       "Windows-7-SP1",
@@ -468,15 +468,15 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 				"AndroidOne":      {"sprout", "MOB30Q"},
 				"Chorizo":         {"chorizo", "1.30_109591"},
 				"GalaxyS6":        {"zerofltetmo", "NRD90M_G920TUVU5FQK1"},
-				"GalaxyS7_G930FD": {"herolte", "R16NW_G930FXXU2EREM"}, // This is Oreo.
+				"GalaxyS7_G930FD": {"herolte", "R16NW_G930FXXS2ERH6"}, // This is Oreo.
 				"MotoG4":          {"athene", "NPJS25.93-14.7-8"},
-				"NVIDIA_Shield":   {"foster", "NRD90M_1915764_848"},
+				"NVIDIA_Shield":   {"foster", "OPR6.170623.010"},
 				"Nexus5":          {"hammerhead", "M4B30Z_3437181"},
 				"Nexus5x":         {"bullhead", "OPR6.170623.023"},
 				"Nexus7":          {"grouper", "LMY47V_1836172"}, // 2012 Nexus 7
 				"NexusPlayer":     {"fugu", "OPR2.170623.027"},
 				"Pixel":           {"sailfish", "PPR1.180610.009"},
-				"Pixel2XL":        {"taimen", "OPM4.171019.016.B1"},
+				"Pixel2XL":        {"taimen", "PPR1.180610.009"},
 			}[parts["model"]]
 			if !ok {
 				glog.Fatalf("Entry %q not found in Android mapping.", parts["model"])
@@ -538,31 +538,19 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 			if strings.Contains(parts["os"], "Win") {
 				gpu, ok := map[string]string{
 					"GT610":         "10de:104a-23.21.13.9101",
-					"GTX1050":       "10de:1c8d-24.21.13.9882",
-					"GTX1070":       "10de:1ba1-24.21.13.9882",
 					"GTX660":        "10de:11c0-24.21.13.9882",
 					"GTX960":        "10de:1401-24.21.13.9882",
-					"IntelHD4400":   "8086:0a16-20.19.15.4835",
-					"IntelIris540":  "8086:1926-23.20.16.4982",
-					"IntelIris6100": "8086:162b-20.19.15.4835",
-					"RadeonHD7770":  "1002:683d-23.20.15033.5003",
-					"RadeonR9M470X": "1002:6646-23.20.15033.5003",
+					"IntelHD4400":   "8086:0a16-20.19.15.4963",
+					"IntelIris540":  "8086:1926-24.20.100.6229",
+					"IntelIris6100": "8086:162b-20.19.15.4963",
+					"RadeonHD7770":  "1002:683d-24.20.13001.1010",
+					"RadeonR9M470X": "1002:6646-24.20.13001.1010",
 					"QuadroP400":    "10de:1cb3-23.21.13.9103",
 				}[parts["cpu_or_gpu_value"]]
 				if !ok {
 					glog.Fatalf("Entry %q not found in Win GPU mapping.", parts["cpu_or_gpu_value"])
 				}
 				d["gpu"] = gpu
-
-				// Specify cpu dimension for NUCs and ShuttleCs. We temporarily have two
-				// types of machines with a GTX960.
-				cpu, ok := map[string]string{
-					"NUC6i7KYK": "x86-64-i7-6770HQ",
-					"ShuttleC":  "x86-64-i7-6700K",
-				}[parts["model"]]
-				if ok {
-					d["cpu"] = cpu
-				}
 			} else if strings.Contains(parts["os"], "Ubuntu") || strings.Contains(parts["os"], "Debian") {
 				gpu, ok := map[string]string{
 					// Intel drivers come from CIPD, so no need to specify the version here.
@@ -632,6 +620,13 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 			// Mac CPU bots.
 			d["cpu"] = "x86-64-E5-2697_v2"
 		}
+	}
+
+	if parts["cpu_or_gpu_value"] == "QuadroP400" {
+		// Specify "rack" dimension for consistent test results.
+		// See https://bugs.chromium.org/p/chromium/issues/detail?id=784662&desc=2#c34
+		// for more context.
+		d["rack"] = "1"
 	}
 
 	rv := make([]string, 0, len(d))
@@ -1044,6 +1039,8 @@ func test(b *specs.TasksCfgBuilder, name string, parts map[string]string, compil
 		recipe = "compute_test"
 	} else if strings.Contains(name, "PathKit") {
 		recipe = "test_pathkit"
+	} else if strings.Contains(name, "LottieWeb") {
+		recipe = "test_lottie_web"
 	}
 	extraProps := map[string]string{
 		"gold_hashes_url": CONFIG.GoldHashesURL,
@@ -1053,7 +1050,7 @@ func test(b *specs.TasksCfgBuilder, name string, parts map[string]string, compil
 		extraProps["internal_hardware_label"] = strconv.Itoa(*iid)
 	}
 	isolate := "test_skia_bundled.isolate"
-	if strings.Contains(name, "PathKit") {
+	if strings.Contains(name, "PathKit") || strings.Contains(name, "LottieWeb") {
 		isolate = "swarm_recipe.isolate"
 	}
 	task := kitchenTask(name, recipe, isolate, "", swarmDimensions(parts), extraProps, OUTPUT_TEST)
@@ -1061,7 +1058,11 @@ func test(b *specs.TasksCfgBuilder, name string, parts map[string]string, compil
 	if strings.Contains(name, "Lottie") {
 		task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("lottie-samples"))
 	}
-	task.Dependencies = append(task.Dependencies, compileTaskName)
+	if !strings.Contains(name, "LottieWeb") {
+		// Test.+LottieWeb doesn't require anything in Skia to be compiled.
+		task.Dependencies = append(task.Dependencies, compileTaskName)
+	}
+
 	if strings.Contains(name, "Android_ASAN") {
 		task.Dependencies = append(task.Dependencies, isolateCIPDAsset(b, ISOLATE_NDK_LINUX_NAME))
 	}
@@ -1302,7 +1303,8 @@ func process(b *specs.TasksCfgBuilder, name string) {
 		!strings.Contains(name, "Android_Framework") &&
 		!strings.Contains(name, "RecreateSKPs") &&
 		!strings.Contains(name, "-CT_") &&
-		!strings.Contains(name, "Housekeeper-PerCommit-Isolate") {
+		!strings.Contains(name, "Housekeeper-PerCommit-Isolate") &&
+		!strings.Contains(name, "LottieWeb") {
 		compile(b, compileTaskName, compileTaskParts)
 		if parts["role"] == "Calmbench" {
 			compile(b, compileParentName, compileParentParts)
@@ -1349,11 +1351,7 @@ func process(b *specs.TasksCfgBuilder, name string) {
 			pkgs = append(pkgs, b.MustGetCipdPackageFromAsset("linux_vulkan_sdk"))
 		}
 		if strings.Contains(name, "Intel") && strings.Contains(name, "GPU") {
-			if strings.Contains(name, "Release") {
-				pkgs = append(pkgs, b.MustGetCipdPackageFromAsset("linux_vulkan_intel_driver_release"))
-			} else {
-				pkgs = append(pkgs, b.MustGetCipdPackageFromAsset("linux_vulkan_intel_driver_debug"))
-			}
+			pkgs = append(pkgs, b.MustGetCipdPackageFromAsset("mesa_intel_driver_linux"))
 		}
 		if strings.Contains(name, "OpenCL") {
 			pkgs = append(pkgs,
@@ -1365,7 +1363,8 @@ func process(b *specs.TasksCfgBuilder, name string) {
 	if strings.Contains(name, "ProcDump") {
 		pkgs = append(pkgs, b.MustGetCipdPackageFromAsset("procdump_win"))
 	}
-	if strings.Contains(name, "PathKit") {
+	if strings.Contains(name, "PathKit") || strings.Contains(name, "LottieWeb") {
+		// Docker-based tests that don't need the standard CIPD assets
 		pkgs = []*specs.CipdPackage{}
 	}
 

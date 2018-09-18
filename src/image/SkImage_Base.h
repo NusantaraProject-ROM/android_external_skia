@@ -13,15 +13,15 @@
 #include <atomic>
 
 #if SK_SUPPORT_GPU
-    #include "GrTextureProxy.h"
+#include "GrTextureProxy.h"
+#include "SkTDArray.h"
 
-    class GrTexture;
+class GrTexture;
 #endif
 
 #include <new>
 
 class GrSamplerState;
-class SkImageCacherator;
 
 enum {
     kNeedNewImageUniqueID = 0
@@ -65,8 +65,6 @@ public:
     virtual GrBackendTexture onGetBackendTexture(bool flushPendingGrContextIO,
                                                  GrSurfaceOrigin* origin) const;
 
-    virtual SkImageCacherator* peekCacherator() const { return nullptr; }
-
     // return a read-only copy of the pixels. We promise to not modify them,
     // but only inspect them (or encode them).
     virtual bool getROPixels(SkBitmap*, SkColorSpace* dstColorSpace,
@@ -80,9 +78,6 @@ public:
 
     // True for picture-backed and codec-backed
     virtual bool onIsLazyGenerated() const { return false; }
-
-    // True only for generators that operate directly on gpu (e.g. picture-generators)
-    virtual bool onCanLazyGenerateOnGPU() const { return false; }
 
     // Call when this image is part of the key to a resourcecache entry. This allows the cache
     // to know automatically those entries can be purged when this SkImage deleted.
