@@ -42,6 +42,7 @@ enum class KeyWord {
     kNone,
     kSK_API,
     kSK_BEGIN_REQUIRE_DENSE,
+    kAlignAs,
     kBool,
     kChar,
     kClass,
@@ -1328,19 +1329,29 @@ struct JsonStatus {
     string fName;
 };
 
-class StatusIter : public ParserCommon {
+class JsonCommon : public ParserCommon {
+public:
+    bool empty() { return fStack.empty(); }
+    bool parseFromFile(const char* path) override;
+
+    void reset() override {
+        fStack.clear();
+        INHERITED::resetCommon();
+    }
+
+    vector<JsonStatus> fStack;
+    Json::Value fRoot;
+private:
+    typedef ParserCommon INHERITED;
+};
+
+class StatusIter : public JsonCommon {
 public:
     StatusIter(const char* statusFile, const char* suffix, StatusFilter);
     ~StatusIter() override {}
     string baseDir();
-    bool empty() { return fStack.empty(); }
     bool next(string* file);
-protected:
-    bool parseFromFile(const char* path) override;
-    void reset() override;
 private:
-    vector<JsonStatus> fStack;
-    Json::Value fRoot;
     const char* fSuffix;
     StatusFilter fFilter;
 };
@@ -1415,6 +1426,7 @@ public:
     bool checkParamReturn(const Definition* definition) const;
     bool dumpExamples(FILE* fiddleOut, Definition& def, bool* continuation) const;
     bool dumpExamples(const char* fiddleJsonFileName) const;
+    bool checkExampleHashes() const;
     bool childOf(MarkType markType) const;
     string className(MarkType markType);
     bool collectExternals();
@@ -1441,6 +1453,7 @@ public:
 
     bool popParentStack(Definition* definition);
     void reportDuplicates(const Definition& def, string dup) const;
+    void resetExampleHashes();
 
     void reset() override {
         INHERITED::resetCommon();
@@ -1556,6 +1569,7 @@ public:
         fIncludeWord = nullptr;
     }
 
+    bool inAlignAs() const;
     void checkForMissingParams(const vector<string>& methodParams,
                                const vector<string>& foundParams);
     bool checkForWord();
@@ -1568,11 +1582,13 @@ public:
     void dumpConst(const Definition& , string className);
     void dumpDefine(const Definition& );
     void dumpEnum(const Definition& , string name);
-    bool dumpGlobals();
+    bool dumpGlobals(string* globalFileName, long int* globalTell);
     void dumpMethod(const Definition& , string className);
     void dumpMember(const Definition& );
     bool dumpTokens();
-    bool dumpTokens(string skClassName);
+    bool dumpTokens(string skClassName, string globalFileName, long int* globalTell);
+    void dumpTypedef(const Definition& , string className);
+
     bool findComments(const Definition& includeDef, Definition* markupDef);
     Definition* findIncludeObject(const Definition& includeDef, MarkType markType,
                                   string typeName);
@@ -1581,6 +1597,7 @@ public:
     bool isClone(const Definition& token);
     bool isConstructor(const Definition& token, string className);
     bool isInternalName(const Definition& token);
+    bool isMember(const Definition& token) const;
     bool isOperator(const Definition& token);
     Definition* parentBracket(Definition* parent) const;
     bool parseChar();
@@ -2084,10 +2101,10 @@ private:
     typedef IncludeParser INHERITED;
 };
 
-class FiddleBase : public ParserCommon {
+class FiddleBase : public JsonCommon {
 protected:
-    FiddleBase(BmhParser* bmh) : ParserCommon()
-        , fBmhParser(bmh)
+    FiddleBase(BmhParser* bmh)
+        : fBmhParser(bmh)
         , fContinuation(false)
         , fTextOut(false)
         , fPngOut(false)
@@ -2096,7 +2113,7 @@ protected:
     }
 
     void reset() override {
-        INHERITED::resetCommon();
+        INHERITED::reset();
     }
 
     Definition* findExample(string name) const { return fBmhParser->findExample(name); }
@@ -2111,7 +2128,7 @@ protected:
     bool fTextOut;
     bool fPngOut;
 private:
-    typedef ParserCommon INHERITED;
+    typedef JsonCommon INHERITED;
 };
 
 class FiddleParser : public FiddleBase {
@@ -2121,10 +2138,14 @@ public:
     }
 
     bool parseFromFile(const char* path) override {
-        if (!INHERITED::parseSetup(path)) {
+        if (!INHERITED::parseFromFile(path)) {
             return false;
         }
-        return parseFiddles();
+        fBmhParser->resetExampleHashes();
+        if (!INHERITED::parseFiddles()) {
+            return false;
+        }
+        return fBmhParser->checkExampleHashes();
     }
 
 private:

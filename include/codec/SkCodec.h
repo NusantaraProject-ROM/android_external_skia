@@ -252,7 +252,7 @@ public:
             : fZeroInitialized(kNo_ZeroInitialized)
             , fSubset(nullptr)
             , fFrameIndex(0)
-            , fPriorFrame(kNone)
+            , fPriorFrame(kNoFrame)
         {}
 
         ZeroInitialized            fZeroInitialized;
@@ -283,7 +283,7 @@ public:
         int                        fFrameIndex;
 
         /**
-         *  If not kNone, the dst already contains the prior frame at this index.
+         *  If not kNoFrame, the dst already contains the prior frame at this index.
          *
          *  Only meaningful for multi-frame images.
          *
@@ -293,7 +293,7 @@ public:
          *  indicate that that frame is already in the dst. Options.fZeroInitialized
          *  is ignored in this case.
          *
-         *  If set to kNone, the codec will decode any necessary required frame(s) first.
+         *  If set to kNoFrame, the codec will decode any necessary required frame(s) first.
          */
         int                        fPriorFrame;
     };
@@ -571,9 +571,17 @@ public:
         return this->onGetFrameCount();
     }
 
-    // The required frame for an independent frame is marked as
-    // kNone.
-    static constexpr int kNone = -1;
+    // Sentinel value used when a frame index implies "no frame":
+    // - FrameInfo::fRequiredFrame set to this value means the frame
+    //   is independent.
+    // - Options::fPriorFrame set to this value means no (relevant) prior frame
+    //   is residing in dst's memory.
+    static constexpr int kNoFrame = -1;
+
+    // This transitional definition was added in August 2018, and will eventually be removed.
+#ifdef SK_LEGACY_SKCODEC_NONE_ENUM
+    static constexpr int kNone = kNoFrame;
+#endif
 
     /**
      *  Information about individual frames in a multi-framed image.
@@ -581,7 +589,7 @@ public:
     struct FrameInfo {
         /**
          *  The frame that this frame needs to be blended with, or
-         *  kNone if this frame is independent.
+         *  kNoFrame if this frame is independent.
          *
          *  Note that this is the *earliest* frame that can be used
          *  for blending. Any frame from [fRequiredFrame, i) can be
@@ -636,20 +644,25 @@ public:
      *
      *  As such, future decoding calls may require a rewind.
      *
-     *  For single-frame images, this will return an empty vector.
+     *  For still (non-animated) image codecs, this will return an empty vector.
      */
     std::vector<FrameInfo> getFrameInfo();
 
     static constexpr int kRepetitionCountInfinite = -1;
 
     /**
-     *  Return the number of times to repeat, if this image is animated.
+     *  Return the number of times to repeat, if this image is animated. This number does not
+     *  include the first play through of each frame. For example, a repetition count of 4 means
+     *  that each frame is played 5 times and then the animation stops.
+     *
+     *  It can return kRepetitionCountInfinite, a negative number, meaning that the animation
+     *  should loop forever.
      *
      *  May require reading the stream to find the repetition count.
      *
      *  As such, future decoding calls may require a rewind.
      *
-     *  For single-frame images, this will return 0.
+     *  For still (non-animated) image codecs, this will return 0.
      */
     int getRepetitionCount() {
         return this->onGetRepetitionCount();
@@ -723,8 +736,8 @@ protected:
      *  @returns true if the codec is at the right position and can be used.
      *      false if there was a failure to rewind.
      *
-     *  This is called by getPixels() and start(). Subclasses may call if they
-     *  need to rewind at another time.
+     *  This is called by getPixels(), getYUV8Planes(), startIncrementalDecode() and
+     *  startScanlineDecode(). Subclasses may call if they need to rewind at another time.
      */
     bool SK_WARN_UNUSED_RESULT rewindIfNeeded();
 
@@ -736,34 +749,6 @@ protected:
     virtual bool onRewind() {
         return true;
     }
-
-    /**
-     * On an incomplete input, getPixels() and getScanlines() will fill any uninitialized
-     * scanlines.  This allows the subclass to indicate what value to fill with.
-     *
-     * @param dstInfo   Describes the destination.
-     * @return          The value with which to fill uninitialized pixels.
-     *
-     * Note that we can interpret the return value as a 64-bit Float16 color, a SkPMColor,
-     * a 16-bit 565 color, an 8-bit gray color, or an 8-bit index into a color table,
-     * depending on the color type.
-     */
-    uint64_t getFillValue(const SkImageInfo& dstInfo) const {
-        return this->onGetFillValue(dstInfo);
-    }
-
-    /**
-     * Some subclasses will override this function, but this is a useful default for the color
-     * types that we support.  Note that for color types that do not use the full 64-bits,
-     * we will simply take the low bits of the fill value.
-     *
-     * The defaults are:
-     * kRGBA_F16_SkColorType: Transparent or Black, depending on the src alpha type
-     * kN32_SkColorType: Transparent or Black, depending on the src alpha type
-     * kRGB_565_SkColorType: Black
-     * kGray_8_SkColorType: Black
-     */
-    virtual uint64_t onGetFillValue(const SkImageInfo& dstInfo) const;
 
     /**
      * Get method for the input stream

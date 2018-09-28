@@ -12,8 +12,9 @@
 #include "GrVkStencilAttachment.h"
 #include "vk/GrVkDefines.h"
 
-struct GrVkInterface;
 class GrShaderCaps;
+class GrVkExtensions;
+struct GrVkInterface;
 
 /**
  * Stores some capabilities of a Vk backend.
@@ -27,7 +28,8 @@ public:
      * be called to fill out the caps.
      */
     GrVkCaps(const GrContextOptions& contextOptions, const GrVkInterface* vkInterface,
-             VkPhysicalDevice device, uint32_t featureFlags, uint32_t extensionFlags);
+             VkPhysicalDevice device, const VkPhysicalDeviceFeatures2& features,
+             uint32_t instanceVersion, const GrVkExtensions& extensions);
 
     bool isConfigTexturable(GrPixelConfig config) const override {
         return SkToBool(ConfigInfo::kTextureable_Flag & fConfigTable[config].fOptimalFlags);
@@ -62,11 +64,6 @@ public:
         const uint16_t& flags = linearTiled ? fConfigTable[config].fLinearFlags :
                                               fConfigTable[config].fOptimalFlags;
         return SkToBool(ConfigInfo::kBlitSrc_Flag & flags);
-    }
-
-    // Tells of if we can pass in straight GLSL string into vkCreateShaderModule
-    bool canUseGLSLForShaderModule() const {
-        return fCanUseGLSLForShaderModule;
     }
 
     // On Adreno vulkan, they do not respect the imageOffset parameter at least in
@@ -107,6 +104,16 @@ public:
     const StencilFormat& preferedStencilFormat() const {
         return fPreferedStencilFormat;
     }
+
+    // Returns whether the device supports the ability to extend VkPhysicalDeviceProperties struct.
+    bool supportsPhysicalDeviceProperties2() const { return fSupportsPhysicalDeviceProperties2; }
+    // Returns whether the device supports the ability to extend VkMemoryRequirements struct.
+    bool supportsMemoryRequirements2() const { return fSupportsMemoryRequirements2; }
+    // Returns whether or not the device suports the various API maintenance fixes to Vulkan 1.0. In
+    // Vulkan 1.1 all these maintenance are part of the core spec.
+    bool supportsMaintenance1() const { return fSupportsMaintenance1; }
+    bool supportsMaintenance2() const { return fSupportsMaintenance2; }
+    bool supportsMaintenance3() const { return fSupportsMaintenance3; }
 
     /**
      * Helpers used by canCopySurface. In all cases if the SampleCnt parameter is zero that means
@@ -151,11 +158,14 @@ private:
     };
 
     void init(const GrContextOptions& contextOptions, const GrVkInterface* vkInterface,
-              VkPhysicalDevice device, uint32_t featureFlags, uint32_t extensionFlags);
-    void initGrCaps(const VkPhysicalDeviceProperties&,
+              VkPhysicalDevice device, const VkPhysicalDeviceFeatures2&, const GrVkExtensions&);
+    void initGrCaps(const GrVkInterface* vkInterface,
+                    VkPhysicalDevice physDev,
+                    const VkPhysicalDeviceProperties&,
                     const VkPhysicalDeviceMemoryProperties&,
-                    uint32_t featureFlags);
-    void initShaderCaps(const VkPhysicalDeviceProperties&, uint32_t featureFlags);
+                    const VkPhysicalDeviceFeatures2&,
+                    const GrVkExtensions&);
+    void initShaderCaps(const VkPhysicalDeviceProperties&, const VkPhysicalDeviceFeatures2&);
 
 #ifdef GR_TEST_UTILS
     GrBackendFormat onCreateFormatFromBackendTexture(const GrBackendTexture&) const override;
@@ -191,12 +201,17 @@ private:
 
     StencilFormat fPreferedStencilFormat;
 
-    bool fCanUseGLSLForShaderModule;
     bool fMustDoCopiesFromOrigin;
     bool fMustSubmitCommandsBeforeCopyOp;
     bool fMustSleepOnTearDown;
     bool fNewCBOnPipelineChange;
     bool fShouldAlwaysUseDedicatedImageMemory;
+
+    bool fSupportsPhysicalDeviceProperties2;
+    bool fSupportsMemoryRequirements2;
+    bool fSupportsMaintenance1;
+    bool fSupportsMaintenance2;
+    bool fSupportsMaintenance3;
 
     typedef GrCaps INHERITED;
 };

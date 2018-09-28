@@ -1674,17 +1674,65 @@ void GrGLGpu::flushMinSampleShading(float minSampleShading) {
     }
 }
 
+void GrGLGpu::resolveAndGenerateMipMapsForProcessorTextures(
+        const GrPrimitiveProcessor& primProc,
+        const GrPipeline& pipeline,
+        const GrTextureProxy* const primProcTextures[],
+        int numPrimitiveProcessorTextureSets) {
+    auto genLevelsIfNeeded = [this](GrTexture* tex, const GrSamplerState& sampler) {
+        SkASSERT(tex);
+        if (sampler.filter() == GrSamplerState::Filter::kMipMap &&
+            tex->texturePriv().mipMapped() == GrMipMapped::kYes &&
+            tex->texturePriv().mipMapsAreDirty()) {
+            SkASSERT(this->caps()->mipMapSupport());
+            this->regenerateMipMapLevels(static_cast<GrGLTexture*>(tex));
+            SkASSERT(!tex->asRenderTarget() || !tex->asRenderTarget()->needsResolve());
+        } else if (auto* rt = tex->asRenderTarget()) {
+            if (rt->needsResolve()) {
+                this->resolveRenderTarget(rt);
+            }
+        }
+    };
+
+    for (int set = 0, tex = 0; set < numPrimitiveProcessorTextureSets; ++set) {
+        for (int sampler = 0; sampler < primProc.numTextureSamplers(); ++sampler, ++tex) {
+            GrTexture* texture = primProcTextures[tex]->peekTexture();
+            genLevelsIfNeeded(texture, primProc.textureSampler(sampler).samplerState());
+        }
+    }
+
+    GrFragmentProcessor::Iter iter(pipeline);
+    while (const GrFragmentProcessor* fp = iter.next()) {
+        for (int i = 0; i < fp->numTextureSamplers(); ++i) {
+            const auto& textureSampler = fp->textureSampler(i);
+            genLevelsIfNeeded(textureSampler.peekTexture(), textureSampler.samplerState());
+        }
+    }
+}
+
 bool GrGLGpu::flushGLState(const GrPrimitiveProcessor& primProc,
                            const GrPipeline& pipeline,
                            const GrPipeline::FixedDynamicState* fixedDynamicState,
+                           const GrPipeline::DynamicStateArrays* dynamicStateArrays,
+                           int dynamicStateArraysLength,
                            bool willDrawPoints) {
     sk_sp<GrGLProgram> program(fProgramCache->refProgram(this, primProc, pipeline, willDrawPoints));
     if (!program) {
         GrCapsDebugf(this->caps(), "Failed to create program!\n");
         return false;
     }
-
-    program->generateMipmaps(primProc, pipeline);
+    const GrTextureProxy* const* primProcProxiesForMipRegen = nullptr;
+    const GrTextureProxy* const* primProcProxiesToBind = nullptr;
+    int numPrimProcTextureSets = 1;  // number of texture per prim proc sampler.
+    if (dynamicStateArrays && dynamicStateArrays->fPrimitiveProcessorTextures) {
+        primProcProxiesForMipRegen = dynamicStateArrays->fPrimitiveProcessorTextures;
+        numPrimProcTextureSets = dynamicStateArraysLength;
+    } else if (fixedDynamicState && fixedDynamicState->fPrimitiveProcessorTextures) {
+        primProcProxiesForMipRegen = fixedDynamicState->fPrimitiveProcessorTextures;
+        primProcProxiesToBind = fixedDynamicState->fPrimitiveProcessorTextures;
+    }
+    this->resolveAndGenerateMipMapsForProcessorTextures(
+            primProc, pipeline, primProcProxiesForMipRegen, numPrimProcTextureSets);
 
     GrXferProcessor::BlendInfo blendInfo;
     pipeline.getXferProcessor().getBlendInfo(&blendInfo);
@@ -1701,7 +1749,7 @@ bool GrGLGpu::flushGLState(const GrPrimitiveProcessor& primProc,
         this->flushBlend(blendInfo, swizzle);
     }
 
-    fHWProgram->setData(primProc, pipeline);
+    fHWProgram->updateUniformsAndTextureBindings(primProc, pipeline, primProcProxiesToBind);
 
     GrGLRenderTarget* glRT = static_cast<GrGLRenderTarget*>(pipeline.renderTarget());
     GrStencilSettings stencil;
@@ -2108,16 +2156,25 @@ bool GrGLGpu::onReadPixels(GrSurface* surface, int left, int top, int width, int
     return true;
 }
 
-GrGpuRTCommandBuffer* GrGLGpu::createCommandBuffer(
+GrGpuRTCommandBuffer* GrGLGpu::getCommandBuffer(
         GrRenderTarget* rt, GrSurfaceOrigin origin,
         const GrGpuRTCommandBuffer::LoadAndStoreInfo& colorInfo,
         const GrGpuRTCommandBuffer::StencilLoadAndStoreInfo& stencilInfo) {
-    return new GrGLGpuRTCommandBuffer(this, rt, origin, colorInfo, stencilInfo);
+    if (!fCachedRTCommandBuffer) {
+        fCachedRTCommandBuffer.reset(new GrGLGpuRTCommandBuffer(this));
+    }
+
+    fCachedRTCommandBuffer->set(rt, origin, colorInfo, stencilInfo);
+    return fCachedRTCommandBuffer.get();
 }
 
-GrGpuTextureCommandBuffer* GrGLGpu::createCommandBuffer(GrTexture* texture,
-                                                        GrSurfaceOrigin origin) {
-    return new GrGLGpuTextureCommandBuffer(this, texture, origin);
+GrGpuTextureCommandBuffer* GrGLGpu::getCommandBuffer(GrTexture* texture, GrSurfaceOrigin origin) {
+    if (!fCachedTexCommandBuffer) {
+        fCachedTexCommandBuffer.reset(new GrGLGpuTextureCommandBuffer(this));
+    }
+
+    fCachedTexCommandBuffer->set(texture, origin);
+    return fCachedTexCommandBuffer.get();
 }
 
 void GrGLGpu::flushRenderTarget(GrGLRenderTarget* target, GrSurfaceOrigin origin,
@@ -2215,30 +2272,40 @@ void GrGLGpu::draw(const GrPrimitiveProcessor& primProc,
             break;
         }
     }
-    if (!this->flushGLState(primProc, pipeline, fixedDynamicState, hasPoints)) {
+    if (!this->flushGLState(primProc, pipeline, fixedDynamicState, dynamicStateArrays, meshCount,
+                            hasPoints)) {
         return;
     }
 
-    bool dynamicScissor =
-            pipeline.isScissorEnabled() && dynamicStateArrays && dynamicStateArrays->fScissorRects;
-    for (int i = 0; i < meshCount; ++i) {
+    bool dynamicScissor = false;
+    bool dynamicPrimProcTextures = false;
+    if (dynamicStateArrays) {
+        dynamicScissor = pipeline.isScissorEnabled() && dynamicStateArrays->fScissorRects;
+        dynamicPrimProcTextures = dynamicStateArrays->fPrimitiveProcessorTextures;
+    }
+    for (int m = 0; m < meshCount; ++m) {
         if (GrXferBarrierType barrierType = pipeline.xferBarrierType(*this->caps())) {
             this->xferBarrier(pipeline.renderTarget(), barrierType);
         }
 
         if (dynamicScissor) {
             GrGLRenderTarget* glRT = static_cast<GrGLRenderTarget*>(pipeline.renderTarget());
-            this->flushScissor(GrScissorState(dynamicStateArrays->fScissorRects[i]),
+            this->flushScissor(GrScissorState(dynamicStateArrays->fScissorRects[m]),
                                glRT->getViewport(), pipeline.proxy()->origin());
         }
+        if (dynamicPrimProcTextures) {
+            auto texProxyArray = dynamicStateArrays->fPrimitiveProcessorTextures +
+                                 m * primProc.numTextureSamplers();
+            fHWProgram->updatePrimitiveProcessorTextureBindings(primProc, texProxyArray);
+        }
         if (this->glCaps().requiresCullFaceEnableDisableWhenDrawingLinesAfterNonLines() &&
-            GrIsPrimTypeLines(meshes[i].primitiveType()) &&
+            GrIsPrimTypeLines(meshes[m].primitiveType()) &&
             !GrIsPrimTypeLines(fLastPrimitiveType)) {
             GL_CALL(Enable(GR_GL_CULL_FACE));
             GL_CALL(Disable(GR_GL_CULL_FACE));
         }
-        meshes[i].sendToGpu(this);
-        fLastPrimitiveType = meshes[i].primitiveType();
+        meshes[m].sendToGpu(this);
+        fLastPrimitiveType = meshes[m].primitiveType();
     }
 
 #if SWAP_PER_DRAW
@@ -2921,6 +2988,13 @@ void GrGLGpu::unbindTextureFBOForPixelOps(GrGLenum fboTarget, GrSurface* surface
     }
 }
 
+void GrGLGpu::onFBOChanged() {
+    if (this->caps()->workarounds().flush_on_framebuffer_change ||
+        this->caps()->workarounds().restore_scissor_on_fbo_change) {
+        GL_CALL(Flush());
+    }
+}
+
 void GrGLGpu::bindFramebuffer(GrGLenum target, GrGLuint fboid) {
     fStats.incRenderTargetBinds();
     GL_CALL(BindFramebuffer(target, fboid));
@@ -2928,18 +3002,14 @@ void GrGLGpu::bindFramebuffer(GrGLenum target, GrGLuint fboid) {
         fBoundDrawFramebuffer = fboid;
     }
 
-    if (!this->caps()->workarounds().restore_scissor_on_fbo_change) {
-        return;
+    if (this->caps()->workarounds().restore_scissor_on_fbo_change) {
+        // The driver forgets the correct scissor when modifying the FBO binding.
+        if (!fHWScissorSettings.fRect.isInvalid()) {
+            fHWScissorSettings.fRect.pushToGLScissor(this->glInterface());
+        }
     }
 
-    // The driver forgets the correct scissor when modifying the FBO binding.
-    if (!fHWScissorSettings.fRect.isInvalid()) {
-        fHWScissorSettings.fRect.pushToGLScissor(this->glInterface());
-    }
-
-    // crbug.com/222018 - Also on QualComm, the flush here avoids flicker,
-    // it's unclear how this bug works.
-    GL_CALL(Flush());
+    this->onFBOChanged();
 }
 
 void GrGLGpu::deleteFramebuffer(GrGLuint fboid) {
@@ -2958,6 +3028,11 @@ void GrGLGpu::deleteFramebuffer(GrGLuint fboid) {
     }
 
     GL_CALL(DeleteFramebuffers(1, &fboid));
+
+    // Deleting the currently bound framebuffer rebinds to 0.
+    if (fboid == fBoundDrawFramebuffer) {
+        this->onFBOChanged();
+    }
 }
 
 bool GrGLGpu::onCopySurface(GrSurface* dst, GrSurfaceOrigin dstOrigin,
@@ -3004,7 +3079,8 @@ bool GrGLGpu::createCopyProgram(GrTexture* srcTex) {
 
     int progIdx = TextureToCopyProgramIdx(srcTex);
     const GrShaderCaps* shaderCaps = this->caps()->shaderCaps();
-    GrSLType samplerType = srcTex->texturePriv().samplerType();
+    GrSLType samplerType =
+            GrSLCombinedSamplerTypeForTextureType(srcTex->texturePriv().textureType());
 
     if (!fCopyProgramArrayBuffer) {
         static const GrGLfloat vdata[] = {
@@ -3927,13 +4003,12 @@ void GrGLGpu::deleteTestingOnlyBackendTexture(const GrBackendTexture& tex) {
 }
 
 GrBackendRenderTarget GrGLGpu::createTestingOnlyBackendRenderTarget(int w, int h,
-                                                                    GrColorType colorType,
-                                                                    GrSRGBEncoded srgbEncoded) {
+                                                                    GrColorType colorType) {
     if (w > this->caps()->maxRenderTargetSize() || h > this->caps()->maxRenderTargetSize()) {
         return GrBackendRenderTarget();  // invalid
     }
     this->handleDirtyContext();
-    auto config = GrColorTypeToPixelConfig(colorType, srgbEncoded);
+    auto config = GrColorTypeToPixelConfig(colorType, GrSRGBEncoded::kNo);
     GrGLenum colorBufferFormat;
     if (!this->glCaps().getRenderbufferFormat(config, &colorBufferFormat)) {
         return {};
@@ -4057,6 +4132,16 @@ void GrGLGpu::onFinishFlush(bool insertedSemaphore) {
     }
 }
 
+void GrGLGpu::submit(GrGpuCommandBuffer* buffer) {
+    if (buffer->asRTCommandBuffer()) {
+        SkASSERT(fCachedRTCommandBuffer.get() == buffer);
+        fCachedRTCommandBuffer->reset();
+    } else {
+        SkASSERT(fCachedTexCommandBuffer.get() == buffer);
+        fCachedTexCommandBuffer->reset();
+    }
+}
+
 GrFence SK_WARN_UNUSED_RESULT GrGLGpu::insertFence() {
     SkASSERT(this->caps()->fenceSyncSupport());
     GrGLsync sync;
@@ -4122,7 +4207,7 @@ sk_sp<GrSemaphore> GrGLGpu::prepareTextureForCrossContextUsage(GrTexture* textur
 }
 
 int GrGLGpu::TextureToCopyProgramIdx(GrTexture* texture) {
-    switch (texture->texturePriv().samplerType()) {
+    switch (GrSLCombinedSamplerTypeForTextureType(texture->texturePriv().textureType())) {
         case kTexture2DSampler_GrSLType:
             return 0;
         case kTexture2DRectSampler_GrSLType:

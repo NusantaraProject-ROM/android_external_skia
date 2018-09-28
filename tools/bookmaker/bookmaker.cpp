@@ -51,6 +51,8 @@ rewrap text to fit in some number of columns
      would rather keep links for body above #Literal, and/or make it a block and not a one-liner
 add check to require #Const to contain #Code block if defining const or constexpr (enum consts have
      #Code blocks inside the #Enum def)
+subclasses (e.g. Iter in SkPath) need to check for #Line and generate overview
+     subclass methods should also disallow #In
 
 There are a number of formatting bugs with ad hoc patches where a substitution doesn't keep
 the space before or after, or the linefeeds before or after. The rules are not very good either.
@@ -701,6 +703,55 @@ Definition* BmhParser::findExample(string name) const {
         }
     }
     return nullptr;
+}
+
+static bool check_example_hashes(Definition* def) {
+    if (MarkType::kExample == def->fMarkType) {
+        if (def->fHash.length()) {
+            return true;
+        }
+        for (auto child : def->fChildren) {
+            if (MarkType::kPlatform == child->fMarkType) {
+                if (string::npos != string(child->fContentStart, child->length()).find("!fiddle")) {
+                    return true;
+                }
+            }
+        }
+        return def->reportError<bool>("missing hash");
+    }
+    for (auto& child : def->fChildren) {
+        if (!check_example_hashes(child)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool BmhParser::checkExampleHashes() const {
+    for (const auto& topic : fTopicMap) {
+        if (!topic.second->fParent && !check_example_hashes(topic.second)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void reset_example_hashes(Definition* def) {
+    if (MarkType::kExample == def->fMarkType) {
+        def->fHash.clear();
+        return;
+    }
+    for (auto& child : def->fChildren) {
+        reset_example_hashes(child);
+    }
+}
+
+void BmhParser::resetExampleHashes() {
+    for (const auto& topic : fTopicMap) {
+        if (!topic.second->fParent) {
+            reset_example_hashes(topic.second);
+        }
+    }
 }
 
 static void find_examples(const Definition& def, vector<string>* exampleNames) {
@@ -2640,7 +2691,7 @@ int main(int argc, char** const argv) {
     }
     if (!done && !FLAGS_fiddle.isEmpty() && FLAGS_examples.isEmpty()) {
         FiddleParser fparser(&bmhParser);
-        if (!fparser.parseFile(FLAGS_fiddle[0], ".txt", ParserCommon::OneFile::kNo)) {
+        if (!fparser.parseFromFile(FLAGS_fiddle[0])) {
             return -1;
         }
     }

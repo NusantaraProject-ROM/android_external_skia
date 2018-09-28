@@ -1678,16 +1678,16 @@ void SkCanvas::drawVertices(const SkVertices* vertices, SkBlendMode mode, const 
     this->onDrawVerticesObject(vertices, nullptr, 0, mode, paint);
 }
 
-void SkCanvas::drawVertices(const sk_sp<SkVertices>& vertices, const SkMatrix* bones, int boneCount,
-                            SkBlendMode mode, const SkPaint& paint) {
+void SkCanvas::drawVertices(const sk_sp<SkVertices>& vertices, const SkVertices::Bone bones[],
+                            int boneCount, SkBlendMode mode, const SkPaint& paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);
     RETURN_ON_NULL(vertices);
     SkASSERT(boneCount <= 80);
     this->onDrawVerticesObject(vertices.get(), bones, boneCount, mode, paint);
 }
 
-void SkCanvas::drawVertices(const SkVertices* vertices, const SkMatrix* bones, int boneCount,
-                            SkBlendMode mode, const SkPaint& paint) {
+void SkCanvas::drawVertices(const SkVertices* vertices, const SkVertices::Bone bones[],
+                            int boneCount, SkBlendMode mode, const SkPaint& paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);
     RETURN_ON_NULL(vertices);
     SkASSERT(boneCount <= 80);
@@ -2478,7 +2478,7 @@ void SkCanvas::onDrawTextOnPath(const void* text, size_t byteLength, const SkPat
     LOOPER_END
 }
 
-void SkCanvas::onDrawTextRSXform(const void* text, size_t byteLength, const SkRSXform xform[],
+void SkCanvas::onDrawTextRSXform(const void* text, size_t len, const SkRSXform xform[],
                                  const SkRect* cullRect, const SkPaint& paint) {
     if (cullRect && this->quickReject(*cullRect)) {
         return;
@@ -2487,7 +2487,12 @@ void SkCanvas::onDrawTextRSXform(const void* text, size_t byteLength, const SkRS
     LOOPER_BEGIN(paint, nullptr)
 
     while (iter.next()) {
-        iter.fDevice->drawTextRSXform(text, byteLength, xform, looper.paint());
+        fScratchGlyphRunBuilder->drawTextAtOrigin(paint, text, len);
+        auto list = fScratchGlyphRunBuilder->useGlyphRunList();
+        if (!list.empty()) {
+            auto glyphRun = list[0];
+            iter.fDevice->drawGlyphRunRSXform(&glyphRun, xform);
+        }
     }
 
     LOOPER_END
@@ -2571,7 +2576,7 @@ void SkCanvas::drawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
     this->onDrawTextBlob(blob, x, y, paint);
 }
 
-void SkCanvas::onDrawVerticesObject(const SkVertices* vertices, const SkMatrix* bones,
+void SkCanvas::onDrawVerticesObject(const SkVertices* vertices, const SkVertices::Bone bones[],
                                     int boneCount, SkBlendMode bmode, const SkPaint& paint) {
     LOOPER_BEGIN(paint, nullptr)
 

@@ -64,7 +64,7 @@
 
 // SRC
 #include "SkCommandLineFlags.h"
-#include "SkUtils.h"
+#include "SkUTF.h"
 
 #if SK_SUPPORT_GPU
 #include "GrContextFactory.h"
@@ -507,17 +507,8 @@ static sk_sp<SkMaskFilter> make_fuzz_maskfilter(Fuzz* fuzz) {
             fuzz_enum_range(fuzz, &blurStyle, 0, kLastEnum_SkBlurStyle);
             SkScalar sigma;
             fuzz->next(&sigma);
-            SkRect occluder{0.0f, 0.0f, 0.0f, 0.0f};
-            bool useOccluder;
-            fuzz->next(&useOccluder);
-            if (useOccluder) {
-                fuzz->next(&occluder);
-            }
             bool respectCTM;
             fuzz->next(&respectCTM);
-            if (useOccluder) {
-                return SkMaskFilter::MakeBlur(blurStyle, sigma, occluder, respectCTM);
-            }
             return SkMaskFilter::MakeBlur(blurStyle, sigma, respectCTM);
         }
         default:
@@ -904,7 +895,7 @@ static SkBitmap make_fuzz_bitmap(Fuzz* fuzz) {
     fuzz->nextRange(&w, 1, 1024);
     fuzz->nextRange(&h, 1, 1024);
     if (!bitmap.tryAllocN32Pixels(w, h)) {
-        SkDEBUGF(("Could not allocate pixels %d x %d", w, h));
+        SkDEBUGF("Could not allocate pixels %d x %d", w, h);
         return bitmap;
     }
     for (int y = 0; y < h; ++y) {
@@ -1020,21 +1011,21 @@ static SkTDArray<uint8_t> make_fuzz_text(Fuzz* fuzz, const SkPaint& paint) {
         case SkPaint::kUTF8_TextEncoding: {
             size_t utf8len = 0;
             for (int j = 0; j < length; ++j) {
-                utf8len += SkUTF8_FromUnichar(buffer[j], nullptr);
+                utf8len += SkUTF::ToUTF8(buffer[j], nullptr);
             }
             char* ptr = (char*)array.append(utf8len);
             for (int j = 0; j < length; ++j) {
-                ptr += SkUTF8_FromUnichar(buffer[j], ptr);
+                ptr += SkUTF::ToUTF8(buffer[j], ptr);
             }
         } break;
         case SkPaint::kUTF16_TextEncoding: {
             size_t utf16len = 0;
             for (int j = 0; j < length; ++j) {
-                utf16len += SkUTF16_FromUnichar(buffer[j]);
+                utf16len += SkUTF::ToUTF16(buffer[j]);
             }
             uint16_t* ptr = (uint16_t*)array.append(utf16len * sizeof(uint16_t));
             for (int j = 0; j < length; ++j) {
-                ptr += SkUTF16_FromUnichar(buffer[j], ptr);
+                ptr += SkUTF::ToUTF16(buffer[j], ptr);
             }
         } break;
         case SkPaint::kUTF32_TextEncoding:
