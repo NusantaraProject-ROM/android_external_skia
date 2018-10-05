@@ -19,10 +19,20 @@
 #include "SkPointPriv.h"
 #include "SkRRect.h"
 #include "SkSafeMath.h"
+#include "SkTLazy.h"
 #include "SkTo.h"
 
 #include <cmath>
 #include <utility>
+
+struct SkPath_Storage_Equivalent {
+    void*    fPtr;
+    int32_t  fIndex;
+    uint32_t fFlags;
+};
+
+static_assert(sizeof(SkPath) == sizeof(SkPath_Storage_Equivalent),
+              "Please keep an eye on SkPath packing.");
 
 static float poly_eval(float A, float B, float C, float t) {
     return (A * t + B) * t + C;
@@ -202,11 +212,16 @@ bool operator==(const SkPath& a, const SkPath& b) {
 
 void SkPath::swap(SkPath& that) {
     if (this != &that) {
-        using std::swap;
         fPathRef.swap(that.fPathRef);
-        swap(fLastMoveToIndex, that.fLastMoveToIndex);
-        swap(fFillType, that.fFillType);
-        swap(fIsVolatile, that.fIsVolatile);
+        std::swap(fLastMoveToIndex, that.fLastMoveToIndex);
+
+        const auto ft = fFillType;
+        fFillType = that.fFillType;
+        that.fFillType = ft;
+
+        const auto iv = fIsVolatile;
+        fIsVolatile = that.fIsVolatile;
+        that.fIsVolatile = iv;
 
         // Non-atomic swaps of atomic values.
         Convexity c = fConvexity.load();
@@ -1577,10 +1592,17 @@ SkPath& SkPath::addPath(const SkPath& path, SkScalar dx, SkScalar dy, AddPathMod
     return this->addPath(path, matrix, mode);
 }
 
-SkPath& SkPath::addPath(const SkPath& path, const SkMatrix& matrix, AddPathMode mode) {
-    SkPathRef::Editor(&fPathRef, path.countVerbs(), path.countPoints());
+SkPath& SkPath::addPath(const SkPath& srcPath, const SkMatrix& matrix, AddPathMode mode) {
+    // Detect if we're trying to add ourself
+    const SkPath* src = &srcPath;
+    SkTLazy<SkPath> tmp;
+    if (this == src) {
+        src = tmp.set(srcPath);
+    }
 
-    RawIter iter(path);
+    SkPathRef::Editor(&fPathRef, src->countVerbs(), src->countPoints());
+
+    RawIter iter(*src);
     SkPoint pts[4];
     Verb    verb;
 
@@ -1686,14 +1708,21 @@ SkPath& SkPath::reversePathTo(const SkPath& path) {
     return *this;
 }
 
-SkPath& SkPath::reverseAddPath(const SkPath& src) {
-    SkPathRef::Editor ed(&fPathRef, src.fPathRef->countPoints(), src.fPathRef->countVerbs());
+SkPath& SkPath::reverseAddPath(const SkPath& srcPath) {
+    // Detect if we're trying to add ourself
+    const SkPath* src = &srcPath;
+    SkTLazy<SkPath> tmp;
+    if (this == src) {
+        src = tmp.set(srcPath);
+    }
 
-    const SkPoint* pts = src.fPathRef->pointsEnd();
-    // we will iterator through src's verbs backwards
-    const uint8_t* verbs = src.fPathRef->verbsMemBegin(); // points at the last verb
-    const uint8_t* verbsEnd = src.fPathRef->verbs(); // points just past the first verb
-    const SkScalar* conicWeights = src.fPathRef->conicWeightsEnd();
+    SkPathRef::Editor ed(&fPathRef, src->countVerbs(), src->countPoints());
+
+    const SkPoint* pts = src->fPathRef->pointsEnd();
+    // we will iterate through src's verbs backwards
+    const uint8_t* verbs = src->fPathRef->verbsMemBegin(); // points at the last verb
+    const uint8_t* verbsEnd = src->fPathRef->verbs(); // points just past the first verb
+    const SkScalar* conicWeights = src->fPathRef->conicWeightsEnd();
 
     bool needMove = true;
     bool needClose = false;
@@ -1811,6 +1840,7 @@ void SkPath::transform(const SkMatrix& matrix, SkPath* dst) const {
         SkPathRef::CreateTransformedCopy(&dst->fPathRef, *fPathRef.get(), matrix);
 
         if (this != dst) {
+            dst->fLastMoveToIndex = fLastMoveToIndex;
             dst->fFillType = fFillType;
             dst->fConvexity.store(fConvexity);
             dst->fIsVolatile = fIsVolatile;

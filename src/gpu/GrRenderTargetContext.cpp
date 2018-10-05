@@ -27,7 +27,7 @@
 #include "GrStyle.h"
 #include "GrTracing.h"
 #include "SkDrawShadowInfo.h"
-#include "SkGlyphRun.h"
+#include "SkGlyphRunPainter.h"
 #include "SkGr.h"
 #include "SkLatticeIter.h"
 #include "SkMatrixPriv.h"
@@ -54,8 +54,6 @@
 #include "text/GrTextContext.h"
 #include "text/GrTextTarget.h"
 
-
-
 class GrRenderTargetContext::TextTarget : public GrTextTarget {
 public:
     TextTarget(GrRenderTargetContext* renderTargetContext)
@@ -68,11 +66,8 @@ public:
         fRenderTargetContext->addDrawOp(clip, std::move(op));
     }
 
-    void drawPath(const GrClip& clip, const SkPath& path, const SkPaint& paint,
-                  const SkMatrix& viewMatrix, bool pathIsMutable) override {
-        // TODO: we are losing the mutability of the path here
-        GrShape shape(path, paint);
-
+    void drawShape(const GrClip& clip, const SkPaint& paint,
+                  const SkMatrix& viewMatrix, const GrShape& shape) override {
         GrBlurUtils::drawShapeWithMaskFilter(fRenderTargetContext->fContext, fRenderTargetContext,
                                              clip, paint, viewMatrix, shape);
     }
@@ -489,12 +484,12 @@ void GrRenderTargetContext::drawRect(const GrClip& clip,
     AutoCheckFlush acf(this->drawingManager());
 
     const SkStrokeRec& stroke = style->strokeRec();
-    if (stroke.getStyle() == SkStrokeRec::kFill_Style && !paint.numCoverageFragmentProcessors()) {
+    if (stroke.getStyle() == SkStrokeRec::kFill_Style) {
         // Check if this is a full RT draw and can be replaced with a clear. We don't bother
         // checking cases where the RT is fully inside a stroke.
         SkRect rtRect = fRenderTargetProxy->getBoundsRect();
         // Does the clip contain the entire RT?
-        if (clip.quickContains(rtRect)) {
+        if (clip.quickContains(rtRect) && !paint.numCoverageFragmentProcessors()) {
             SkMatrix invM;
             if (!viewMatrix.invert(&invM)) {
                 return;
@@ -1025,17 +1020,13 @@ bool GrRenderTargetContext::drawFastShadow(const GrClip& clip,
             // set a large inset to force a fill
             devSpaceInsetWidth = ambientRRect.width();
         }
-        // the fraction of the blur we want to apply is devSpaceInsetWidth/devSpaceAmbientBlur,
-        // which is just 1/umbraRecipAlpha.
-        SkScalar blurClamp = SkScalarInvert(umbraRecipAlpha);
 
         std::unique_ptr<GrDrawOp> op = GrShadowRRectOp::Make(fContext,
                                                              ambientColor,
                                                              viewMatrix,
                                                              ambientRRect,
                                                              devSpaceAmbientBlur,
-                                                             devSpaceInsetWidth,
-                                                             blurClamp);
+                                                             devSpaceInsetWidth);
         SkASSERT(op);
         this->addDrawOp(clip, std::move(op));
     }
@@ -1285,6 +1276,8 @@ void GrRenderTargetContext::drawRegion(const GrClip& clip,
     if (complexStyle || GrAA::kYes == aa) {
         SkPath path;
         region.getBoundaryPath(&path);
+        path.setIsVolatile(true);
+
         return this->drawPath(clip, std::move(paint), aa, viewMatrix, path, style);
     }
 

@@ -31,6 +31,7 @@ declare_args() {
   skia_use_zlib = true
   skia_use_metal = false
   skia_use_libheif = is_skia_dev_build
+  skia_use_x11 = is_linux
 
   skia_android_serial = ""
   skia_enable_discrete_gpu = true
@@ -599,7 +600,7 @@ optional("gpu") {
   } else if (skia_use_egl) {
     sources += [ "src/gpu/gl/egl/GrGLMakeNativeInterface_egl.cpp" ]
     libs += [ "EGL" ]
-  } else if (is_linux) {
+  } else if (is_linux && skia_use_x11) {
     sources += [ "src/gpu/gl/glx/GrGLMakeNativeInterface_glx.cpp" ]
     libs += [ "GL" ]
   } else if (is_mac) {
@@ -863,6 +864,7 @@ component("skia") {
     "src/codec/SkCodec.cpp",
     "src/codec/SkCodecImageGenerator.cpp",
     "src/codec/SkColorTable.cpp",
+    "src/codec/SkEncodedInfo.cpp",
     "src/codec/SkGifCodec.cpp",
     "src/codec/SkMaskSwizzler.cpp",
     "src/codec/SkMasks.cpp",
@@ -1350,6 +1352,7 @@ if (skia_enable_tools) {
       "tools/debugger/SkDrawCommand.cpp",
       "tools/debugger/SkJsonWriteBuffer.cpp",
       "tools/fonts/SkRandomScalerContext.cpp",
+      "tools/fonts/SkTestEmptyTypeface.h",
       "tools/fonts/SkTestFontMgr.cpp",
       "tools/fonts/SkTestFontMgr.h",
       "tools/fonts/SkTestSVGTypeface.cpp",
@@ -1537,7 +1540,7 @@ if (skia_enable_tools) {
     ]
   }
 
-  if (is_linux) {
+  if (is_linux || is_mac) {
     test_app("skottie_tool") {
       deps = [
         "modules/skottie:tool",
@@ -1750,17 +1753,18 @@ if (skia_enable_tools) {
       "tools/debugger",
     ]
     sources = [
+      "fuzz/Fuzz.cpp",
       "fuzz/FuzzCanvas.cpp",
       "fuzz/FuzzCommon.cpp",
       "fuzz/FuzzDrawFunctions.cpp",
       "fuzz/FuzzEncoders.cpp",
       "fuzz/FuzzGradients.cpp",
+      "fuzz/FuzzMain.cpp",
       "fuzz/FuzzParsePath.cpp",
       "fuzz/FuzzPathMeasure.cpp",
       "fuzz/FuzzPathop.cpp",
       "fuzz/FuzzPolyUtils.cpp",
       "fuzz/FuzzRegionOp.cpp",
-      "fuzz/fuzz.cpp",
       "fuzz/oss_fuzz/FuzzAnimatedImage.cpp",
       "fuzz/oss_fuzz/FuzzImage.cpp",
       "fuzz/oss_fuzz/FuzzImageFilterDeserialize.cpp",

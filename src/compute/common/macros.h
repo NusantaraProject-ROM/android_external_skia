@@ -57,15 +57,15 @@
 //
 //
 
-#define STRINGIFY2_MACRO(a)     #a
-#define STRINGIFY_MACRO(a)      STRINGIFY2_MACRO(a)
+#define STRINGIFY_MACRO_2(a)    #a
+#define STRINGIFY_MACRO(a)      STRINGIFY_MACRO_2(a)
 
 //
 //
 //
 
-#define EVAL_MACRO(x)           x
-#define CONCAT_MACRO(a,b)       EVAL_MACRO(a)##EVAL_MACRO(b)
+#define CONCAT_MACRO_2(a,b)     a ## b
+#define CONCAT_MACRO(a,b)       CONCAT_MACRO_2(a,b)
 
 //
 // Convert byte pointer to a network order 32-bit integer to host

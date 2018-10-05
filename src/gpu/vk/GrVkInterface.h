@@ -206,11 +206,26 @@ public:
         VkPtr<PFN_vkGetBufferMemoryRequirements2> fGetBufferMemoryRequirements2;
         VkPtr<PFN_vkGetImageSparseMemoryRequirements2> fGetImageSparseMemoryRequirements2;
 
+        //Functions for VK_KHR_bind_memory2
+        VkPtr<PFN_vkBindBufferMemory2> fBindBufferMemory2;
+        VkPtr<PFN_vkBindImageMemory2> fBindImageMemory2;
+
         // Functions for VK_KHR_maintenance1 or vulkan 1.1
         VkPtr<PFN_vkTrimCommandPool> fTrimCommandPool;
 
         // Functions for VK_KHR_maintenance3 or vulkan 1.1
         VkPtr<PFN_vkGetDescriptorSetLayoutSupport> fGetDescriptorSetLayoutSupport;
+
+        // Functions for VK_KHR_external_memory_capabilities
+        VkPtr<PFN_vkGetPhysicalDeviceExternalBufferProperties> fGetPhysicalDeviceExternalBufferProperties;
+
+#ifdef SK_BUILD_FOR_ANDROID
+        // Functions for VK_ANDROID_external_memory_android_hardware_buffer
+        VkPtr<PFN_vkGetAndroidHardwareBufferPropertiesANDROID> fGetAndroidHardwareBufferProperties;
+        VkPtr<PFN_vkGetMemoryAndroidHardwareBufferANDROID> fGetMemoryAndroidHardwareBuffer;
+#endif
+
+
     } fFunctions;
 };
 

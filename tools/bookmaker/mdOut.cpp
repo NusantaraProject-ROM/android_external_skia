@@ -278,6 +278,11 @@ Definition* MdOut::checkParentsForMatch(Definition* test, string ref) const {
     return nullptr;
 }
 
+static bool formula_or_code(BmhParser::Resolvable resolvable) {
+    return  BmhParser::Resolvable::kFormula == resolvable
+            || BmhParser::Resolvable::kCode == resolvable;
+}
+
 // FIXME: preserve inter-line spaces and don't add new ones
 string MdOut::addReferences(const char* refStart, const char* refEnd,
         BmhParser::Resolvable resolvable) {
@@ -292,7 +297,7 @@ string MdOut::addReferences(const char* refStart, const char* refEnd,
         const char* base = t.fChar;
         t.skipWhiteSpace();
         const char* wordStart = t.fChar;
-        if (BmhParser::Resolvable::kFormula == resolvable && !t.eof() && '"' == t.peek()) {
+        if (formula_or_code(resolvable) && !t.eof() && '"' == t.peek()) {
             t.next();
             t.skipToEndBracket('"');
             t.next();
@@ -306,7 +311,24 @@ string MdOut::addReferences(const char* refStart, const char* refEnd,
             } else {
                 wordStart = base;
             }
-            result += string(wordStart, start - wordStart);
+            string nonWord = string(wordStart, start - wordStart);
+            if (BmhParser::Resolvable::kFormula == resolvable) {
+                string unbreakable;
+                bool comma = false;
+                for (char c : nonWord) {
+                    if (string::npos != string("\\`*_{}[]()#+-.!").find(c)) {
+                        unbreakable += '\\';
+                    }
+                    if (' ' == c && !comma) {
+                        unbreakable += "&nbsp;";
+                    } else {
+                        unbreakable += c;
+                    }
+                    comma = ',' == c;
+                }
+                nonWord = unbreakable;
+            }
+            result += nonWord;
             if ('\n' != result.back()) {
                 while (start > wordStart && '\n' == start[-1]) {
                     result += '\n';
@@ -373,7 +395,7 @@ string MdOut::addReferences(const char* refStart, const char* refEnd,
                 }
                 if (!foundMatch) {
                     if (!(def = this->isDefined(t, fullRef, resolvable))) {
-                        if (BmhParser::Resolvable::kFormula == resolvable) {
+                        if (formula_or_code(resolvable)) {
                             // TODO: look for looser mapping -- if methods name match, look for
                             //   unique mapping based on number of parameters
                             // for now, just look for function name match
@@ -422,16 +444,14 @@ string MdOut::addReferences(const char* refStart, const char* refEnd,
             // look for Sk / sk / SK ..
         if (!ref.compare(0, 2, "Sk") && ref != "Skew" && ref != "Skews" && ref != "Skewing"
               && ref != "Skip" && ref != "Skips") {
-            if (BmhParser::Resolvable::kOut != resolvable &&
-                    BmhParser::Resolvable::kFormula != resolvable) {
+            if (BmhParser::Resolvable::kOut != resolvable && !formula_or_code(resolvable)) {
                 t.reportError("missed Sk prefixed");
                 fAddRefFailed = true;
                 return result;
             }
         }
         if (!ref.compare(0, 2, "SK")) {
-            if (BmhParser::Resolvable::kOut != resolvable &&
-                    BmhParser::Resolvable::kFormula != resolvable) {
+            if (BmhParser::Resolvable::kOut != resolvable && !formula_or_code(resolvable)) {
                 t.reportError("missed SK prefixed");
                 fAddRefFailed = true;
                 return result;
@@ -465,7 +485,7 @@ string MdOut::addReferences(const char* refStart, const char* refEnd,
                     }
                     if (BmhParser::Resolvable::kSimple != resolvable
                             && BmhParser::Resolvable::kOut != resolvable
-                            && BmhParser::Resolvable::kFormula != resolvable) {
+                            && !formula_or_code(resolvable)) {
                         t.reportError("missed camelCase");
                         fAddRefFailed = true;
                         return result;
@@ -506,7 +526,7 @@ string MdOut::addReferences(const char* refStart, const char* refEnd,
             continue;
         }
         if (BmhParser::Resolvable::kOut != resolvable &&
-                BmhParser::Resolvable::kFormula != resolvable) {
+                !formula_or_code(resolvable)) {
             t.reportError("undefined reference");
             fAddRefFailed = true;
         } else {
@@ -621,16 +641,12 @@ bool MdOut::buildRefFromFile(const char* name, const char* outDir) {
         this->writePending();
         fclose(fOut);
         fflush(fOut);
-        if (this->writtenFileDiffers(filename, fullName)) {
-            fOut = fopen(fullName.c_str(), "wb");
-            int writtenSize;
-            const char* written = ReadToBuffer(filename, &writtenSize);
-            fwrite(written, 1, writtenSize, fOut);
-            fclose(fOut);
-            fflush(fOut);
-            SkDebugf("wrote updated %s\n", fullName.c_str());
+        if (ParserCommon::WrittenFileDiffers(fullName, filename)) {
+            ParserCommon::CopyToFile(fullName, filename);
+            SkDebugf("wrote %s\n", fullName.c_str());
+        } else {
+            remove(filename.c_str());
         }
-        remove(filename.c_str());
         fOut = nullptr;
     }
     return !fAddRefFailed;
@@ -744,6 +760,9 @@ bool MdOut::checkParamReturnBody(const Definition* def) {
 }
 
 void MdOut::childrenOut(Definition* def, const char* start) {
+    if (MarkType::kDeprecated == def->fMarkType || MarkType::kExperimental == def->fMarkType) {
+        return;
+    }
     const char* end;
     fLineCount = def->fLineCount;
     if (MarkType::kEnumClass == def->fMarkType) {
@@ -764,6 +783,9 @@ void MdOut::childrenOut(Definition* def, const char* start) {
     }
     if (BmhParser::Resolvable::kNo != resolvable) {
         end = def->fContentEnd;
+        if (MarkType::kFormula == def->fMarkType && ' ' == start[0]) {
+            this->writeSpace();
+        }
         this->resolveOut(start, end, resolvable);
     }
     if (MarkType::kEnumClass == def->fMarkType) {
@@ -1055,7 +1077,7 @@ const Definition* MdOut::isDefined(const TextParser& parser, string ref,
             }
         } else {
             if (BmhParser::Resolvable::kOut != resolvable &&
-                    BmhParser::Resolvable::kFormula != resolvable) {
+                    !formula_or_code(resolvable)) {
                 parser.reportError("SK undefined");
                 fAddRefFailed = true;
             }
@@ -1086,7 +1108,7 @@ const Definition* MdOut::isDefined(const TextParser& parser, string ref,
                 }
             }
             if (BmhParser::Resolvable::kOut != resolvable &&
-                    BmhParser::Resolvable::kFormula != resolvable) {
+                    !formula_or_code(resolvable)) {
                 parser.reportError("_ undefined");
                 fAddRefFailed = true;
             }
@@ -1372,7 +1394,8 @@ void MdOut::markTypeOut(Definition* def, const Definition** prior) {
             this->lf(2);
             break;
         case MarkType::kDeprecated:
-            this->writeString("Deprecated.");
+            this->writeString(def->fParent->incompleteMessage(
+                    Definition::DetailsType::kSentence).c_str());
             this->lf(2);
             break;
         case MarkType::kDescription:
@@ -1428,7 +1451,8 @@ void MdOut::markTypeOut(Definition* def, const Definition** prior) {
             }
             } break;
         case MarkType::kExperimental:
-            writeString("Experimental.");
+            this->writeString(def->fParent->incompleteMessage(
+                    Definition::DetailsType::kSentence).c_str());
             this->lf(2);
             break;
         case MarkType::kExternal:
@@ -1691,6 +1715,16 @@ void MdOut::markTypeOut(Definition* def, const Definition** prior) {
         case MarkType::kTemplate:
             break;
         case MarkType::kText:
+            if (def->fParent && MarkType::kFormula == def->fParent->fMarkType) {
+                if (fColumn > 0) {
+                    this->writeSpace();
+                }
+                this->writePending();
+                this->htmlOut("<code>");
+                this->resolveOut(def->fContentStart, def->fContentEnd,
+                        BmhParser::Resolvable::kFormula);
+                this->htmlOut("</code>");
+            }
             break;
         case MarkType::kToDo:
             break;

@@ -920,9 +920,16 @@ int SkCanvas::saveLayerPreserveLCDTextRequests(const SkRect* bounds, const SkPai
 }
 
 int SkCanvas::saveLayer(const SaveLayerRec& rec) {
-    SaveLayerStrategy strategy = this->getSaveLayerStrategy(rec);
-    fSaveCount += 1;
-    this->internalSaveLayer(rec, strategy);
+    TRACE_EVENT0("skia", TRACE_FUNC);
+    if (rec.fPaint && rec.fPaint->nothingToDraw()) {
+        // no need for the layer (or any of the draws until the matching restore()
+        this->save();
+        this->clipRect({0,0,0,0});
+    } else {
+        SaveLayerStrategy strategy = this->getSaveLayerStrategy(rec);
+        fSaveCount += 1;
+        this->internalSaveLayer(rec, strategy);
+    }
     return this->getSaveCount() - 1;
 }
 
@@ -968,6 +975,7 @@ static SkImageInfo make_layer_info(const SkImageInfo& prev, int w, int h, const 
 }
 
 void SkCanvas::internalSaveLayer(const SaveLayerRec& rec, SaveLayerStrategy strategy) {
+    TRACE_EVENT0("skia", TRACE_FUNC);
     const SkRect* bounds = rec.fBounds;
     const SkPaint* paint = rec.fPaint;
     SaveLayerFlags saveLayerFlags = rec.fSaveLayerFlags;
@@ -2001,7 +2009,7 @@ void SkCanvas::onDrawRect(const SkRect& r, const SkPaint& paint) {
         }
 
         LOOPER_END
-    } else {
+    } else if (!paint.nothingToDraw()) {
         this->predrawNotify(&r, &paint, false);
         SkDrawIter iter(this);
         while (iter.next()) {
@@ -2467,17 +2475,6 @@ void SkCanvas::onDrawPosTextH(const void* text, size_t byteLength, const SkScala
     LOOPER_END
 }
 
-void SkCanvas::onDrawTextOnPath(const void* text, size_t byteLength, const SkPath& path,
-                                const SkMatrix* matrix, const SkPaint& paint) {
-    LOOPER_BEGIN(paint, nullptr)
-
-    while (iter.next()) {
-        iter.fDevice->drawTextOnPath(text, byteLength, path, matrix, looper.paint());
-    }
-
-    LOOPER_END
-}
-
 void SkCanvas::onDrawTextRSXform(const void* text, size_t len, const SkRSXform xform[],
                                  const SkRect* cullRect, const SkPaint& paint) {
     if (cullRect && this->quickReject(*cullRect)) {
@@ -2552,14 +2549,7 @@ void SkCanvas::drawPosTextH(const void* text, size_t byteLength, const SkScalar 
         this->onDrawPosTextH(text, byteLength, xpos, constY, paint);
     }
 }
-void SkCanvas::drawTextOnPath(const void* text, size_t byteLength, const SkPath& path,
-                              const SkMatrix* matrix, const SkPaint& paint) {
-    TRACE_EVENT0("skia", TRACE_FUNC);
-    if (byteLength) {
-        sk_msan_assert_initialized(text, SkTAddOffset<const void>(text, byteLength));
-        this->onDrawTextOnPath(text, byteLength, path, matrix, paint);
-    }
-}
+
 void SkCanvas::drawTextRSXform(const void* text, size_t byteLength, const SkRSXform xform[],
                                const SkRect* cullRect, const SkPaint& paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);
@@ -2732,15 +2722,6 @@ void SkCanvas::drawArc(const SkRect& oval, SkScalar startAngle,
         return;
     }
     this->onDrawArc(oval, startAngle, sweepAngle, useCenter, paint);
-}
-
-void SkCanvas::drawTextOnPathHV(const void* text, size_t byteLength,
-                                const SkPath& path, SkScalar hOffset,
-                                SkScalar vOffset, const SkPaint& paint) {
-    SkMatrix    matrix;
-
-    matrix.setTranslate(hOffset, vOffset);
-    this->drawTextOnPath(text, byteLength, path, &matrix, paint);
 }
 
 ///////////////////////////////////////////////////////////////////////////////

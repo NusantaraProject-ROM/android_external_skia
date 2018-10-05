@@ -738,10 +738,26 @@ void SkTypeface_FreeType::onFilterRec(SkScalerContextRec* rec) const {
 #endif
 }
 
+int SkTypeface_FreeType::GetUnitsPerEm(FT_Face face) {
+    if (!face) {
+        return 0;
+    }
+
+    SkScalar upem = SkIntToScalar(face->units_per_EM);
+    // At least some versions of FreeType set face->units_per_EM to 0 for bitmap only fonts.
+    if (upem == 0) {
+        TT_Header* ttHeader = (TT_Header*)FT_Get_Sfnt_Table(face, ft_sfnt_head);
+        if (ttHeader) {
+            upem = SkIntToScalar(ttHeader->Units_Per_EM);
+        }
+    }
+    return upem;
+}
+
 int SkTypeface_FreeType::onGetUPEM() const {
     AutoFTAccess fta(this);
     FT_Face face = fta.face();
-    return face ? face->units_per_EM : 0;
+    return GetUnitsPerEm(face);
 }
 
 bool SkTypeface_FreeType::onGetKerningPairAdjustments(const uint16_t glyphs[],
@@ -1161,75 +1177,79 @@ void SkScalerContext_FreeType::generateMetrics(SkGlyph* glyph) {
     }
     emboldenIfNeeded(fFace, fFace->glyph, glyph->getGlyphID());
 
-    switch ( fFace->glyph->format ) {
-      case FT_GLYPH_FORMAT_OUTLINE:
-        if (0 == fFace->glyph->outline.n_contours) {
-            glyph->fWidth = 0;
-            glyph->fHeight = 0;
-            glyph->fTop = 0;
-            glyph->fLeft = 0;
-        } else {
-            FT_BBox bbox;
-
+    if (fFace->glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+        using FT_PosLimits = std::numeric_limits<FT_Pos>;
+        FT_BBox bounds = { FT_PosLimits::max(), FT_PosLimits::max(),
+                           FT_PosLimits::min(), FT_PosLimits::min() };
 #ifdef FT_COLOR_H
-            SkRect bounds = SkRect::MakeEmpty();
-
-            FT_LayerIterator layerIterator;
-            layerIterator.p  = NULL;
-            FT_Bool haveLayers = false;
-            FT_UInt layerGlyphIndex;
-            FT_UInt layerColorIndex;
-            while (FT_Get_Color_Glyph_Layer(fFace,
-                                            glyph->getGlyphID(),
-                                            &layerGlyphIndex,
-                                            &layerColorIndex,
-                                            &layerIterator)) {
-                haveLayers = true;
-                err = FT_Load_Glyph(fFace, layerGlyphIndex,
-                                    fLoadGlyphFlags | FT_LOAD_BITMAP_METRICS_ONLY);
-                if (err != 0) {
-                    glyph->zeroMetrics();
-                    return;
-                }
-                emboldenIfNeeded(fFace, fFace->glyph, layerGlyphIndex);
-
-                if (0 < fFace->glyph->outline.n_contours) {
-                    getBBoxForCurrentGlyph(glyph, &bbox, true);
-
-                    SkRect layerBounds = SkRect::MakeLTRB(SkFDot6ToScalar(bbox.xMin),
-                                                          SkFDot6ToScalar(-bbox.yMax),
-                                                          SkFDot6ToScalar(bbox.xMax),
-                                                          SkFDot6ToScalar(-bbox.yMin)
-                    );
-
-                    bounds.join(layerBounds);
-                }
+        FT_Bool haveLayers = false;
+        FT_LayerIterator layerIterator = { 0, 0, nullptr };
+        FT_UInt layerGlyphIndex;
+        FT_UInt layerColorIndex;
+        while (FT_Get_Color_Glyph_Layer(fFace, glyph->getGlyphID(),
+                                        &layerGlyphIndex, &layerColorIndex, &layerIterator))
+        {
+            haveLayers = true;
+            err = FT_Load_Glyph(fFace, layerGlyphIndex,
+                                fLoadGlyphFlags | FT_LOAD_BITMAP_METRICS_ONLY);
+            if (err != 0) {
+                glyph->zeroMetrics();
+                return;
             }
+            emboldenIfNeeded(fFace, fFace->glyph, layerGlyphIndex);
 
-            if (haveLayers) {
-                glyph->fMaskFormat = SkMask::kARGB32_Format;
-
-                SkIRect ibounds = bounds.roundOut();
-                glyph->fWidth   = SkToU16(ibounds.width());
-                glyph->fHeight  = SkToU16(ibounds.height());
-                glyph->fTop     = SkToS16(ibounds.top());
-                glyph->fLeft    = SkToS16(ibounds.left());
-            } else {
-#endif
+            if (0 < fFace->glyph->outline.n_contours) {
+                FT_BBox bbox;
                 getBBoxForCurrentGlyph(glyph, &bbox, true);
 
-                glyph->fWidth   = SkToU16(SkFDot6Floor(bbox.xMax - bbox.xMin));
-                glyph->fHeight  = SkToU16(SkFDot6Floor(bbox.yMax - bbox.yMin));
-                glyph->fTop     = -SkToS16(SkFDot6Floor(bbox.yMax));
-                glyph->fLeft    = SkToS16(SkFDot6Floor(bbox.xMin));
-#ifdef FT_COLOR_H
+                // Union
+                bounds.xMin = std::min(bbox.xMin, bounds.xMin);
+                bounds.yMin = std::min(bbox.yMin, bounds.yMin);
+                bounds.xMax = std::max(bbox.xMax, bounds.xMax);
+                bounds.yMax = std::max(bbox.yMax, bounds.yMax);
             }
-#endif
-            updateGlyphIfLCD(glyph);
         }
-        break;
 
-      case FT_GLYPH_FORMAT_BITMAP:
+        if (haveLayers) {
+            glyph->fMaskFormat = SkMask::kARGB32_Format;
+            if (!(bounds.xMin < bounds.xMax && bounds.yMin < bounds.yMax)) {
+                bounds = { 0, 0, 0, 0 };
+            }
+        } else {
+#endif
+            if (0 < fFace->glyph->outline.n_contours) {
+                getBBoxForCurrentGlyph(glyph, &bounds, true);
+            } else {
+                bounds = { 0, 0, 0, 0 };
+            }
+#ifdef FT_COLOR_H
+        }
+#endif
+        // Round out, no longer dot6.
+        bounds.xMin = SkFDot6Floor(bounds.xMin);
+        bounds.yMin = SkFDot6Floor(bounds.yMin);
+        bounds.xMax = SkFDot6Ceil (bounds.xMax);
+        bounds.yMax = SkFDot6Ceil (bounds.yMax);
+
+        FT_Pos width  =  bounds.xMax - bounds.xMin;
+        FT_Pos height =  bounds.yMax - bounds.yMin;
+        FT_Pos top    = -bounds.yMax;  // Freetype y-up, Skia y-down.
+        FT_Pos left   =  bounds.xMin;
+        if (!SkTFitsIn<decltype(glyph->fWidth )>(width ) ||
+            !SkTFitsIn<decltype(glyph->fHeight)>(height) ||
+            !SkTFitsIn<decltype(glyph->fTop   )>(top   ) ||
+            !SkTFitsIn<decltype(glyph->fLeft  )>(left  )  )
+        {
+            width = height = top = left = 0;
+        }
+
+        glyph->fWidth  = SkToU16(width );
+        glyph->fHeight = SkToU16(height);
+        glyph->fTop    = SkToS16(top   );
+        glyph->fLeft   = SkToS16(left  );
+        updateGlyphIfLCD(glyph);
+
+    } else if (fFace->glyph->format == FT_GLYPH_FORMAT_BITMAP) {
         if (this->isVertical()) {
             FT_Vector vector;
             vector.x = fFace->glyph->metrics.vertBearingX - fFace->glyph->metrics.horiBearingX;
@@ -1259,9 +1279,7 @@ void SkScalerContext_FreeType::generateMetrics(SkGlyph* glyph) {
             glyph->fTop     = SkToS16(irect.top());
             glyph->fLeft    = SkToS16(irect.left());
         }
-        break;
-
-      default:
+    } else {
         SkDEBUGFAIL("unknown glyph format");
         glyph->zeroMetrics();
         return;
@@ -1342,7 +1360,7 @@ bool SkScalerContext_FreeType::generatePath(SkGlyphID glyphID, SkPath* path) {
     flags &= ~FT_LOAD_RENDER;   // don't scan convert (we just want the outline)
 
     FT_Error err = FT_Load_Glyph(fFace, glyphID, flags);
-    if (err != 0) {
+    if (err != 0 || fFace->glyph->format == FT_GLYPH_FORMAT_BITMAP) {
         path->reset();
         return false;
     }
@@ -1380,14 +1398,7 @@ void SkScalerContext_FreeType::generateFontMetrics(SkPaint::FontMetrics* metrics
     FT_Face face = fFace;
     metrics->fFlags = 0;
 
-    // fetch units/EM from "head" table if needed (ie for bitmap fonts)
-    SkScalar upem = SkIntToScalar(face->units_per_EM);
-    if (!upem) {
-        TT_Header* ttHeader = (TT_Header*)FT_Get_Sfnt_Table(face, ft_sfnt_head);
-        if (ttHeader) {
-            upem = SkIntToScalar(ttHeader->Units_Per_EM);
-        }
-    }
+    SkScalar upem = SkIntToScalar(SkTypeface_FreeType::GetUnitsPerEm(face));
 
     // use the os/2 table as a source of reasonable defaults.
     SkScalar x_height = 0.0f;

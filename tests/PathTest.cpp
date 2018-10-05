@@ -4090,6 +4090,10 @@ static void test_contains(skiatest::Reporter* reporter) {
 
 class PathRefTest_Private {
 public:
+    static size_t GetFreeSpace(const SkPathRef& ref) {
+        return ref.fFreeSpace;
+    }
+
     static void TestPathRef(skiatest::Reporter* reporter) {
         static const int kRepeatCnt = 10;
 
@@ -4259,6 +4263,10 @@ private:
 
 class PathTest_Private {
 public:
+    static size_t GetFreeSpace(const SkPath& path) {
+        return PathRefTest_Private::GetFreeSpace(*path.fPathRef);
+    }
+
     static void TestPathTo(skiatest::Reporter* reporter) {
         SkPath p, q;
         p.lineTo(4, 4);
@@ -5061,6 +5069,29 @@ DEF_TEST(Path_isRect, reporter) {
     REPORTER_ASSERT(reporter, rect == compare);
 }
 
+// Be sure we can safely add ourselves
+DEF_TEST(Path_self_add, reporter) {
+    // The possible problem is that during path.add() we may have to grow the dst buffers as
+    // we append the src pts/verbs, but all the while we are iterating over the src. If src == dst
+    // we could realloc the buffer's (on behalf of dst) leaving the src iterator pointing at
+    // garbage.
+    //
+    // The test runs though verious sized src paths, since its not defined publicly what the
+    // reserve allocation strategy is for SkPath, therefore we can't know when an append operation
+    // will trigger a realloc. At the time of this writing, these loops were sufficient to trigger
+    // an ASAN error w/o the fix to SkPath::addPath().
+    //
+    for (int count = 0; count < 10; ++count) {
+        SkPath path;
+        for (int add = 0; add < count; ++add) {
+            // just add some stuff, so we have something to copy/append in addPath()
+            path.moveTo(1, 2).lineTo(3, 4).cubicTo(1,2,3,4,5,6).conicTo(1,2,3,4,5);
+        }
+        path.addPath(path, 1, 2);
+        path.addPath(path, 3, 4);
+    }
+}
+
 #include "SkVertices.h"
 static void draw_triangle(SkCanvas* canvas, const SkPoint pts[]) {
     // draw in different ways, looking for an assert
@@ -5103,3 +5134,49 @@ DEF_TEST(triangle_big, reporter) {
     draw_triangle(surface->getCanvas(), pts);
 }
 
+static void add_verbs(SkPath* path, int count) {
+    path->moveTo(0, 0);
+    for (int i = 0; i < count; ++i) {
+        switch (i & 3) {
+            case 0: path->lineTo(10, 20); break;
+            case 1: path->quadTo(5, 6, 7, 8); break;
+            case 2: path->conicTo(1, 2, 3, 4, 0.5f); break;
+            case 3: path->cubicTo(2, 4, 6, 8, 10, 12); break;
+        }
+    }
+}
+
+// Make sure when we call shrinkToFit() that we always shrink (or stay the same)
+// and that if we call twice, we stay the same.
+DEF_TEST(Path_shrinkToFit, reporter) {
+    size_t max_free = 0;
+    for (int verbs = 0; verbs < 100; ++verbs) {
+        SkPath unique_path, shared_path;
+        add_verbs(&unique_path, verbs);
+        add_verbs(&shared_path, verbs);
+
+        const SkPath copy = shared_path;
+        REPORTER_ASSERT(reporter, shared_path == unique_path);
+        REPORTER_ASSERT(reporter, shared_path == copy);
+
+#ifdef SK_DEBUG
+        size_t before = PathTest_Private::GetFreeSpace(unique_path);
+#endif
+        unique_path.shrinkToFit();
+        shared_path.shrinkToFit();
+        REPORTER_ASSERT(reporter, shared_path == unique_path);
+        REPORTER_ASSERT(reporter, shared_path == copy);
+
+#ifdef SK_DEBUG
+        size_t after = PathTest_Private::GetFreeSpace(unique_path);
+        REPORTER_ASSERT(reporter, before >= after);
+        max_free = std::max(max_free, before - after);
+
+        size_t after2 = PathTest_Private::GetFreeSpace(unique_path);
+        REPORTER_ASSERT(reporter, after == after2);
+#endif
+    }
+    if (false) {
+        SkDebugf("max_free %zu\n", max_free);
+    }
+}

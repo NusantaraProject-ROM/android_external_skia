@@ -14,7 +14,7 @@
 #include "SkAtlasTextContext.h"
 #include "SkAtlasTextFont.h"
 #include "SkAtlasTextRenderer.h"
-#include "SkGlyphRun.h"
+#include "SkGlyphRunPainter.h"
 #include "SkGr.h"
 #include "SkInternalAtlasTextContext.h"
 #include "ops/GrAtlasTextOp.h"
@@ -98,14 +98,14 @@ public:
 
     void addDrawOp(const GrClip&, std::unique_ptr<GrAtlasTextOp> op) override;
 
-    void drawPath(const GrClip&, const SkPath&, const SkPaint&, const SkMatrix& viewMatrix,
-                  bool pathIsMutable) override {
+    void drawShape(const GrClip&, const SkPaint&, const SkMatrix& viewMatrix,
+                   const GrShape&) override {
         SkDebugf("Path glyph??");
     }
 
     void makeGrPaint(GrMaskFormat, const SkPaint& skPaint, const SkMatrix&,
                      GrPaint* grPaint) override {
-        grPaint->setColor4f(SkColorToPremulGrColor4fLegacy(skPaint.getColor()));
+        grPaint->setColor4f(SkColor4fToPremulGrColor4fLegacy(skPaint.getColor4f()));
     }
 
     GrContext* getContext() override {

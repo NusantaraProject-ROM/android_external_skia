@@ -658,10 +658,7 @@ paths are interpolatable
 Interpolates between Paths with Point_Array of equal size.
 Copy Verb_Array and Weights to out, and set out Point_Array to a weighted
 average of this Point_Array and ending Point_Array, using the formula:
-#Formula
-(Path Point * weight) + ending Point * (1 - weight)
-##
-.
+#Formula # (Path Point * weight) + ending Point * (1 - weight) ##.
 
 weight is most useful when between zero (ending Point_Array) and
 one (this Point_Array); will work with values outside of this
@@ -2117,6 +2114,27 @@ void draw(SkCanvas* canvas) {
 
 ##
 
+#Method void shrinkToFit()
+#In Utility
+#Line # removes unused reserved space ##
+Shrinks Path Verb_Array and Point_Array storage to discard unused capacity.
+May reduce the heap overhead for Paths known to be fully constructed.
+
+#NoExample
+#Height 192
+void draw(SkCanvas* canvas) {
+    SkPath skinnyPath;
+    skinnyPath.lineTo(100, 100);
+    skinnyPath.shrinkToFit();
+
+    SkDebugf("no wasted Path capacity in my house!\n");
+}
+##
+
+#SeeAlso incReserve
+
+##
+
 # ------------------------------------------------------------------------------
 #Subtopic Build
 #Populate
@@ -2578,11 +2596,7 @@ If weight is less than one, Conic is an elliptical segment.
 
 #Example
 #Description
-A 90 degree circular arc has the weight
-#Formula
-1 / sqrt(2)
-##
-.
+A 90 degree circular arc has the weight #Formula # 1 / sqrt(2) ##.
 ##
 void draw(SkCanvas* canvas) {
     const char* verbNames[] = { "move", "line", "quad", "conic", "cubic", "close", "done" };
@@ -3023,15 +3037,11 @@ conicTo describes Arc of less than 180 degrees as a pair of tangent lines and Co
 conicTo can represent any Arc with a sweep less than 180 degrees at any rotation. All arcTo
 constructions are converted to Conic data when added to Path.
 
-#ToDo  allow example to hide source and not be exposed as fiddle since markdown / html can't
-       do the kind of table shown in the illustration.
-       example is spaced correctly on fiddle but spacing is too wide on pc
+#ToDo  example is spaced correctly on fiddle but spacing is too wide on pc
 ##
 
-#Example
-#Height 300
-#Width 600
-#Description
+#Illustration
+
 #List
 # <sup>1</sup> arcTo(const SkRect& oval, SkScalar startAngle, SkScalar sweepAngle, bool forceMoveTo) ##
 # <sup>2</sup> parameter sets force MoveTo  ##
@@ -3040,105 +3050,9 @@ constructions are converted to Conic data when added to Path.
 # <sup>5</sup> arcTo(SkScalar rx, SkScalar ry, SkScalar xAxisRotate, ArcSize largeArc,
                Direction sweep, SkScalar x, SkScalar y) ##
 #List ##
-#Description ##
-#Function
-###$
-struct data {
-   const char* name;
-   char super;
-   int yn[10];
-};
-
-const data dataSet[] = {
-{ "arcTo sweep",    '1', {1,  3, 1, 0, 0, 0, 0, 1, 0, 0 }},
-{ "drawArc",         0,  {1, -1, 1, 1, 1, 1, 1, 0, 0, 0 }},
-{ "addArc",          0,  {1,  1, 1, 4, 0, 1, 1, 1, 0, 0 }},
-{ "arcTo tangents", '4', {0,  0, 0, 0, 0, 0, 0, 1, 1, 0 }},
-{ "arcTo radii",    '5', {1,  0, 1, 0, 0, 0, 0, 1, 1, 0 }},
-{ "conicTo",         0,  {1,  1, 0, 0, 0, 0, 0, 1, 1, 1 }}
-};
-
-#define __degree_symbol__ "\xC2" "\xB0"
-
-const char* headers[] = {
-    "Oval part",
-    "force moveTo",
-    "can draw 180" __degree_symbol__,
-    "can draw 360" __degree_symbol__,
-    "can draw greater than 360" __degree_symbol__,
-    "ignored if radius is zero",
-    "ignored if sweep is zero",
-    "requires Path",
-    "describes rotation",
-    "describes perspective",
-};
-
-const char* yna[] = {
-     "n/a",
-     "no",
-     "yes"
-};
-$$$#
-##
-void draw(SkCanvas* canvas) {
-    SkPaint lp;
-    lp.setAntiAlias(true);
-    SkPaint tp(lp);
-    SkPaint sp(tp);
-    SkPaint bp(tp);
-    bp.setFakeBoldText(true);
-    sp.setTextSize(10);
-    lp.setColor(SK_ColorGRAY);
-    canvas->translate(0, 32);
-    const int tl = 115;
-    for (unsigned col = 0; col <= SK_ARRAY_COUNT(headers); ++col) {
-       canvas->drawLine(tl + col * 35, 100, tl + col * 35, 250, lp);
-       if (0 == col) {
-          continue;
-       }
-       canvas->drawLine(tl + col * 35, 100, tl + 100 + col * 35, 0, lp);
-       SkPath path;
-       path.moveTo(tl - 3 + col * 35, 103);
-       path.lineTo(tl + 124 + col * 35, -24);
-       canvas->drawTextOnPathHV(headers[col -1], strlen(headers[col -1]), path, 0, -9, bp);
-    }
-    for (unsigned row = 0; row <= SK_ARRAY_COUNT(dataSet); ++row) {
-        if (0 == row) {
-            canvas->drawLine(tl, 100, tl + 350, 100, lp);
-        } else {
-            canvas->drawLine(5, 100 + row * 25, tl + 350, 100 + row * 25, lp);
-        }
-        if (row == SK_ARRAY_COUNT(dataSet)) {
-            break;
-        }
-        canvas->drawString(dataSet[row].name, 5, 117 + row * 25, bp);
-        if (dataSet[row].super) {
-            SkScalar width = bp.measureText(dataSet[row].name, strlen(dataSet[row].name));
-            canvas->drawText(&dataSet[row].super, 1, 8 + width, 112 + row * 25, sp);
-        }
-        for (unsigned col = 0; col < SK_ARRAY_COUNT(headers); ++col) {
-            int val = dataSet[row].yn[col];
-            canvas->drawString(yna[SkTMin(2, val + 1)], tl + 5 + col * 35, 117 + row * 25, tp);
-            if (val > 1) {
-                char supe = '0' + val - 1;
-                canvas->drawText(&supe, 1, tl + 25 + col * 35, 112 + row * 25, sp);
-            }
-        }
-    }
-}
-#Example ##
 
 #Example
 #Height 128
-#Description
-#ToDo make this a list or table ##
-1 describes an arc from an oval, a starting angle, and a sweep angle.
-2 is similar to 1, but does not require building a path to draw.
-3 is similar to 1, but always begins new Contour.
-4 describes an arc from a pair of tangent lines and a radius.
-5 describes an arc from Oval center, arc start Point and arc end Point.
-6 describes an arc from a pair of tangent lines and a Conic_Weight.
-##
 void draw(SkCanvas* canvas) {
     SkRect oval = {8, 8, 56, 56};
     SkPaint ovalPaint;
@@ -3180,6 +3094,15 @@ void draw(SkCanvas* canvas) {
 }
 #Example ##
 
+In the example above:
+#List
+# 1 describes an arc from an oval, a starting angle, and a sweep angle. ##
+# 2 is similar to 1, but does not require building a path to draw. ##
+# 3 is similar to 1, but always begins new Contour. ##
+# 4 describes an arc from a pair of tangent lines and a radius. ##
+# 5 describes an arc from Oval center, arc start Point and arc end Point. ##
+# 6 describes an arc from a pair of tangent lines and a Conic_Weight. ##
+#List ##
 
 #Method SkPath& arcTo(const SkRect& oval, SkScalar startAngle, SkScalar sweepAngle, bool forceMoveTo)
 #In Build
@@ -3560,14 +3483,16 @@ void draw(SkCanvas* canvas) {
 #In Build
 #In Arc
 
-Appends Arc to Path. Arc is implemented by one or more Conic weighted to describe part of Oval
-with radii (r.fX, r.fY) rotated by xAxisRotate degrees. Arc curves from last Path Point to
-(xy.fX, xy.fY), choosing one of four possible routes: clockwise or counterclockwise,
+Appends Arc to Path. Arc is implemented by one or more Conic weighted to describe
+part of Oval with radii (r.fX, r.fY) rotated by xAxisRotate degrees. Arc curves
+from last Path Point to (xy.fX, xy.fY), choosing one of four possible routes:
+clockwise or counterclockwise,
 and smaller or larger.
 
-Arc sweep is always less than 360 degrees. arcTo appends Line to xy if either radii are zero,
-or if last Path Point equals (x, y). arcTo scales radii r to fit last Path Point and
-xy if both are greater than zero but too small to describe an arc.
+Arc sweep is always less than 360 degrees. arcTo appends Line to xy if either
+radii are zero, or if last Path Point equals (x, y). arcTo scales radii r to fit
+last Path Point and xy if both are greater than zero but too small to describe
+an arc.
 
 arcTo appends up to four Conic curves.
 arcTo implements the functionality of SVG_Arc, although SVG "sweep-flag" value is
@@ -3611,11 +3536,7 @@ void draw(SkCanvas* canvas) {
 Appends Arc to Path, relative to last Path Point. Arc is implemented by one or
 more Conic, weighted to describe part of Oval with radii (rx, ry) rotated by
 xAxisRotate degrees. Arc curves from last Path Point (x0, y0) to end Point:
-
-#Formula
-(x0 + dx, y0 + dy)
-##
-, choosing one of four possible routes: clockwise or
+#Formula # (x0 + dx, y0 + dy) ##, choosing one of four possible routes: clockwise or
 counterclockwise, and smaller or larger. If Path is empty, the start Arc Point
 is (0, 0).
 
@@ -3832,10 +3753,7 @@ Quad array is stored in pts; this storage is supplied by caller.
 Maximum Quad count is 2 to the pow2.
 Every third point in array shares last Point of previous Quad and first Point of
 next Quad. Maximum pts storage size is given by:
-#Formula
-(1 + 2 * (1 << pow2)) * sizeof(SkPoint)
-##
-.
+#Formula # (1 + 2 * (1 << pow2)) * sizeof(SkPoint) ##.
 
 Returns Quad count used the approximation, which may be smaller
 than the number requested.
@@ -4238,11 +4156,7 @@ void draw(SkCanvas* canvas) {
 #Line # adds one Contour containing Circle ##
 
 Adds Circle centered at (x, y) of size radius to Path, appending kMove_Verb,
-four kConic_Verb, and kClose_Verb. Circle begins at:
-#Formula
-(x + radius, y)
-##
-, continuing
+four kConic_Verb, and kClose_Verb. Circle begins at: #Formula # (x + radius, y) ##, continuing
 clockwise if dir is kCW_Direction, and counterclockwise if dir is kCCW_Direction.
 
 Has no effect if radius is zero or negative.
@@ -4500,6 +4414,11 @@ After appending, Path may be empty, or may contain: Rect, Oval, or Round_Rect.
 #Return reference to Path ##
 
 #Example
+###$
+$Function
+#include "SkTextOnPath.h"
+$$
+
 void draw(SkCanvas* canvas) {
     SkPaint paint;
     paint.setAntiAlias(true);
@@ -4511,9 +4430,12 @@ void draw(SkCanvas* canvas) {
     for (int start = 0; start < 8; ++start) {
         SkPath textPath;
         textPath.addRRect(rrect, SkPath::kCW_Direction, start);
-        canvas->drawTextOnPathHV(&"01234567"[start], 1, textPath, 0, -5, paint);
+        SkMatrix matrix;
+        matrix.setTranslate(0, -5);
+        SkDrawTextOnPath(&"01234567"[start], 1, paint, textPath, &matrix, canvas);
     }
 }
+$$$#
 ##
 
 #SeeAlso addRoundRect SkCanvas::drawRRect

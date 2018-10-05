@@ -22,7 +22,6 @@
 #include "SkMakeUnique.h"
 #include "SkMaskFilterBase.h"
 #include "SkPaintPriv.h"
-#include "SkTextMapStateProc.h"
 #include "SkTo.h"
 #include "ops/GrMeshDrawOp.h"
 
@@ -82,10 +81,6 @@ SkScalerContextFlags GrTextContext::ComputeScalerContextFlags(
     } else {
         return SkScalerContextFlags::kFakeGammaAndBoostContrast;
     }
-}
-
-bool glyph_too_big_for_atlas(const SkGlyph& glyph) {
-    return GrDrawOpAtlas::GlyphTooLargeForAtlas(glyph.fWidth, glyph.fHeight);
 }
 
 void GrTextContext::SanitizeOptions(Options* options) {

@@ -48,17 +48,13 @@ sk_sp<SkData> GetResourceAsData(const char* resource) {
                            : SkData::MakeFromFileName(GetResourcePath(resource).c_str())) {
         return data;
     }
-    SkDebugf("Resource \"%s\" not found.\n", resource);
+    SkDebugf("Resource \"%s\" not found.\n", GetResourcePath(resource).c_str());
     #ifdef SK_TOOLS_REQUIRE_RESOURCES
     SK_ABORT("missing resource");
     #endif
     return nullptr;
 }
 
-sk_sp<SkTypeface> MakeResourceAsTypeface(const char* resource) {
-    std::unique_ptr<SkStreamAsset> stream(GetResourceAsStream(resource));
-    if (!stream) {
-        return nullptr;
-    }
-    return SkTypeface::MakeFromStream(stream.release());
+sk_sp<SkTypeface> MakeResourceAsTypeface(const char* resource, int ttcIndex) {
+    return SkTypeface::MakeFromStream(GetResourceAsStream(resource), ttcIndex);
 }

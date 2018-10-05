@@ -89,7 +89,12 @@ public:
         INVOCATIONS,
         WHEN,
         KEY,
-        CTYPE
+        TRACKED,
+        CTYPE,
+        GRCOLOR4F,
+        SKRECT,
+        SKIRECT,
+        SKPMCOLOR,
     };
 
     Parser(const char* text, size_t length, SymbolTable& types, ErrorReporter& errors);
@@ -189,6 +194,8 @@ private:
     String layoutCode();
 
     Layout::Key layoutKey();
+
+    Layout::CType layoutCType();
 
     Layout layout();
 
