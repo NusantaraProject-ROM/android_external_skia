@@ -40,6 +40,7 @@ SkPathRef::Editor::Editor(sk_sp<SkPathRef>* pathRef,
     fPathRef = pathRef->get();
     fPathRef->callGenIDChangeListeners();
     fPathRef->fGenerationID = 0;
+    fPathRef->fBoundsIsDirty = true;
     SkDEBUGCODE(sk_atomic_inc(&fPathRef->fEditorsAttached);)
 }
 
@@ -700,28 +701,22 @@ uint32_t SkPathRef::genID() const {
 }
 
 void SkPathRef::addGenIDChangeListener(sk_sp<GenIDChangeListener> listener) {
-
     if (nullptr == listener || this == gEmpty) {
         return;
     }
-
-    SkPathRef::GenIDChangeListener* ptr = listener.release();
-    ptr->next = fGenIDChangeListeners;
-    while (!fGenIDChangeListeners.compare_exchange_weak(ptr->next, ptr)) {}
+    SkAutoMutexAcquire lock(fGenIDChangeListenersMutex);
+    *fGenIDChangeListeners.append() = listener.release();
 }
 
 // we need to be called *before* the genID gets changed or zerod
 void SkPathRef::callGenIDChangeListeners() {
-
-    SkPathRef::GenIDChangeListener* ptr = fGenIDChangeListeners.exchange(nullptr);
-
-    while (ptr != nullptr) {
-        ptr->onChange();
-        auto next = ptr->next;
-        // Listeners get at most one shot, so whether these triggered or not, blow them away.
-        ptr->unref();
-        ptr = next;
+    SkAutoMutexAcquire lock(fGenIDChangeListenersMutex);
+    for (int i = 0; i < fGenIDChangeListeners.count(); i++) {
+        fGenIDChangeListeners[i]->onChange();
     }
+
+    // Listeners get at most one shot, so whether these triggered or not, blow them away.
+    fGenIDChangeListeners.unrefAll();
 }
 
 SkRRect SkPathRef::getRRect() const {
@@ -897,14 +892,15 @@ bool SkPathRef::isValid() const {
 #ifdef SK_DEBUG
             if (fPoints[i].isFinite() &&
                 ((point < leftTop).anyTrue() || (point > rightBot).anyTrue())) {
-                SkDebugf("bounds: %f %f %f %f\n",
+                SkDebugf("bad SkPathRef bounds: %g %g %g %g\n",
                          fBounds.fLeft, fBounds.fTop, fBounds.fRight, fBounds.fBottom);
                 for (int j = 0; j < fPointCnt; ++j) {
                     if (i == j) {
-                        SkDebugf("*");
+                        SkDebugf("*** bounds do not contain: ");
                     }
-                    SkDebugf("%f %f\n", fPoints[j].fX, fPoints[j].fY);
+                    SkDebugf("%g %g\n", fPoints[j].fX, fPoints[j].fY);
                 }
+                return false;
             }
 #endif
 

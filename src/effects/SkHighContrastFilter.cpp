@@ -6,8 +6,8 @@
 */
 
 #include "SkHighContrastFilter.h"
-#include "SkPM4f.h"
 #include "SkArenaAlloc.h"
+#include "SkColorData.h"
 #include "SkRasterPipeline.h"
 #include "SkReadBuffer.h"
 #include "SkString.h"
@@ -299,7 +299,7 @@ void GLHighContrastFilterEffect::emitCode(EmitArgs& args) {
         fragBuilder->codeAppendf("l = 1.0 - l;");
         // Convert back from HSL to RGB.
         SkString hue2rgbFuncName;
-        static const GrShaderVar gHue2rgbArgs[] = {
+        const GrShaderVar gHue2rgbArgs[] = {
             GrShaderVar("p", kHalf_GrSLType),
             GrShaderVar("q", kHalf_GrSLType),
             GrShaderVar("t", kHalf_GrSLType),

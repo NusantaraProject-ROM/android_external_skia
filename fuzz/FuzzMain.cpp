@@ -18,7 +18,6 @@
 #include "SkPaint.h"
 #include "SkPath.h"
 #include "SkPicturePriv.h"
-#include "SkPipe.h"
 #include "SkReadBuffer.h"
 #include "SkStream.h"
 #include "SkSurface.h"
@@ -28,12 +27,12 @@
 #include "SkSLCompiler.h"
 #endif
 
+#include "sk_tool_utils.h"
+
 #include <iostream>
 #include <map>
 #include <regex>
 #include <signal.h>
-#include "sk_tool_utils.h"
-
 
 DEFINE_string2(bytes, b, "", "A path to a file or a directory. If a file, the "
         "contents will be used as the fuzz bytes. If a directory, all files "
@@ -55,7 +54,6 @@ static constexpr char g_type_message[] = "How to interpret --bytes, one of:\n"
                                          "image_scale\n"
                                          "json\n"
                                          "path_deserialize\n"
-                                         "pipe\n"
                                          "region_deserialize\n"
                                          "region_set_path\n"
                                          "skp\n"
@@ -82,7 +80,6 @@ static void fuzz_path_deserialize(sk_sp<SkData>);
 static void fuzz_region_deserialize(sk_sp<SkData>);
 static void fuzz_region_set_path(sk_sp<SkData>);
 static void fuzz_skp(sk_sp<SkData>);
-static void fuzz_skpipe(sk_sp<SkData>);
 static void fuzz_textblob_deserialize(sk_sp<SkData>);
 
 static void print_api_names();
@@ -186,7 +183,7 @@ static int fuzz_file(SkString path, SkString type) {
         return 0;
     }
     if (type.equals("pipe")) {
-        fuzz_skpipe(bytes);
+        SkDebugf("I would prefer not to.\n");
         return 0;
     }
 #if defined(SK_ENABLE_SKOTTIE)
@@ -221,6 +218,7 @@ static std::map<std::string, std::string> cf_api_map = {
     {"api_mock_gpu_canvas", "MockGPUCanvas"},
     {"api_null_canvas", "NullCanvas"},
     {"api_path_measure", "PathMeasure"},
+    {"api_pathop", "Pathop"},
     {"api_raster_n32_canvas", "RasterN32Canvas"},
     {"jpeg_encoder", "JPEGEncoder"},
     {"png_encoder", "PNGEncoder"},
@@ -238,6 +236,9 @@ static std::map<std::string, std::string> cf_map = {
     {"region_deserialize", "region_deserialize"},
     {"region_set_path", "region_set_path"},
     {"skjson", "json"},
+#if defined(SK_ENABLE_SKOTTIE)
+    {"skottie_json", "skottie_json"},
+#endif
     {"textblob_deserialize", "textblob"}
 };
 
@@ -606,21 +607,6 @@ static void fuzz_skp(sk_sp<SkData> bytes) {
     canvas.drawPicture(pic);
     SkDebugf("[terminated] Success! Decoded and rendered an SkPicture!\n");
     dump_png(bitmap);
-}
-
-static void fuzz_skpipe(sk_sp<SkData> bytes) {
-    SkPipeDeserializer d;
-    SkDebugf("Decoding\n");
-    sk_sp<SkPicture> pic(d.readPicture(bytes.get()));
-    if (!pic) {
-        SkDebugf("[terminated] Couldn't decode picture via SkPipe.\n");
-        return;
-    }
-    SkDebugf("Rendering\n");
-    SkBitmap bitmap;
-    SkCanvas canvas(bitmap);
-    canvas.drawPicture(pic);
-    SkDebugf("[terminated] Success! Decoded and rendered an SkPicture from SkPipe!\n");
 }
 
 static void fuzz_color_deserialize(sk_sp<SkData> bytes) {

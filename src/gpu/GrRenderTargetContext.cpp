@@ -732,26 +732,10 @@ void GrRenderTargetContext::fillRectToRect(const GrClip& clip,
                                      GrShape(localRect));
 }
 
-static bool must_filter(const SkRect& src, const SkRect& dst, const SkMatrix& ctm) {
-    // We don't currently look for 90 degree rotations, mirroring, or downscales that sample at
-    // texel centers.
-    if (!ctm.isTranslate()) {
-        return true;
-    }
-    if (src.width() != dst.width() || src.height() != dst.height()) {
-        return true;
-    }
-    // Check that the device space rectangle's fractional offset is the same as the src rectangle,
-    // and that therefore integers in the src image fall on integers in device space.
-    SkScalar x = ctm.getTranslateX(), y = ctm.getTranslateY();
-    x += dst.fLeft; y += dst.fTop;
-    x -= src.fLeft; y -= src.fTop;
-    return !SkScalarIsInt(x) || !SkScalarIsInt(y);
-}
-
 void GrRenderTargetContext::drawTexture(const GrClip& clip, sk_sp<GrTextureProxy> proxy,
                                         GrSamplerState::Filter filter, GrColor color,
-                                        const SkRect& srcRect, const SkRect& dstRect, GrAA aa,
+                                        const SkRect& srcRect, const SkRect& dstRect,
+                                        GrQuadAAFlags aaFlags,
                                         SkCanvas::SrcRectConstraint constraint,
                                         const SkMatrix& viewMatrix,
                                         sk_sp<GrColorSpaceXform> textureColorSpaceXform,
@@ -760,29 +744,22 @@ void GrRenderTargetContext::drawTexture(const GrClip& clip, sk_sp<GrTextureProxy
     RETURN_IF_ABANDONED
     SkDEBUGCODE(this->validate();)
     GR_CREATE_TRACE_MARKER_CONTEXT("GrRenderTargetContext", "drawTexture", fContext);
-    if (filter != GrSamplerState::Filter::kNearest && !must_filter(srcRect, dstRect, viewMatrix)) {
-        filter = GrSamplerState::Filter::kNearest;
+    if (constraint == SkCanvas::kStrict_SrcRectConstraint &&
+        srcRect.contains(proxy->getWorstCaseBoundsRect())) {
+        constraint = SkCanvas::kFast_SrcRectConstraint;
     }
-    GrAAType aaType = this->chooseAAType(aa, GrAllowMixedSamples::kNo);
-    if (constraint == SkCanvas::kStrict_SrcRectConstraint) {
-        // No need to use a texture domain with nearest filtering unless there is AA bloating.
-        // Also, no need if the srcRect contains the entire texture.
-        if (filter == GrSamplerState::Filter::kNearest && aaType != GrAAType::kCoverage) {
-            constraint = SkCanvas::kFast_SrcRectConstraint;
-        } else if (srcRect.contains(proxy->getWorstCaseBoundsRect())) {
-            constraint = SkCanvas::kFast_SrcRectConstraint;
-        }
-    }
+    GrAAType aaType =
+            this->chooseAAType(GrAA(aaFlags != GrQuadAAFlags::kNone), GrAllowMixedSamples::kNo);
     SkRect clippedDstRect = dstRect;
     SkRect clippedSrcRect = srcRect;
     if (!crop_filled_rect(this->width(), this->height(), clip, viewMatrix, &clippedDstRect,
                           &clippedSrcRect)) {
         return;
     }
-    this->addDrawOp(clip, GrTextureOp::Make(fContext, std::move(proxy), filter, color,
-                                            clippedSrcRect, clippedDstRect, aaType, constraint,
-                                            viewMatrix, std::move(textureColorSpaceXform),
-                                            std::move(paintColorSpaceXform)));
+    auto op = GrTextureOp::Make(fContext, std::move(proxy), filter, color, clippedSrcRect,
+                                clippedDstRect, aaType, aaFlags, constraint, viewMatrix,
+                                std::move(textureColorSpaceXform), std::move(paintColorSpaceXform));
+    this->addDrawOp(clip, std::move(op));
 }
 
 void GrRenderTargetContext::fillRectWithLocalMatrix(const GrClip& clip,
@@ -1587,6 +1564,10 @@ void GrRenderTargetContext::drawShapeUsingPathRenderer(const GrClip& clip,
     ASSERT_SINGLE_OWNER
     RETURN_IF_ABANDONED
     GR_CREATE_TRACE_MARKER_CONTEXT("GrRenderTargetContext", "internalDrawPath", fContext);
+
+    if (!viewMatrix.isFinite() || !originalShape.bounds().isFinite()) {
+        return;
+    }
 
     SkIRect clipConservativeBounds;
     clip.getConservativeBounds(this->width(), this->height(), &clipConservativeBounds, nullptr);

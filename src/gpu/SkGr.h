@@ -19,7 +19,6 @@
 #include "SkFilterQuality.h"
 #include "SkImageInfo.h"
 #include "SkMatrix.h"
-#include "SkPM4f.h"
 #include "SkVertices.h"
 
 class GrCaps;
@@ -60,24 +59,10 @@ static inline GrColor SkColorToUnpremulGrColor(SkColor c) {
 
 /** Transform an SkColor (sRGB bytes) or SkColor4f (sRGB floats) to GrColor4f
     for the specified color space info. */
-GrColor4f SkColorToPremulGrColor4f(SkColor, const GrColorSpaceInfo&);
-GrColor4f SkColor4fToPremulGrColor4fLegacy(SkColor4f);
 GrColor4f SkColor4fToUnpremulGrColor4f(SkColor4f, const GrColorSpaceInfo&);
 
-//////////////////////////////////////////////////////////////////////////////
-
-static inline SkPM4f GrColor4fToSkPM4f(const GrColor4f& c) {
-    SkPM4f pm4f;
-    pm4f.fVec[SkPM4f::R] = c.fRGBA[0];
-    pm4f.fVec[SkPM4f::G] = c.fRGBA[1];
-    pm4f.fVec[SkPM4f::B] = c.fRGBA[2];
-    pm4f.fVec[SkPM4f::A] = c.fRGBA[3];
-    return pm4f;
-}
-
-static inline GrColor4f SkPM4fToGrColor4f(const SkPM4f& c) {
-    return GrColor4f{c.r(), c.g(), c.b(), c.a()};
-}
+/** Similar, but using SkPMColor4f. */
+SkPMColor4f SkColorToPMColor4f(SkColor, const GrColorSpaceInfo&);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Paint conversion
@@ -178,8 +163,6 @@ GR_STATIC_ASSERT((int)kISA_GrBlendCoeff == (int)SkBlendModeCoeff::kISA);
 GR_STATIC_ASSERT((int)kDA_GrBlendCoeff == (int)SkBlendModeCoeff::kDA);
 GR_STATIC_ASSERT((int)kIDA_GrBlendCoeff == (int)SkBlendModeCoeff::kIDA);
 //GR_STATIC_ASSERT(SkXfermode::kCoeffCount == 10);
-
-#define SkXfermodeCoeffToGrBlendCoeff(X) ((GrBlendCoeff)(X))
 
 ////////////////////////////////////////////////////////////////////////////////
 // Texture management

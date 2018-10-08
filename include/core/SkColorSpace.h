@@ -11,6 +11,7 @@
 #include "../private/SkOnce.h"
 #include "SkMatrix44.h"
 #include "SkRefCnt.h"
+#include <memory>
 
 class SkData;
 struct skcms_ICCProfile;
@@ -46,11 +47,9 @@ struct SK_API SkColorSpacePrimaries {
  *  Contains the coefficients for a common transfer function equation, specified as
  *  a transformation from a curved space to linear.
  *
- *  LinearVal = C*InputVal + F        , for 0.0f <= InputVal <  D
- *  LinearVal = (A*InputVal + B)^G + E, for D    <= InputVal <= 1.0f
+ *  LinearVal = sign(InputVal) * (  C*|InputVal| + F       ), for 0.0f <= |InputVal| <  D
+ *  LinearVal = sign(InputVal) * ( (A*|InputVal| + B)^G + E), for D    <= |InputVal|
  *
- *  Function is undefined if InputVal is not in [ 0.0f, 1.0f ].
- *  Resulting LinearVals must be in [ 0.0f, 1.0f ].
  *  Function must be positive and increasing.
  */
 struct SK_API SkColorSpaceTransferFn {
@@ -61,26 +60,6 @@ struct SK_API SkColorSpaceTransferFn {
     float fD;
     float fE;
     float fF;
-
-    /**
-     * Produces a new parametric transfer function equation that is the mathematical inverse of
-     * this one.
-     */
-    SkColorSpaceTransferFn invert() const;
-
-    /**
-     * Transform a single float by this transfer function.
-     * For negative inputs, returns sign(x) * f(abs(x)).
-     */
-    float operator()(float x) const {
-        SkScalar s = SkScalarSignAsScalar(x);
-        x = sk_float_abs(x);
-        if (x >= fD) {
-            return s * (powf(fA * x + fB, fG) + fE);
-        } else {
-            return s * (fC * x + fF);
-        }
-    }
 };
 
 class SK_API SkColorSpace : public SkNVRefCnt<SkColorSpace> {
@@ -164,21 +143,8 @@ public:
     bool toXYZD50(SkMatrix44* toXYZD50) const;
 
     /**
-     *  Describes color space gamut as a transformation to XYZ D50.
-     *  Returns nullptr if color gamut cannot be described in terms of XYZ D50.
-     */
-    const SkMatrix44* toXYZD50() const { return &fToXYZD50; }
-
-    /**
-     *  Describes color space gamut as a transformation from XYZ D50
-     *  Returns nullptr if color gamut cannot be described in terms of XYZ D50.
-     */
-    const SkMatrix44* fromXYZD50() const;
-
-    /**
-     *  Returns a hash of the gamut transofmration to XYZ D50. Allows for fast equality checking
+     *  Returns a hash of the gamut transformation to XYZ D50. Allows for fast equality checking
      *  of gamuts, at the (very small) risk of collision.
-     *  Returns 0 if color gamut cannot be described in terms of XYZ D50.
      */
     uint32_t toXYZD50Hash() const { return fToXYZD50Hash; }
 
@@ -238,21 +204,34 @@ public:
      *  If both are null, we return true.  If one is null and the other is not, we return false.
      *  If both are non-null, we do a deeper compare.
      */
-    static bool Equals(const SkColorSpace* src, const SkColorSpace* dst);
+    static bool Equals(const SkColorSpace*, const SkColorSpace*);
+
+    void       transferFn(float gabcdef[7]) const;
+    void    invTransferFn(float gabcdef[7]) const;
+    void gamutTransformTo(const SkColorSpace* dst, float src_to_dst_row_major[9]) const;
+
+    uint32_t transferFnHash() const { return fTransferFnHash; }
+    uint64_t           hash() const { return (uint64_t)fTransferFnHash << 32 | fToXYZD50Hash; }
 
 private:
-    SkColorSpace(SkGammaNamed gammaNamed,
-                 const SkColorSpaceTransferFn* transferFn,
-                 const SkMatrix44& toXYZ);
     friend class SkColorSpaceSingletonFactory;
 
-    SkGammaNamed           fGammaNamed;    // TODO: 2-bit, pack more tightly?  or drop?
-    SkColorSpaceTransferFn fTransferFn;
-    SkMatrix44             fToXYZD50;      // TODO: SkMatrix, or just 9 floats?
-    uint32_t               fToXYZD50Hash;  // TODO: Drop?
+    SkColorSpace(SkGammaNamed gammaNamed,
+                 const float transferFn[7],
+                 const SkMatrix44& toXYZ);
 
-    mutable SkMatrix44     fFromXYZD50;    // TODO: Maybe don't cache?
-    mutable SkOnce         fFromXYZOnce;
+    void computeLazyDstFields() const;
+
+    SkGammaNamed                        fGammaNamed;         // TODO: 2-bit, pack tightly?  drop?
+    uint32_t                            fTransferFnHash;
+    uint32_t                            fToXYZD50Hash;
+
+    float                               fTransferFn[7];
+    float                               fToXYZD50_3x3[9];    // row-major
+
+    mutable float                       fInvTransferFn[7];
+    mutable float                       fFromXYZD50_3x3[9];  // row-major
+    mutable SkOnce                      fLazyDstFieldsOnce;
 };
 
 #endif

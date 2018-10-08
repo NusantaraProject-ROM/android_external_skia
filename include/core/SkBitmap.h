@@ -801,13 +801,6 @@ public:
         this->eraseColor(SkColorSetARGB(a, r, g, b));
     }
 
-    /** Deprecated.
-    */
-    SK_ATTR_DEPRECATED("use eraseARGB or eraseColor")
-    void eraseRGB(U8CPU r, U8CPU g, U8CPU b) const {
-        this->eraseARGB(0xFF, r, g, b);
-    }
-
     /** Replaces pixel values inside area with c. If area does not intersect bounds(),
         call has no effect.
 
@@ -844,6 +837,18 @@ public:
     */
     SkColor getColor(int x, int y) const {
         return this->pixmap().getColor(x, y);
+    }
+
+    /** Look up the pixel at (x,y) and return its alpha component, normalized to [0..1].
+        This is roughly equivalent to SkGetColorA(getColor()), but can be more efficent
+        (and more precise if the pixels store more than 8 bits per component).
+
+        @param x  column index, zero or greater, and less than width()
+        @param y  row index, zero or greater, and less than height()
+        @return   alpha converted to normalized float
+     */
+    float getAlphaf(int x, int y) const {
+        return this->pixmap().getAlphaf(x, y);
     }
 
     /** Returns pixel address at (x, y).

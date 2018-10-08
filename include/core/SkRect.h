@@ -195,7 +195,7 @@ struct SK_API SkIRect {
     */
     bool isEmpty64() const { return fRight <= fLeft || fBottom <= fTop; }
 
-    /** Returns true if width() or height() .
+    /** Returns true if width() or height() are zero or negative.
 
         @return  true if width() or height() are zero or negative
     */
@@ -776,18 +776,6 @@ struct SK_API SkRect {
     static constexpr SkRect SK_WARN_UNUSED_RESULT MakeXYWH(SkScalar x, SkScalar y, SkScalar w,
                                                            SkScalar h) {
         return SkRect {x, y, x + w, y + h};
-    }
-
-    /** Deprecated.
-    */
-    SK_ATTR_DEPRECATED("use Make()")
-    static SkRect SK_WARN_UNUSED_RESULT MakeFromIRect(const SkIRect& irect) {
-        SkRect r;
-        r.set(SkIntToScalar(irect.fLeft),
-              SkIntToScalar(irect.fTop),
-              SkIntToScalar(irect.fRight),
-              SkIntToScalar(irect.fBottom));
-        return r;
     }
 
     /** Returns constructed SkIRect set to (0, 0, size.width(), size.height()).

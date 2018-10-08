@@ -4521,11 +4521,9 @@ DEF_TEST(Paths, reporter) {
     test_mask_overflow();
     test_path_crbugskia6003();
     test_fuzz_crbug_668907();
-#if !defined(SK_SUPPORT_LEGACY_DELTA_AA)
     test_skbug_6947();
     test_skbug_7015();
     test_skbug_7051();
-#endif
 
     SkSize::Make(3, 4);
 
@@ -4817,8 +4815,6 @@ DEF_TEST(NonFinitePathIteration, reporter) {
     REPORTER_ASSERT(reporter, verbs == 0);
 }
 
-
-#ifndef SK_SUPPORT_LEGACY_SVG_ARC_TO
 DEF_TEST(AndroidArc, reporter) {
     const char* tests[] = {
         "M50,0A50,50,0,0 1 100,50 L100,85 A15,15,0,0 1 85,100 L50,100 A50,50,0,0 1 50,0z",
@@ -4846,7 +4842,6 @@ DEF_TEST(AndroidArc, reporter) {
         }
     }
 }
-#endif
 
 /*
  *  Try a range of crazy values, just to ensure that we don't assert/crash.
@@ -5179,4 +5174,20 @@ DEF_TEST(Path_shrinkToFit, reporter) {
     if (false) {
         SkDebugf("max_free %zu\n", max_free);
     }
+}
+
+DEF_TEST(Path_setLastPt, r) {
+    // There was a time where SkPath::setLastPoint() didn't invalidate cached path bounds.
+    SkPath p;
+    p.moveTo(0,0);
+    p.moveTo(20,01);
+    p.moveTo(20,10);
+    p.moveTo(20,61);
+    REPORTER_ASSERT(r, p.getBounds() == SkRect::MakeLTRB(0,0, 20,61));
+
+    p.setLastPt(30,01);
+    REPORTER_ASSERT(r, p.getBounds() == SkRect::MakeLTRB(0,0, 30,10));  // was {0,0, 20,61}
+
+    REPORTER_ASSERT(r, p.isValid());
+    REPORTER_ASSERT(r, p.pathRefIsValid());
 }

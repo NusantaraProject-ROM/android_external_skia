@@ -21,8 +21,8 @@ GrVkCaps::GrVkCaps(const GrContextOptions& contextOptions, const GrVkInterface* 
     : INHERITED(contextOptions) {
 
     /**************************************************************************
-    * GrDrawTargetCaps fields
-    **************************************************************************/
+     * GrCaps fields
+     **************************************************************************/
     fMipMapSupport = true;   // always available in Vulkan
     fSRGBSupport = true;   // always available in Vulkan
     fNPOTTextureTileSupport = true;  // always available in Vulkan
@@ -32,7 +32,6 @@ GrVkCaps::GrVkCaps(const GrContextOptions& contextOptions, const GrVkInterface* 
     fOversizedStencilSupport = false; //TODO: figure this out
     fInstanceAttribSupport = true;
 
-    fBlacklistCoverageCounting = true; // blacklisting ccpr until we work through a few issues.
     fFenceSyncSupport = true;   // always available in Vulkan
     fCrossContextTextureSupport = true;
     fHalfFloatVertexAttributeSupport = true;
@@ -42,6 +41,8 @@ GrVkCaps::GrVkCaps(const GrContextOptions& contextOptions, const GrVkInterface* 
 
     fMaxRenderTargetSize = 4096; // minimum required by spec
     fMaxTextureSize = 4096; // minimum required by spec
+
+    fDynamicStateArrayGeometryProcessorTextureSupport = true;
 
     fShaderCaps.reset(new GrShaderCaps(contextOptions));
 
@@ -326,6 +327,7 @@ void GrVkCaps::applyDriverCorrectnessWorkarounds(const VkPhysicalDevicePropertie
 
     if (kARM_VkVendor == properties.vendorID) {
         fInstanceAttribSupport = false;
+        fAvoidWritePixelsFastPath = true; // bugs.skia.org/8064
     }
 
     // AMD advertises support for MAX_UINT vertex input attributes, but in reality only supports 32.
@@ -340,7 +342,6 @@ void GrVkCaps::applyDriverCorrectnessWorkarounds(const VkPhysicalDevicePropertie
     if (kImagination_VkVendor == properties.vendorID) {
         fShaderCaps->fAtan2ImplementedAsAtanYOverX = true;
     }
-
 }
 
 int get_max_sample_count(VkSampleCountFlags flags) {
@@ -497,8 +498,9 @@ void GrVkCaps::initShaderCaps(const VkPhysicalDeviceProperties& properties,
 
     shaderCaps->fShaderDerivativeSupport = true;
 
-    shaderCaps->fGeometryShaderSupport = features.features.geometryShader;
-    shaderCaps->fGSInvocationsSupport = shaderCaps->fGeometryShaderSupport;
+    // FIXME: http://skbug.com/7733: Disable geometry shaders until Intel/Radeon GMs draw correctly.
+    // shaderCaps->fGeometryShaderSupport =
+    //         shaderCaps->fGSInvocationsSupport = features.features.geometryShader;
 
     shaderCaps->fDualSourceBlendingSupport = features.features.dualSrcBlend;
 
@@ -546,12 +548,12 @@ void GrVkCaps::initStencilFormat(const GrVkInterface* interface, VkPhysicalDevic
         gD32S8 = { VK_FORMAT_D32_SFLOAT_S8_UINT, 8,                64,               true };
 
     if (stencil_format_supported(interface, physDev, VK_FORMAT_S8_UINT)) {
-        fPreferedStencilFormat = gS8;
+        fPreferredStencilFormat = gS8;
     } else if (stencil_format_supported(interface, physDev, VK_FORMAT_D24_UNORM_S8_UINT)) {
-        fPreferedStencilFormat = gD24S8;
+        fPreferredStencilFormat = gD24S8;
     } else {
         SkASSERT(stencil_format_supported(interface, physDev, VK_FORMAT_D32_SFLOAT_S8_UINT));
-        fPreferedStencilFormat = gD32S8;
+        fPreferredStencilFormat = gD32S8;
     }
 }
 
@@ -711,8 +713,10 @@ bool validate_image_info(VkFormat format, SkColorType ct, GrPixelConfig* config)
             }
             break;
         case kRGB_888x_SkColorType:
-            // TODO: VK_FORMAT_R8G8B8_UNORM
-            return false;
+            if (VK_FORMAT_R8G8B8_UNORM == format) {
+                *config = kRGB_888_GrPixelConfig;
+            }
+            break;
         case kBGRA_8888_SkColorType:
             if (VK_FORMAT_B8G8R8A8_UNORM == format) {
                 *config = kBGRA_8888_GrPixelConfig;

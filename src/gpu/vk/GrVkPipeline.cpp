@@ -60,6 +60,8 @@ static inline VkFormat attrib_type_to_vkformat(GrVertexAttribType type) {
             return VK_FORMAT_R8G8B8A8_UNORM;
         case kShort2_GrVertexAttribType:
             return VK_FORMAT_R16G16_SINT;
+        case kShort4_GrVertexAttribType:
+            return VK_FORMAT_R16G16B16A16_SINT;
         case kUShort2_GrVertexAttribType:
             return VK_FORMAT_R16G16_UINT;
         case kUShort2_norm_GrVertexAttribType:
@@ -498,7 +500,7 @@ GrVkPipeline* GrVkPipeline::Create(GrVkGpu* gpu, const GrPrimitiveProcessor& pri
                                    const GrPipeline& pipeline, const GrStencilSettings& stencil,
                                    VkPipelineShaderStageCreateInfo* shaderStageInfo,
                                    int shaderStageCount, GrPrimitiveType primitiveType,
-                                   const GrVkRenderPass& renderPass, VkPipelineLayout layout,
+                                   VkRenderPass compatibleRenderPass, VkPipelineLayout layout,
                                    VkPipelineCache cache) {
     VkPipelineVertexInputStateCreateInfo vertexInputInfo;
     SkSTArray<2, VkVertexInputBindingDescription, true> bindingDescs;
@@ -549,7 +551,7 @@ GrVkPipeline* GrVkPipeline::Create(GrVkGpu* gpu, const GrPrimitiveProcessor& pri
     pipelineCreateInfo.pColorBlendState = &colorBlendInfo;
     pipelineCreateInfo.pDynamicState = &dynamicInfo;
     pipelineCreateInfo.layout = layout;
-    pipelineCreateInfo.renderPass = renderPass.vkRenderPass();
+    pipelineCreateInfo.renderPass = compatibleRenderPass;
     pipelineCreateInfo.subpass = 0;
     pipelineCreateInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineCreateInfo.basePipelineIndex = -1;
