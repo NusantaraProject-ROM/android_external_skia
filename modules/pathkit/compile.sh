@@ -4,10 +4,12 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+set -ex
 
 BASE_DIR=`cd $(dirname ${BASH_SOURCE[0]}) && pwd`
 HTML_SHELL=$BASE_DIR/shell.html
 BUILD_DIR=${BUILD_DIR:="out/pathkit"}
+mkdir -p $BUILD_DIR
 
 # This expects the environment variable EMSDK to be set
 if [[ ! -d $EMSDK ]]; then
@@ -67,20 +69,21 @@ if [[ $@ == *asm.js* ]]; then
 fi
 
 OUTPUT="-o $BUILD_DIR/pathkit.js"
+
 source $EMSDK/emsdk_env.sh
-NINJA=`which ninja`
 EMCC=`which emcc`
 EMCXX=`which em++`
 
 
-mkdir -p $BUILD_DIR
-
+# Turn off exiting while we check for ninja (which may not be on PATH)
+set +e
+NINJA=`which ninja`
 if [[ -z $NINJA ]]; then
   git clone "https://chromium.googlesource.com/chromium/tools/depot_tools.git" --depth 1 $BUILD_DIR/depot_tools
   NINJA=$BUILD_DIR/depot_tools/ninja
 fi
-
-set -ex
+# Re-enable error checking
+set -e
 
 echo "Compiling bitcode"
 
@@ -88,38 +91,19 @@ echo "Compiling bitcode"
 ./bin/gn gen ${BUILD_DIR} \
   --args="cc=\"${EMCC}\" \
   cxx=\"${EMCXX}\" \
-  extra_cflags=[\"-DSK_DISABLE_READBUFFER=1\",${EXTRA_CFLAGS}] \
+  extra_cflags=[\"-DSK_DISABLE_READBUFFER=1\",\"-s\", \"WARN_UNALIGNED=1\",
+    ${EXTRA_CFLAGS}
+  ] \
   is_debug=false \
   is_official_build=true \
   is_component_build=false \
-  target_cpu=\"wasm\" \
-  \
-  skia_use_egl=false \
-  skia_use_vulkan=false \
-  skia_use_libwebp=false \
-  skia_use_libpng=false \
-  skia_use_lua=false \
-  skia_use_dng_sdk=false \
-  skia_use_fontconfig=false \
-  skia_use_libjpeg_turbo=false \
-  skia_use_libheif=false \
-  skia_use_expat=false \
-  skia_use_vulkan=false \
-  skia_use_freetype=false \
-  skia_use_icu=false \
-  skia_use_expat=false \
-  skia_use_piex=false \
-  skia_use_zlib=false \
-  \
-  skia_enable_gpu=false \
-  skia_enable_fontmgr_empty=true \
-  skia_enable_pdf=false"
+  target_cpu=\"wasm\" "
 
 ${NINJA} -C ${BUILD_DIR} libpathkit.a
 
 echo "Generating WASM"
 
-em++ $RELEASE_CONF -std=c++14 \
+${EMCXX} $RELEASE_CONF -std=c++14 \
 -Iinclude/config \
 -Iinclude/core \
 -Iinclude/effects \
@@ -132,6 +116,7 @@ em++ $RELEASE_CONF -std=c++14 \
 -Isrc/shaders \
 -Isrc/opts \
 -Isrc/utils \
+-std=c++14 \
 --bind \
 --pre-js $BASE_DIR/helper.js \
 --pre-js $BASE_DIR/chaining.js \
@@ -146,6 +131,7 @@ $WASM_CONF \
 -s NO_EXIT_RUNTIME=1 \
 -s NO_FILESYSTEM=1 \
 -s STRICT=1 \
+-s WARN_UNALIGNED=1 \
 $OUTPUT \
 $BASE_DIR/pathkit_wasm_bindings.cpp \
 ${BUILD_DIR}/libpathkit.a

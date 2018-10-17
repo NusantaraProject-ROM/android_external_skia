@@ -16,7 +16,6 @@
 #include "SkPaint.h"
 #include "SkRect.h"
 #include "SkRefCnt.h"
-#include "SkSinglyLinkedList.h"
 #include "SkStream.h"
 #include "SkTextBlobPriv.h"
 #include "SkKeyedImage.h"
@@ -124,7 +123,7 @@ public:
     struct GraphicStateEntry {
         SkMatrix fMatrix = SkMatrix::I();
         uint32_t fClipStackGenID = SkClipStack::kWideOpenGenID;
-        SkColor fColor = SK_ColorBLACK;
+        SkColor4f fColor = {0, 0, 0, 1};
         SkScalar fTextScaleX = 1;  // Zero means we don't care what the value is.
         SkPaint::Style fTextFill = SkPaint::kFill_Style;  // Only if TextScaleX is non-zero.
         int fShaderIndex = -1;
@@ -172,9 +171,11 @@ private:
     std::vector<sk_sp<SkPDFFont>> fFontResources;
     int fNodeId;
 
-    SkSinglyLinkedList<SkDynamicMemoryWStream> fContentEntries;
+    SkDynamicMemoryWStream fContent;
+    SkDynamicMemoryWStream fContentBuffer;
+    bool fNeedsExtraSave = false;
     struct GraphicStackState {
-        GraphicStackState(SkDynamicMemoryWStream* s = nullptr) : fContentStream(s) {}
+        GraphicStackState(SkDynamicMemoryWStream* s = nullptr);
         void updateClip(const SkClipStack* clipStack, const SkIRect& bounds);
         void updateMatrix(const SkMatrix& matrix);
         void updateDrawingState(const SkPDFDevice::GraphicStateEntry& state);
