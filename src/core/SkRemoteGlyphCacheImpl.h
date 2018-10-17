@@ -10,6 +10,7 @@
 
 #include "SkDescriptor.h"
 #include "SkGlyphRun.h"
+#include "SkGlyphRunPainter.h"
 #include "SkRemoteGlyphCache.h"
 
 class SkStrikeServer::SkGlyphCacheState : public SkGlyphCacheInterface {
@@ -100,10 +101,12 @@ private:
     void processGlyphRunForMask(
             const SkGlyphRun& glyphRun, const SkMatrix& runMatrix, SkPoint origin);
 
-    void processGlyphRunForPaths(const SkGlyphRun& glyphRun, const SkMatrix& runMatrix);
+    void processGlyphRunForPaths(
+            const SkGlyphRun& glyphRun, const SkMatrix& runMatrix, SkPoint origin);
 
 #if SK_SUPPORT_GPU
-    bool maybeProcessGlyphRunForDFT(const SkGlyphRun& glyphRun, const SkMatrix& runMatrix);
+    bool maybeProcessGlyphRunForDFT(
+            const SkGlyphRun& glyphRun, const SkMatrix& runMatrix, SkPoint origin);
 #endif
 
     SkStrikeServer* const fStrikeServer;

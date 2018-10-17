@@ -54,6 +54,12 @@ GrColor4f GrColorSpaceXform::apply(const GrColor4f& srcColor) {
     return result;
 }
 
+SkColor4f GrColorSpaceXform::apply(const SkColor4f& srcColor) {
+    SkColor4f result = srcColor;
+    fSteps.apply(result.vec());
+    return result;
+}
+
 //////////////////////////////////////////////////////////////////////////////
 
 class GrGLColorSpaceXformEffect : public GrGLSLFragmentProcessor {
@@ -144,9 +150,10 @@ GrFragmentProcessor::OptimizationFlags GrColorSpaceXformEffect::OptFlags(
 
 std::unique_ptr<GrFragmentProcessor> GrColorSpaceXformEffect::Make(SkColorSpace* src,
                                                                    SkAlphaType srcAT,
-                                                                   SkColorSpace* dst) {
+                                                                   SkColorSpace* dst,
+                                                                   SkAlphaType dstAT) {
     auto xform = GrColorSpaceXform::Make(src, srcAT,
-                                         dst, kPremul_SkAlphaType);
+                                         dst, dstAT);
     if (!xform) {
         return nullptr;
     }

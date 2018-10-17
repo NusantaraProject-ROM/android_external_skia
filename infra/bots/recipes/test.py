@@ -468,6 +468,7 @@ def dm_flags(api, bot):
   # Not expected to round trip encoding/decoding.
   bad_serialize_gms.append('all_bitmap_configs')
   bad_serialize_gms.append('makecolorspace')
+  bad_serialize_gms.append('readpixels')
 
   # This GM forces a path to be convex. That property doesn't survive
   # serialization.
@@ -623,10 +624,6 @@ def dm_flags(api, bot):
       # skia:7663
       match.extend(['~WritePixelsNonTextureMSAA_Gpu'])
       match.extend(['~WritePixelsMSAA_Gpu'])
-
-  if 'Vulkan' in bot and 'GalaxyS7_G930FD' in bot:
-    # skia:8064
-    match.append('~^WritePixelsNonTexture_Gpu$')
 
   if 'Vulkan' in bot and api.vars.is_linux and 'IntelIris640' in bot:
     match.extend(['~VkHeapTests']) # skia:6245

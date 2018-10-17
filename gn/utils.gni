@@ -8,6 +8,7 @@ _src = get_path_info("../src", "abspath")
 _include = get_path_info("../include", "abspath")
 
 skia_utils_sources = [
+  "$_include/utils/SkAnimCodecPlayer.h",
   "$_include/utils/SkFrontBufferedStream.h",
   "$_include/utils/SkCamera.h",
   "$_include/utils/SkCanvasStateUtils.h",
@@ -23,6 +24,7 @@ skia_utils_sources = [
   "$_include/utils/SkShadowUtils.h",
 
   "$_src/utils/Sk3D.cpp",
+  "$_src/utils/SkAnimCodecPlayer.cpp",
   "$_src/utils/SkBase64.cpp",
   "$_src/utils/SkBase64.h",
   "$_src/utils/SkBitSet.h",
@@ -60,7 +62,6 @@ skia_utils_sources = [
   "$_src/utils/SkShadowTessellator.cpp",
   "$_src/utils/SkShadowTessellator.h",
   "$_src/utils/SkShadowUtils.cpp",
-  "$_src/utils/SkTextOnPath.cpp",
   "$_src/utils/SkThreadUtils_pthread.cpp",
   "$_src/utils/SkThreadUtils_win.cpp",
   "$_src/utils/SkUTF.cpp",
@@ -70,6 +71,7 @@ skia_utils_sources = [
   #mac
   "$_include/utils/mac/SkCGUtils.h",
   "$_src/utils/mac/SkCreateCGImageRef.cpp",
+  "$_src/utils/mac/SkUniqueCFRef.h",
 
   #windows
   "$_src/utils/win/SkAutoCoInitialize.h",

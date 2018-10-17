@@ -43,25 +43,25 @@ public:
                                                            kDefault_GrSLPrecision, "focalParams");
         SkString sk_TransformedCoords2D_0 = fragBuilder->ensureCoords2D(args.fTransformedCoords[0]);
         fragBuilder->codeAppendf(
-                "half2 p = half2(%s);\nhalf t = -1.0;\nhalf v = 1.0;\n@switch (%d) {\n    case "
-                "1:\n        {\n            half r0_2 = %s.y;\n            t = r0_2 - p.y * p.y;\n "
-                "           if (t >= 0.0) {\n                t = float(p.x) + sqrt(float(t));\n    "
-                "        } else {\n                v = -1.0;\n            }\n        }\n        "
-                "break;\n    case 0:\n        {\n            half r0 = %s.x;\n            @if (%s) "
-                "{\n                t = length(p) - r0;\n            } else {\n                t = "
-                "-length(p) - r0;\n         ",
+                "float2 p = %s;\nfloat t = -1.0;\nhalf v = 1.0;\n@switch (%d) {\n    case 1:\n     "
+                "   {\n            half r0_2 = %s.y;\n            t = float(float(r0_2) - p.y * "
+                "p.y);\n            if (t >= 0.0) {\n                t = p.x + sqrt(t);\n          "
+                "  } else {\n                v = -1.0;\n            }\n        }\n        break;\n "
+                "   case 0:\n        {\n            half r0 = %s.x;\n            @if (%s) {\n      "
+                "          t = length(p) - float(r0);\n            } else {\n                t = "
+                "-length(p) - float(r0);\n",
                 sk_TransformedCoords2D_0.c_str(), (int)_outer.type(),
                 args.fUniformHandler->getUniformCStr(fFocalParamsVar),
                 args.fUniformHandler->getUniformCStr(fFocalParamsVar),
                 (_outer.isRadiusIncreasing() ? "true" : "false"));
         fragBuilder->codeAppendf(
-                "   }\n        }\n        break;\n    case 2:\n        {\n            half invR1 = "
-                "%s.x;\n            half fx = %s.y;\n            half x_t = -1.0;\n            @if "
-                "(%s) {\n                x_t = dot(p, p) / p.x;\n            } else if (%s) {\n    "
-                "            x_t = length(p) - p.x * invR1;\n            } else {\n                "
-                "half temp = p.x * p.x - p.y * p.y;\n                if (temp >= 0.0) {\n          "
-                "          @if (%s || !%s) {\n                        x_t = "
-                "half(-sqrt(float(temp)) - float(p.x * invR1",
+                "            }\n        }\n        break;\n    case 2:\n        {\n            "
+                "half invR1 = %s.x;\n            half fx = %s.y;\n            float x_t = -1.0;\n  "
+                "          @if (%s) {\n                x_t = dot(p, p) / p.x;\n            } else "
+                "if (%s) {\n                x_t = length(p) - p.x * float(invR1);\n            } "
+                "else {\n                float temp = p.x * p.x - p.y * p.y;\n                if "
+                "(temp >= 0.0) {\n                    @if (%s || !%s) {\n                        "
+                "x_t = -sqrt(temp) - p.x * float",
                 args.fUniformHandler->getUniformCStr(fFocalParamsVar),
                 args.fUniformHandler->getUniformCStr(fFocalParamsVar),
                 (_outer.isFocalOnCircle() ? "true" : "false"),
@@ -69,22 +69,22 @@ public:
                 (_outer.isSwapped() ? "true" : "false"),
                 (_outer.isRadiusIncreasing() ? "true" : "false"));
         fragBuilder->codeAppendf(
-                "));\n                    } else {\n                        x_t = "
-                "half(sqrt(float(temp)) - float(p.x * invR1));\n                    }\n            "
-                "    }\n            }\n            @if (!%s) {\n                if (float(x_t) <= "
-                "0.0) {\n                    v = -1.0;\n                }\n            }\n         "
-                "   @if (%s) {\n                @if (%s) {\n                    t = x_t;\n         "
-                "       } else {\n                    t = x_t + fx;\n                }\n           "
-                " } else {\n                @if (%s) {",
+                "(invR1);\n                    } else {\n                        x_t = sqrt(temp) "
+                "- p.x * float(invR1);\n                    }\n                }\n            }\n  "
+                "          @if (!%s) {\n                if (x_t <= 0.0) {\n                    v = "
+                "-1.0;\n                }\n            }\n            @if (%s) {\n                "
+                "@if (%s) {\n                    t = x_t;\n                } else {\n              "
+                "      t = x_t + float(fx);\n                }\n            } else {\n             "
+                "   @if (%s) {\n       ",
                 (_outer.isWellBehaved() ? "true" : "false"),
                 (_outer.isRadiusIncreasing() ? "true" : "false"),
                 (_outer.isNativelyFocal() ? "true" : "false"),
                 (_outer.isNativelyFocal() ? "true" : "false"));
         fragBuilder->codeAppendf(
-                "\n                    t = -x_t;\n                } else {\n                    t "
-                "= -x_t + fx;\n                }\n            }\n            @if (%s) {\n          "
-                "      t = 1.0 - t;\n            }\n        }\n        break;\n}\n%s = half4(t, v, "
-                "0.0, 0.0);\n",
+                "             t = -x_t;\n                } else {\n                    t = -x_t + "
+                "float(fx);\n                }\n            }\n            @if (%s) {\n            "
+                "    t = 1.0 - t;\n            }\n        }\n        break;\n}\n%s = "
+                "half4(half(t), v, 0.0, 0.0);\n",
                 (_outer.isSwapped() ? "true" : "false"), args.fOutputColor);
     }
 
@@ -150,10 +150,15 @@ GR_DEFINE_FRAGMENT_PROCESSOR_TEST(GrTwoPointConicalGradientLayout);
 #if GR_TEST_UTILS
 std::unique_ptr<GrFragmentProcessor> GrTwoPointConicalGradientLayout::TestCreate(
         GrProcessorTestData* d) {
-    SkPoint center1 = {d->fRandom->nextUScalar1(), d->fRandom->nextUScalar1()};
-    SkPoint center2 = {d->fRandom->nextUScalar1(), d->fRandom->nextUScalar1()};
-    SkScalar radius1 = d->fRandom->nextUScalar1();
-    SkScalar radius2 = d->fRandom->nextUScalar1();
+    SkScalar scale = GrGradientShader::RandomParams::kGradientScale;
+    SkScalar offset = scale / 32.0f;
+
+    SkPoint center1 = {d->fRandom->nextRangeScalar(0.0f, scale),
+                       d->fRandom->nextRangeScalar(0.0f, scale)};
+    SkPoint center2 = {d->fRandom->nextRangeScalar(0.0f, scale),
+                       d->fRandom->nextRangeScalar(0.0f, scale)};
+    SkScalar radius1 = d->fRandom->nextRangeScalar(0.0f, scale);
+    SkScalar radius2 = d->fRandom->nextRangeScalar(0.0f, scale);
 
     constexpr int kTestTypeMask = (1 << 2) - 1, kTestNativelyFocalBit = (1 << 2),
                   kTestFocalOnCircleBit = (1 << 3), kTestSwappedBit = (1 << 4);
@@ -167,19 +172,19 @@ std::unique_ptr<GrFragmentProcessor> GrTwoPointConicalGradientLayout::TestCreate
         center2 = center1;
         // Make sure that the radii are different
         if (SkScalarNearlyZero(radius1 - radius2)) {
-            radius2 += .1f;
+            radius2 += offset;
         }
     } else if (type == static_cast<int>(Type::kStrip)) {
         radius1 = SkTMax(radius1, .1f);  // Make sure that the radius is non-zero
         radius2 = radius1;
         // Make sure that the centers are different
         if (SkScalarNearlyZero(SkPoint::Distance(center1, center2))) {
-            center2.fX += .1f;
+            center2.fX += offset;
         }
     } else {  // kFocal_Type
         // Make sure that the centers are different
         if (SkScalarNearlyZero(SkPoint::Distance(center1, center2))) {
-            center2.fX += .1f;
+            center2.fX += offset;
         }
 
         if (kTestNativelyFocalBit & mask) {
@@ -195,13 +200,13 @@ std::unique_ptr<GrFragmentProcessor> GrTwoPointConicalGradientLayout::TestCreate
 
         // Make sure that the radii are different
         if (SkScalarNearlyZero(radius1 - radius2)) {
-            radius2 += .1f;
+            radius2 += offset;
         }
     }
 
     if (SkScalarNearlyZero(radius1 - radius2) &&
         SkScalarNearlyZero(SkPoint::Distance(center1, center2))) {
-        radius2 += .1f;  // make sure that we're not degenerated
+        radius2 += offset;  // make sure that we're not degenerated
     }
 
     GrGradientShader::RandomParams params(d->fRandom);

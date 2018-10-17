@@ -288,6 +288,27 @@ enum class GrAllowMixedSamples : bool { kNo = false, kYes = true };
 GrAAType GrChooseAAType(GrAA, GrFSAAType, GrAllowMixedSamples, const GrCaps&);
 
 /**
+ * Controls anti-aliasing of a quad on a per-edge basis. Currently only used by GrTextureOp.
+ * This will be moved to public API and renamed when this functionality is exposed.
+ */
+enum class GrQuadAAFlags : unsigned {
+    kLeft   = 0b0001,
+    kTop    = 0b0010,
+    kRight  = 0b0100,
+    kBottom = 0b1000,
+
+    kNone   = 0b0000,
+    kAll    = 0b1111,
+
+    kTopLeft     = kTop    | kLeft,
+    kTopRight    = kTop    | kRight,
+    kBottomRight = kBottom | kRight,
+    kBottomLeft  = kBottom | kLeft,
+};
+
+GR_MAKE_BITFIELD_CLASS_OPS(GrQuadAAFlags)
+
+/**
  * Types of shader-language-specific boxed variables we can create. (Currently only GrGLShaderVars,
  * but should be applicable to other shader languages.)
  */
@@ -711,6 +732,8 @@ enum GrVertexAttribType {
                                      // 255 -> 1.0f.
 
     kShort2_GrVertexAttribType,       // vector of 2 16-bit shorts.
+    kShort4_GrVertexAttribType,       // vector of 4 16-bit shorts.
+
     kUShort2_GrVertexAttribType,      // vector of 2 unsigned shorts. 0 -> 0, 65535 -> 65535.
     kUShort2_norm_GrVertexAttribType, // vector of 2 unsigned shorts. 0 -> 0.0f, 65535 -> 1.0f.
 

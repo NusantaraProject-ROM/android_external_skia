@@ -6,6 +6,7 @@
  */
 
 #include "GrBackendSurface.h"
+#include "GrClip.h"
 #include "GrContextOptions.h"
 #include "GrContextPriv.h"
 #include "GrDrawOpAtlas.h"
@@ -29,6 +30,7 @@
 #include "ops/GrMeshDrawOp.h"
 #include "text/GrGlyphCache.h"
 #include "text/GrTextBlobCache.h"
+
 #include <algorithm>
 
 bool GrSurfaceProxy::isWrapped_ForTesting() const {
@@ -133,16 +135,6 @@ void GrGpu::Stats::dumpKeyValuePairs(SkTArray<SkString>* keys, SkTArray<double>*
 
 #endif
 
-GrBackendTexture GrGpu::createTestingOnlyBackendTexture(const void* pixels, int w, int h,
-                                                        SkColorType colorType, bool isRenderTarget,
-                                                        GrMipMapped mipMapped) {
-    GrPixelConfig config = SkColorType2GrPixelConfig(colorType);
-    if (kUnknown_GrPixelConfig == config) {
-        return GrBackendTexture();
-    }
-    return this->createTestingOnlyBackendTexture(pixels, w, h, config, isRenderTarget, mipMapped);
-}
-
 #if GR_CACHE_STATS
 void GrResourceCache::getStats(Stats* stats) const {
     stats->reset();
@@ -208,6 +200,24 @@ int GrResourceCache::countUniqueKeysWithTag(const char* tag) const {
     return count;
 }
 #endif
+
+///////////////////////////////////////////////////////////////////////////////
+
+sk_sp<GrTextureProxy> GrProxyProvider::testingOnly_createInstantiatedProxy(
+        const GrSurfaceDesc& desc, GrSurfaceOrigin origin, SkBackingFit fit, SkBudgeted budgeted) {
+    sk_sp<GrTexture> tex;
+
+    if (SkBackingFit::kApprox == fit) {
+        tex = fResourceProvider->createApproxTexture(desc, GrResourceProvider::Flags::kNone);
+    } else {
+        tex = fResourceProvider->createTexture(desc, budgeted, GrResourceProvider::Flags::kNone);
+    }
+    if (!tex) {
+        return nullptr;
+    }
+
+    return this->createWrapped(std::move(tex), origin);
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 
