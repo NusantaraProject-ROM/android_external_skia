@@ -23,7 +23,7 @@ public:
 
     GrContext* context() const final { return fContext.get(); }
 
-    bool getROPixels(SkBitmap*, SkColorSpace* dstColorSpace, CachingHint) const final;
+    bool getROPixels(SkBitmap*, CachingHint) const final;
     sk_sp<SkImage> onMakeSubset(const SkIRect& subset) const final;
 
     bool onReadPixels(const SkImageInfo& dstInfo, void* dstPixels, size_t dstRB,
@@ -34,8 +34,7 @@ public:
         SkASSERT(false);
         return this->INHERITED::asTextureProxyRef();
     }
-    sk_sp<GrTextureProxy> asTextureProxyRef(GrContext*, const GrSamplerState&, SkColorSpace*,
-                                            sk_sp<SkColorSpace>*,
+    sk_sp<GrTextureProxy> asTextureProxyRef(GrContext*, const GrSamplerState&,
                                             SkScalar scaleAdjust[2]) const final;
 
     sk_sp<GrTextureProxy> refPinnedTextureProxy(uint32_t* uniqueID) const final {
@@ -51,6 +50,13 @@ public:
     sk_sp<SkImage> onMakeColorSpace(sk_sp<SkColorSpace>) const final;
 
     bool onIsValid(GrContext*) const final;
+
+#if GR_TEST_UTILS
+    void resetContext(sk_sp<GrContext> newContext) {
+        SkASSERT(fContext->uniqueID() == newContext->uniqueID());
+        fContext = newContext;
+    }
+#endif
 
     static bool ValidateBackendTexture(GrContext* ctx, const GrBackendTexture& tex,
                                        GrPixelConfig* config, SkColorType ct, SkAlphaType at,

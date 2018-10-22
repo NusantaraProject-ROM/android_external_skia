@@ -9,7 +9,7 @@
 #include "Sk4fLinearGradient.h"
 #include "SkColorSpacePriv.h"
 #include "SkColorSpaceXformer.h"
-#include "SkFlattenablePriv.h"
+#include "SkConvertPixels.h"
 #include "SkFloatBits.h"
 #include "SkGradientShaderPriv.h"
 #include "SkHalf.h"
@@ -21,7 +21,6 @@
 #include "SkTwoPointConicalGradient.h"
 #include "SkWriteBuffer.h"
 #include "../../jumper/SkJumper.h"
-#include "../../third_party/skcms/skcms.h"
 
 enum GradientSerializationFlags {
     // Bits 29:31 used for various boolean flags
@@ -460,29 +459,16 @@ SkGradientShaderBase::AutoXformColors::AutoXformColors(const SkGradientShaderBas
 
 SkColor4fXformer::SkColor4fXformer(const SkColor4f* colors, int colorCount,
                                    SkColorSpace* src, SkColorSpace* dst) {
-    // Transform all of the colors to destination color space
     fColors = colors;
 
-    // Treat null destinations as sRGB.
-    if (!dst) {
-        dst = sk_srgb_singleton();
-    }
-
-    // Treat null sources as sRGB.
-    if (!src) {
-        src = sk_srgb_singleton();
-    }
-
-    if (!SkColorSpace::Equals(src, dst)) {
-        skcms_ICCProfile srcProfile, dstProfile;
-        src->toProfile(&srcProfile);
-        dst->toProfile(&dstProfile);
+    if (dst && !SkColorSpace::Equals(src, dst)) {
         fStorage.reset(colorCount);
-        const skcms_PixelFormat rgba_f32 = skcms_PixelFormat_RGBA_ffff;
-        const skcms_AlphaFormat unpremul = skcms_AlphaFormat_Unpremul;
-        SkAssertResult(skcms_Transform(colors,           rgba_f32, unpremul, &srcProfile,
-                                       fStorage.begin(), rgba_f32, unpremul, &dstProfile,
-                                       colorCount));
+
+        auto info = SkImageInfo::Make(colorCount,1, kRGBA_F32_SkColorType, kUnpremul_SkAlphaType);
+
+        SkConvertPixels(info.makeColorSpace(sk_ref_sp(dst)), fStorage.begin(), info.minRowBytes(),
+                        info.makeColorSpace(sk_ref_sp(src)), fColors         , info.minRowBytes());
+
         fColors = fStorage.begin();
     }
 }
@@ -789,9 +775,9 @@ sk_sp<SkShader> SkGradientShader::MakeSweep(SkScalar cx, SkScalar cy,
     return sk_make_sp<SkSweepGradient>(SkPoint::Make(cx, cy), t0, t1, desc);
 }
 
-SK_DEFINE_FLATTENABLE_REGISTRAR_GROUP_START(SkGradientShader)
-    SK_DEFINE_FLATTENABLE_REGISTRAR_ENTRY(SkLinearGradient)
-    SK_DEFINE_FLATTENABLE_REGISTRAR_ENTRY(SkRadialGradient)
-    SK_DEFINE_FLATTENABLE_REGISTRAR_ENTRY(SkSweepGradient)
-    SK_DEFINE_FLATTENABLE_REGISTRAR_ENTRY(SkTwoPointConicalGradient)
-SK_DEFINE_FLATTENABLE_REGISTRAR_GROUP_END
+void SkGradientShader::RegisterFlattenables() {
+    SK_REGISTER_FLATTENABLE(SkLinearGradient)
+    SK_REGISTER_FLATTENABLE(SkRadialGradient)
+    SK_REGISTER_FLATTENABLE(SkSweepGradient)
+    SK_REGISTER_FLATTENABLE(SkTwoPointConicalGradient)
+}

@@ -9,6 +9,7 @@
 
 #include "SkColorFilter.h"
 #include "SkDraw.h"
+#include "SkDrawable.h"
 #include "SkGlyphRun.h"
 #include "SkImageFilter.h"
 #include "SkImageFilterCache.h"
@@ -141,7 +142,7 @@ void SkBaseDevice::drawPatch(const SkPoint cubics[12], const SkColor colors[4],
 void SkBaseDevice::drawImage(const SkImage* image, SkScalar x, SkScalar y,
                              const SkPaint& paint) {
     SkBitmap bm;
-    if (as_IB(image)->getROPixels(&bm, this->imageInfo().colorSpace())) {
+    if (as_IB(image)->getROPixels(&bm)) {
         this->drawBitmap(bm, x, y, paint);
     }
 }
@@ -150,7 +151,7 @@ void SkBaseDevice::drawImageRect(const SkImage* image, const SkRect* src,
                                  const SkRect& dst, const SkPaint& paint,
                                  SkCanvas::SrcRectConstraint constraint) {
     SkBitmap bm;
-    if (as_IB(image)->getROPixels(&bm, this->imageInfo().colorSpace())) {
+    if (as_IB(image)->getROPixels(&bm)) {
         this->drawBitmapRect(bm, src, dst, paint, constraint);
     }
 }
@@ -199,6 +200,22 @@ void SkBaseDevice::drawImageLattice(const SkImage* image,
         } else {
             this->drawImageRect(image, &srcR, dstR, paint, SkCanvas::kStrict_SrcRectConstraint);
         }
+    }
+}
+
+void SkBaseDevice::drawImageSet(const SkCanvas::ImageSetEntry images[], int count, float alpha,
+                                SkFilterQuality filterQuality, SkBlendMode mode) {
+    SkPaint paint;
+    paint.setFilterQuality(SkTPin(filterQuality, kNone_SkFilterQuality, kLow_SkFilterQuality));
+    paint.setAlpha(SkToUInt(SkTClamp(SkScalarRoundToInt(alpha * 255), 0, 255)));
+    paint.setBlendMode(mode);
+    for (int i = 0; i < count; ++i) {
+        // TODO: Handle per-edge AA. Right now this mirrors the SkiaRenderer component of Chrome
+        // which turns off antialiasing unless all four edges should be antialiased. This avoids
+        // seaming in tiled composited layers.
+        paint.setAntiAlias(images[i].fAAFlags == SkCanvas::kAll_QuadAAFlags);
+        this->drawImageRect(images[i].fImage.get(), &images[i].fSrcRect, images[i].fDstRect, paint,
+                            SkCanvas::kFast_SrcRectConstraint);
     }
 }
 
@@ -255,6 +272,12 @@ void SkBaseDevice::drawAtlas(const SkImage* atlas, const SkRSXform xform[],
     SkPaint p(paint);
     p.setShader(atlas->makeShader());
     this->drawVertices(builder.detach().get(), nullptr, 0, mode, p);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+void SkBaseDevice::drawDrawable(SkDrawable* drawable, const SkMatrix* matrix, SkCanvas* canvas) {
+    drawable->draw(canvas, matrix);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

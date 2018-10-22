@@ -182,7 +182,8 @@ def dm_flags(api, bot):
       blacklist('gltestthreading gm _ savelayer_with_backdrop')
       blacklist('gltestthreading gm _ persp_shaders_bw')
       blacklist('gltestthreading gm _ dftext_blob_persp')
-      # skbug.com/7523 - Flaky on various GPUs
+      blacklist('gltestthreading gm _ dftext')
+    # skbug.com/7523 - Flaky on various GPUs
       blacklist('gltestthreading gm _ orientation')
 
     # CommandBuffer bot *only* runs the command_buffer config.
@@ -408,6 +409,11 @@ def dm_flags(api, bot):
     blacklist('_ image gen_platf rle8-height-negative.bmp')
     blacklist('_ image gen_platf rle4-height-negative.bmp')
 
+  # These PNGs have CRC errors. The platform generators seem to draw
+  # uninitialized memory without reporting an error, so skip them to
+  # avoid lots of images on Gold.
+  blacklist('_ image gen_platf error')
+
   if 'Android' in bot or 'iOS' in bot or 'Chromecast' in bot:
     # This test crashes the N9 (perhaps because of large malloc/frees). It also
     # is fairly slow and not platform-specific. So we just disable it on all of
@@ -419,6 +425,10 @@ def dm_flags(api, bot):
     blacklist('_ test _ SRGBReadWritePixels')
     blacklist('_ test _ SRGBMipMap')
 
+  if api.vars.internal_hardware_label == '5':
+    # skia:8470
+    blacklist('_ test _ SRGBReadWritePixels')
+    blacklist('_ test _ ES2BlendWithNoTexture')
 
   # skia:4095
   bad_serialize_gms = ['bleed_image',
@@ -469,6 +479,7 @@ def dm_flags(api, bot):
   bad_serialize_gms.append('all_bitmap_configs')
   bad_serialize_gms.append('makecolorspace')
   bad_serialize_gms.append('readpixels')
+  bad_serialize_gms.append('draw_image_set_rect_to_rect')
 
   # This GM forces a path to be convex. That property doesn't survive
   # serialization.
@@ -752,7 +763,6 @@ def dm_flags(api, bot):
     match.append('~^RGB565TextureTest$')
     match.append('~^RGBA4444TextureTest$')
     match.append('~^TransferPixelsTest$')
-    match.append('~^SurfaceCreationWithColorSpace_Gpu$')
     match.append('~^SurfaceSemaphores$')
     match.append('~^VertexAttributeCount$')
     match.append('~^WrappedProxyTest$')
@@ -783,7 +793,17 @@ def dm_flags(api, bot):
   if 'GDI' in bot:
     args.append('--gdi')
 
-  if 'QuadroP400' in bot or 'Adreno540' in bot:
+  if ('QuadroP400' in bot or
+      'Adreno540' in bot or
+      'IntelHD2000' in bot or   # gen 6 - sandy bridge
+      'IntelHD4400' in bot or   # gen 7 - haswell
+      'IntelHD405' in bot or    # gen 8 - cherryview braswell
+      'IntelIris6100' in bot or # gen 8 - broadwell
+      'IntelIris540' in bot or  # gen 9 - skylake
+      'IntelIris640' in bot or  # gen 9 - kaby lake
+      'MaliT760' in bot or
+      'MaliT860' in bot or
+      'MaliT880' in bot):
     args.extend(['--reduceOpListSplitting'])
 
   # Let's make all bots produce verbose output by default.
@@ -1201,6 +1221,27 @@ def GenTests(api):
                    swarm_out_dir='[SWARM_OUT_DIR]',
                    gold_hashes_url='https://example.com/hashes.txt',
                    internal_hardware_label='2') +
+    api.path.exists(
+        api.path['start_dir'].join('skia'),
+        api.path['start_dir'].join('skia', 'infra', 'bots', 'assets',
+                                     'skimage', 'VERSION'),
+        api.path['start_dir'].join('skia', 'infra', 'bots', 'assets',
+                                     'skp', 'VERSION'),
+        api.path['start_dir'].join('skia', 'infra', 'bots', 'assets',
+                                     'svg', 'VERSION'),
+        api.path['start_dir'].join('tmp', 'uninteresting_hashes.txt')
+    )
+  )
+
+  yield (
+    api.test('internal_bot_5') +
+    api.properties(buildername=builder,
+                   buildbucket_build_id='123454321',
+                   revision='abc123',
+                   path_config='kitchen',
+                   swarm_out_dir='[SWARM_OUT_DIR]',
+                   gold_hashes_url='https://example.com/hashes.txt',
+                   internal_hardware_label='5') +
     api.path.exists(
         api.path['start_dir'].join('skia'),
         api.path['start_dir'].join('skia', 'infra', 'bots', 'assets',

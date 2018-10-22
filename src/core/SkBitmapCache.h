@@ -11,6 +11,7 @@
 #include "SkBitmap.h"
 #include "SkMipMap.h"
 
+class SkBitmapProvider;
 class SkImage;
 class SkResourceCache;
 
@@ -32,7 +33,6 @@ struct SkBitmapCacheDesc {
         SkASSERT(kUnknown_SkColorType != fColorType);
     }
 
-    static SkBitmapCacheDesc Make(const SkBitmap&);
     static SkBitmapCacheDesc Make(const SkImage*);
     static SkBitmapCacheDesc Make(uint32_t genID, SkColorType, SkColorSpace*,
                                   const SkIRect& subset);
@@ -61,7 +61,8 @@ class SkMipMapCache {
 public:
     static const SkMipMap* FindAndRef(const SkBitmapCacheDesc&,
                                       SkResourceCache* localCache = nullptr);
-    static const SkMipMap* AddAndRef(const SkBitmap& src, SkResourceCache* localCache = nullptr);
+    static const SkMipMap* AddAndRef(const SkBitmapProvider&,
+                                     SkResourceCache* localCache = nullptr);
 };
 
 #endif

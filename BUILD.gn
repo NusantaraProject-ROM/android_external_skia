@@ -16,6 +16,10 @@ if (!defined(is_skia_standalone)) {
 is_skia_dev_build = is_skia_standalone && !is_official_build
 
 declare_args() {
+  skia_enable_flutter_defines = false
+}
+
+declare_args() {
   skia_use_angle = false
   skia_use_egl = false
   skia_use_expat = true
@@ -34,14 +38,17 @@ declare_args() {
   skia_use_x11 = is_linux
 
   skia_android_serial = ""
+  skia_enable_ccpr = true
+  skia_enable_nvpr = !skia_enable_flutter_defines
   skia_enable_discrete_gpu = true
   skia_enable_effects = true
   skia_enable_effects_imagefilters = true
-  skia_enable_flutter_defines = false
+  skia_enable_effect_deserialization = !skia_enable_flutter_defines
   skia_enable_fontmgr_empty = false
   skia_enable_gpu = true
   skia_enable_pdf = true
   skia_enable_spirv_validation = is_skia_dev_build && is_debug
+  skia_enable_skpicture = true
   skia_enable_tools = is_skia_dev_build
   skia_enable_vulkan_debug_layers = is_skia_dev_build && is_debug
   skia_vulkan_header = ""  # temporary as we remove the use from clients
@@ -374,13 +381,27 @@ optional("effects") {
   deps = [
     ":compile_processors",
   ]
-  sources =
-      skia_effects_sources + [ "src/ports/SkGlobalInitialization_default.cpp" ]
+  sources = skia_effects_sources
   if (skia_enable_effects_imagefilters) {
-    sources += skia_effects_imagefilter_sources
+    sources += skia_effects_imagefilter_sources_no_global_initialization
+    if (!skia_enable_skpicture) {
+      sources -= [ "//src/effects/imagefilters/SkPictureImageFilter.cpp" ]
+    }
+  }
+}
+
+optional("effect_deserialization") {
+  enabled = skia_enable_effects && skia_enable_effect_deserialization
+
+  sources = [
+    "src/ports/SkGlobalInitialization_default.cpp",
+  ]
+  if (skia_enable_effects_imagefilters) {
+    sources += [ "src/ports/SkGlobalInitialization_default_imagefilters.cpp" ]
   } else {
     sources += [ "src/ports/SkGlobalInitialization_none_imagefilters.cpp" ]
   }
+
   sources_when_disabled = [
     "src/ports/SkGlobalInitialization_none.cpp",
     "src/ports/SkGlobalInitialization_none_imagefilters.cpp",
@@ -587,6 +608,14 @@ optional("gpu") {
   public_deps = []
 
   sources = skia_gpu_sources + skia_sksl_sources + skia_gpu_processor_outputs
+  if (!skia_enable_ccpr) {
+    sources -= skia_ccpr_sources
+    sources += [ "src/gpu/ccpr/GrCoverageCountingPathRenderer_none.cpp" ]
+  }
+  if (!skia_enable_nvpr) {
+    sources -= skia_nvpr_sources
+    sources += [ "src/gpu/GrPathRendering_none.cpp" ]
+  }
 
   # These paths need to be absolute to match the ones produced by shared_sources.gni.
   sources -= get_path_info([ "src/gpu/gl/GrGLMakeNativeInterface_none.cpp" ],
@@ -824,6 +853,7 @@ component("skia") {
     ":armv7",
     ":avx",
     ":crc32",
+    ":effect_deserialization",
     ":effects",
     ":fontmgr_android",
     ":fontmgr_custom",
@@ -889,6 +919,13 @@ component("skia") {
     "src/utils/mac/SkStream_mac.cpp",
     "third_party/gif/SkGifImageReader.cpp",
   ]
+
+  defines = []
+  if (!skia_enable_skpicture) {
+    defines = [ "SK_DISABLE_SKPICTURE" ]
+    sources -= skia_skpicture_sources
+    sources += [ "src/core/SkPicture_none.cpp" ]
+  }
 
   libs = []
 
@@ -1490,7 +1527,6 @@ if (skia_enable_tools) {
       sources -= [ "//tests/FontMgrFontConfigTest.cpp" ]
     }
     deps = [
-      ":experimental_pipe",
       ":experimental_svg_model",
       ":flags",
       ":skia",
@@ -1515,18 +1551,6 @@ if (skia_enable_tools) {
       ":gpu_tool_utils",
       ":skia",
       ":tool_utils",
-    ]
-  }
-
-  test_lib("experimental_pipe") {
-    public_include_dirs = [ "experimental/pipe" ]
-    sources = [
-      "experimental/pipe/SkPipe.h",
-      "experimental/pipe/SkPipeCanvas.cpp",
-      "experimental/pipe/SkPipeCanvas.h",
-      "experimental/pipe/SkPipeFormat.h",
-      "experimental/pipe/SkPipeReader.cpp",
-      "experimental/pipe/SkRefSet.h",
     ]
   }
 
@@ -1681,7 +1705,6 @@ if (skia_enable_tools) {
       include_dirs = [ "tests" ]
       deps = [
         ":common_flags",
-        ":experimental_pipe",
         ":experimental_svg_model",
         ":flags",
         ":gm",
@@ -1851,9 +1874,11 @@ if (skia_enable_tools) {
       "fuzz/FuzzPathop.cpp",
       "fuzz/FuzzPolyUtils.cpp",
       "fuzz/FuzzRegionOp.cpp",
+      "fuzz/oss_fuzz/FuzzAndroidCodec.cpp",
       "fuzz/oss_fuzz/FuzzAnimatedImage.cpp",
       "fuzz/oss_fuzz/FuzzImage.cpp",
       "fuzz/oss_fuzz/FuzzImageFilterDeserialize.cpp",
+      "fuzz/oss_fuzz/FuzzIncrementalImage.cpp",
       "fuzz/oss_fuzz/FuzzJSON.cpp",
       "fuzz/oss_fuzz/FuzzPathDeserialize.cpp",
       "fuzz/oss_fuzz/FuzzRegionDeserialize.cpp",

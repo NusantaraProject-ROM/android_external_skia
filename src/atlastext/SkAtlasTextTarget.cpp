@@ -105,7 +105,7 @@ public:
 
     void makeGrPaint(GrMaskFormat, const SkPaint& skPaint, const SkMatrix&,
                      GrPaint* grPaint) override {
-        grPaint->setColor4f(GrColor4f::FromRGBA4f(skPaint.getColor4f().premul()));
+        grPaint->setColor4f(skPaint.getColor4f().premul());
     }
 
     GrContext* getContext() override {
@@ -188,7 +188,6 @@ void SkInternalAtlasTextTarget::addDrawOp(const GrClip& clip, std::unique_ptr<Gr
             break;
         }
     }
-    op->visitProxies([](GrSurfaceProxy*) {});
     fOps.emplace_back(std::move(op));
 }
 
