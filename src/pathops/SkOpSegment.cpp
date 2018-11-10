@@ -921,7 +921,11 @@ bool SkOpSegment::markAndChaseWinding(SkOpSpanBase* start, SkOpSpanBase* end,
     bool success = markWinding(spanStart, winding, oppWinding);
     SkOpSpanBase* last = nullptr;
     SkOpSegment* other = this;
+    int safetyNet = 100000;
     while ((other = other->nextChase(&start, &step, &spanStart, &last))) {
+        if (!--safetyNet) {
+            return false;
+        }
         if (spanStart->windSum() != SK_MinS32) {
             if (this->operand() == other->operand()) {
                 if (spanStart->windSum() != winding || spanStart->oppSum() != oppWinding) {
@@ -985,15 +989,17 @@ bool SkOpSegment::markAngle(int maxWinding, int sumWinding, int oppMaxWinding,
         return false;
     }
 #if DEBUG_WINDING
-    SkOpSpanBase* last = *result;
-    if (last) {
-        SkDebugf("%s last segment=%d span=%d", __FUNCTION__,
-                last->segment()->debugID(), last->debugID());
-        if (!last->final()) {
-            SkDebugf(" windSum=");
-            SkPathOpsDebug::WindingPrintf(last->upCast()->windSum());
+    if (result) {
+        SkOpSpanBase* last = *result;
+        if (last) {
+            SkDebugf("%s last segment=%d span=%d", __FUNCTION__,
+                    last->segment()->debugID(), last->debugID());
+            if (!last->final()) {
+                SkDebugf(" windSum=");
+                SkPathOpsDebug::WindingPrintf(last->upCast()->windSum());
+            }
+            SkDebugf(" \n");
         }
-        SkDebugf(" \n");
     }
 #endif
     return true;

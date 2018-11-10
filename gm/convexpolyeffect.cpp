@@ -51,7 +51,7 @@ public:
 
     const char* name() const override { return "PolyBoundsOp"; }
 
-    void visitProxies(const VisitProxyFunc& func) const override {
+    void visitProxies(const VisitProxyFunc& func, VisitorType) const override {
         fProcessors.visitProxies(func);
     }
 
@@ -211,7 +211,7 @@ protected:
                 }
 
                 GrPaint grPaint;
-                grPaint.setColor4f(GrColor4f(0, 0, 0, 1.f));
+                grPaint.setColor4f({ 0, 0, 0, 1.f });
                 grPaint.setXPFactory(GrPorterDuffXPFactory::Get(SkBlendMode::kSrc));
                 grPaint.addCoverageFragmentProcessor(std::move(fp));
 
@@ -251,7 +251,7 @@ protected:
                 }
 
                 GrPaint grPaint;
-                grPaint.setColor4f(GrColor4f(0, 0, 0, 1.f));
+                grPaint.setColor4f({ 0, 0, 0, 1.f });
                 grPaint.setXPFactory(GrPorterDuffXPFactory::Get(SkBlendMode::kSrc));
                 grPaint.addCoverageFragmentProcessor(std::move(fp));
 

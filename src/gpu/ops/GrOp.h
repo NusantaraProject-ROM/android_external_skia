@@ -68,7 +68,22 @@ public:
 
     typedef std::function<void(GrSurfaceProxy*)> VisitProxyFunc;
 
-    virtual void visitProxies(const VisitProxyFunc&) const {
+    /**
+     * Knowning the type of visitor may enable an op to be more efficient by skipping irrelevant
+     * proxies on visitProxies.
+     */
+    enum class VisitorType : unsigned {
+        /**
+         * Ops *may* skip proxy visitation for allocation for proxies that have the
+         * canSkipResourceAllocator() property.
+         */
+        kAllocatorGather,
+        /**
+         * Ops should visit all proxies.
+         */
+        kOther,
+    };
+    virtual void visitProxies(const VisitProxyFunc&, VisitorType = VisitorType::kOther) const {
         // This default implementation assumes the op has no proxies
     }
 
@@ -209,6 +224,10 @@ public:
     bool isChained() const { return SkToBool(fChainHead); }
     /** The next op in the chain. */
     const GrOp* nextInChain() const { return fNextInChain; }
+
+#ifdef SK_DEBUG
+    virtual void validate() const {}
+#endif
 
 protected:
     GrOp(uint32_t classID);

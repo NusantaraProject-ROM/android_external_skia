@@ -106,17 +106,14 @@
       }
       return this;
     };
-  }
 
-  CanvasKit.getWebGLSurface = function(htmlID) {
-    var canvas = document.getElementById(htmlID);
-    if (!canvas) {
-      throw 'Canvas with id ' + htmlID + ' was not found';
+    // Run through the JS files that are added at compile time.
+    if (CanvasKit._extraInitializations) {
+      CanvasKit._extraInitializations.forEach(function(init) {
+        init();
+      });
     }
-    // Maybe better to use clientWidth/height.  See:
-    // https://webglfundamentals.org/webgl/lessons/webgl-anti-patterns.html
-    return this._getWebGLSurface(htmlID, canvas.width, canvas.height);
-  }
+  } // end CanvasKit.onRuntimeInitialized, that is, anything changing prototypes or dynamic.
 
   // Likely only used for tests.
   CanvasKit.LTRBRect = function(l, t, r, b) {

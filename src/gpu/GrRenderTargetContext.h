@@ -17,6 +17,7 @@
 #include "GrTypesPriv.h"
 #include "GrXferProcessor.h"
 #include "SkCanvas.h"
+#include "SkDrawable.h"
 #include "SkRefCnt.h"
 #include "SkSurfaceProps.h"
 #include "text/GrTextTarget.h"
@@ -138,6 +139,21 @@ public:
                      const SkRect& srcRect, const SkRect& dstRect, GrQuadAAFlags,
                      SkCanvas::SrcRectConstraint, const SkMatrix& viewMatrix,
                      sk_sp<GrColorSpaceXform> texXform, sk_sp<GrColorSpaceXform> colorXform);
+
+    /** Used with drawTextureSet */
+    struct TextureSetEntry {
+        sk_sp<GrTextureProxy> fProxy;
+        SkRect fSrcRect;
+        SkRect fDstRect;
+        GrQuadAAFlags fAAFlags;
+    };
+    /**
+     * Draws a set of textures with a shared filter, color, view matrix, color xform, and
+     * texture color xform. The textures must all have the same GrTextureType and GrConfig.
+     */
+    void drawTextureSet(const GrClip&, const TextureSetEntry[], int cnt, GrSamplerState::Filter,
+                        GrColor, const SkMatrix& viewMatrix, sk_sp<GrColorSpaceXform> texXform,
+                        sk_sp<GrColorSpaceXform> colorXform);
 
     /**
      * Draw a roundrect using a paint.
@@ -322,6 +338,12 @@ public:
                           GrSamplerState::Filter,
                           std::unique_ptr<SkLatticeIter>,
                           const SkRect& dst);
+
+    /**
+     * Adds the necessary signal and wait semaphores and adds the passed in SkDrawable to the
+     * command stream.
+     */
+    void drawDrawable(std::unique_ptr<SkDrawable::GpuDrawHandler>, const SkRect& bounds);
 
     /**
      * After this returns any pending surface IO will be issued to the backend 3D API and

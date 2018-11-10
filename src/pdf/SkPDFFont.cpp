@@ -210,8 +210,7 @@ static SkGlyphID first_nonzero_glyph_for_single_byte_encoding(SkGlyphID gid) {
 
 static bool has_outline_glyph(SkGlyphID gid, SkGlyphCache* cache) {
     const SkGlyph& glyph = cache->getGlyphIDMetrics(gid);
-    const SkPath* path = cache->findPath(glyph);
-    return (path && !path->isEmpty()) || (glyph.fWidth == 0 && glyph.fHeight == 0);
+    return glyph.isEmpty() || cache->findPath(glyph);
 }
 
 sk_sp<SkPDFFont> SkPDFFont::GetFontResource(SkPDFCanon* canon,
@@ -359,7 +358,7 @@ static sk_sp<SkPDFStream> get_subset_font_stream(
     if (!glyphUsage.has(0)) {
         subset.push_back(0);  // Always include glyph 0.
     }
-    glyphUsage.exportTo(&subset);
+    glyphUsage.getSetValues([&subset](unsigned v) { subset.push_back(v); });
 
     unsigned char* subsetFont{nullptr};
     sk_sp<SkData> fontData(stream_to_data(std::move(fontAsset)));
@@ -735,7 +734,6 @@ static void add_type3_font_info(SkPDFCanon* canon,
 
     SkIRect bbox = SkIRect::MakeEmpty();
 
-    sk_sp<SkPDFStream> emptyStream;
     for (SkGlyphID gID : SingleByteGlyphIdIterator(firstGlyphID, lastGlyphID)) {
         bool skipGlyph = gID != 0 && !subset.has(gID);
         SkString characterName;
@@ -764,12 +762,13 @@ static void add_type3_font_info(SkPDFCanon* canon,
             } else {
                 auto pimg = to_image(gID, cache.get());
                 if (!pimg.fImage) {
-                    if (!emptyStream) {
-                        emptyStream = sk_make_sp<SkPDFStream>(
-                                std::unique_ptr<SkStreamAsset>(
-                                        new SkMemoryStream((size_t)0)));
-                    }
-                    charProcs->insertObjRef(characterName, emptyStream);
+                    SkDynamicMemoryWStream content;
+                    setGlyphWidthAndBoundingBox(SkFloatToScalar(glyph.fAdvanceX), glyphBBox,
+                                                &content);
+                    content.writeText("m 0 0\nf\n"); // fill an empty path.
+                    charProcs->insertObjRef(
+                        characterName, sk_make_sp<SkPDFStream>(
+                                std::unique_ptr<SkStreamAsset>(content.detachAsStream())));
                 } else {
                     SkDynamicMemoryWStream content;
                     SkPDFUtils::AppendScalar(SkFloatToScalar(glyph.fAdvanceX), &content);

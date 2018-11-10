@@ -15,11 +15,14 @@
 #include "GrRenderTargetPriv.h"
 
 GrMtlGpuRTCommandBuffer::GrMtlGpuRTCommandBuffer(
-        GrMtlGpu* gpu, GrRenderTarget* rt, GrSurfaceOrigin origin,
+        GrMtlGpu* gpu, GrRenderTarget* rt, GrSurfaceOrigin origin, const SkRect& bounds,
         const GrGpuRTCommandBuffer::LoadAndStoreInfo& colorInfo,
         const GrGpuRTCommandBuffer::StencilLoadAndStoreInfo& stencilInfo)
         : INHERITED(rt, origin)
         , fGpu(gpu)
+#ifdef SK_DEBUG
+        , fBounds(bounds)
+#endif
         , fColorLoadAndStoreInfo(colorInfo)
         , fStencilLoadAndStoreInfo(stencilInfo)
         , fRenderPassDesc(this->createRenderPassDesc()) {
@@ -178,6 +181,20 @@ void GrMtlGpuRTCommandBuffer::onDraw(const GrPrimitiveProcessor& primProc,
     fCommandBufferInfo.fBounds.join(bounds);
 }
 
+void GrMtlGpuRTCommandBuffer::onClear(const GrFixedClip& clip, GrColor color) {
+    // if we end up here from absClear, the clear bounds may be bigger than the RT proxy bounds -
+    // but in that case, scissor should be enabled, so this check should still succeed
+    SkASSERT(!clip.scissorEnabled() || clip.scissorRect().contains(fBounds));
+    float clear[4];
+    GrColorToRGBAFloat(color, clear);
+    fRenderPassDesc.colorAttachments[0].clearColor = MTLClearColorMake(clear[0], clear[1], clear[2],
+                                                                       clear[3]);
+    fRenderPassDesc.colorAttachments[0].loadAction = MTLLoadActionClear;
+    this->internalBegin();
+    this->internalEnd();
+    fRenderPassDesc.colorAttachments[0].loadAction = MTLLoadActionLoad;
+}
+
 void GrMtlGpuRTCommandBuffer::onClearStencilClip(const GrFixedClip& clip, bool insideStencilMask) {
     SkASSERT(!clip.hasWindowRectangles());
 
@@ -225,7 +242,8 @@ MTLRenderPassDescriptor* GrMtlGpuRTCommandBuffer::createRenderPassDesc() const {
             static_cast<GrMtlRenderTarget*>(fRenderTarget)->mtlRenderTexture();
     renderPassDesc.colorAttachments[0].slice = 0;
     renderPassDesc.colorAttachments[0].level = 0;
-    const auto& clearColor = GrColor4f::FromGrColor(fColorLoadAndStoreInfo.fClearColor).fRGBA;
+    float clearColor[4];
+    GrColorToRGBAFloat(fColorLoadAndStoreInfo.fClearColor, clearColor);
     renderPassDesc.colorAttachments[0].clearColor =
             MTLClearColorMake(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
     renderPassDesc.colorAttachments[0].loadAction =

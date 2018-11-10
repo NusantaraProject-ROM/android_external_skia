@@ -75,7 +75,7 @@ void GrRenderTargetOpList::dump(bool printDependencies) const {
 
 void GrRenderTargetOpList::visitProxies_debugOnly(const GrOp::VisitProxyFunc& func) const {
     for (const RecordedOp& recordedOp : fRecordedOps) {
-        recordedOp.visitProxies(func);
+        recordedOp.visitProxies(func, GrOp::VisitorType::kOther);
     }
 }
 
@@ -118,6 +118,7 @@ void GrRenderTargetOpList::onPrepare(GrOpFlushState* flushState) {
 static GrGpuRTCommandBuffer* create_command_buffer(GrGpu* gpu,
                                                    GrRenderTarget* rt,
                                                    GrSurfaceOrigin origin,
+                                                   const SkRect& bounds,
                                                    GrLoadOp colorLoadOp,
                                                    GrColor loadClearColor,
                                                    GrLoadOp stencilLoadOp) {
@@ -137,7 +138,7 @@ static GrGpuRTCommandBuffer* create_command_buffer(GrGpu* gpu,
         GrStoreOp::kStore,
     };
 
-    return gpu->getCommandBuffer(rt, origin, kColorLoadStoreInfo, stencilLoadAndStoreInfo);
+    return gpu->getCommandBuffer(rt, origin, bounds, kColorLoadStoreInfo, stencilLoadAndStoreInfo);
 }
 
 // TODO: this is where GrOp::renderTarget is used (which is fine since it
@@ -164,6 +165,7 @@ bool GrRenderTargetOpList::onExecute(GrOpFlushState* flushState) {
                                                     flushState->gpu(),
                                                     fTarget.get()->peekRenderTarget(),
                                                     fTarget.get()->origin(),
+                                                    fTarget.get()->getBoundsRect(),
                                                     fColorLoadOp,
                                                     fLoadClearColor,
                                                     fStencilLoadOp);
@@ -267,7 +269,7 @@ void GrRenderTargetOpList::purgeOpsWithUninstantiatedProxies() {
     for (RecordedOp& recordedOp : fRecordedOps) {
         hasUninstantiatedProxy = false;
         if (recordedOp.fOp) {
-            recordedOp.visitProxies(checkInstantiation);
+            recordedOp.visitProxies(checkInstantiation, GrOp::VisitorType::kOther);
         }
         if (hasUninstantiatedProxy) {
             // When instantiation of the proxy fails we drop the Op
@@ -304,7 +306,8 @@ void GrRenderTargetOpList::gatherProxyIntervals(GrResourceAllocator* alloc) cons
         alloc->addInterval(p SkDEBUGCODE(, fTarget.get() == p));
     };
     for (const RecordedOp& recordedOp : fRecordedOps) {
-        recordedOp.visitProxies(gather); // only diff from the GrTextureOpList version
+        // only diff from the GrTextureOpList version
+        recordedOp.visitProxies(gather, GrOp::VisitorType::kAllocatorGather);
 
         // Even though the op may have been moved we still need to increment the op count to
         // keep all the math consistent.
@@ -342,6 +345,7 @@ uint32_t GrRenderTargetOpList::recordOp(std::unique_ptr<GrOp> op,
                                         const GrCaps& caps,
                                         GrAppliedClip* clip,
                                         const DstProxy* dstProxy) {
+    SkDEBUGCODE(op->validate();)
     SkASSERT(fTarget.get());
 
     // A closed GrOpList should never receive new/more ops

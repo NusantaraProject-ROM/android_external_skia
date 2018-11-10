@@ -141,9 +141,16 @@ static void compare_pixel(const char* label,
     }
 }
 
-DEF_SIMPLE_GM(p3, canvas, 450, 1000) {
+DEF_SIMPLE_GM(p3, canvas, 450, 1300) {
     auto p3 = SkColorSpace::MakeRGB(SkColorSpace::kSRGB_RenderTargetGamma,
                                     SkColorSpace::kDCIP3_D65_Gamut);
+    auto srgb = SkColorSpace::MakeSRGB();
+
+    auto p3_to_srgb = [&](SkColor4f c) {
+        SkPaint p;
+        p.setColor4f(c, p3.get());
+        return p.getColor4f();
+    };
 
     // Draw a P3 red rectangle and check the corner.
     {
@@ -208,7 +215,29 @@ DEF_SIMPLE_GM(p3, canvas, 450, 1000) {
 
     canvas->translate(0,80);
 
-    // Draw a gradient from P3 red to P3 green interpolating in unpremul, and check the corners.
+    // Draw a P3 red bitmap wrapped in a shader, using SkPixmap::erase().
+    {
+        SkBitmap bm;
+        bm.allocPixels(SkImageInfo::Make(60,60, kRGBA_F16_SkColorType, kPremul_SkAlphaType, p3));
+
+        // At the moment only SkPixmap has an erase() that takes an SkColor4f.
+        SkPixmap pm;
+        SkAssertResult(bm.peekPixels(&pm));
+        SkAssertResult(pm.erase({1,0,0,1} /*in p3*/));
+
+        SkPaint paint;
+        paint.setShader(SkShader::MakeBitmapShader(bm, SkShader::kRepeat_TileMode,
+                                                   SkShader::kRepeat_TileMode));
+
+        canvas->drawRect({10,10,70,70}, paint);
+        compare_pixel("drawBitmapAsShader P3 red, from SkPixmap::erase",
+                      canvas, 10,10,
+                      {1,0,0,1}, p3.get());
+    }
+
+    canvas->translate(0,80);
+
+    // Draw a gradient from P3 red to P3 green interpolating in unpremul P3, checking the corners.
     {
 
         SkPoint points[] = {{10.5,10.5}, {69.5,69.5}};
@@ -220,13 +249,13 @@ DEF_SIMPLE_GM(p3, canvas, 450, 1000) {
                                                      SkShader::kClamp_TileMode));
         canvas->drawRect({10,10,70,70}, paint);
         canvas->save();
-            compare_pixel("gradient P3 red",
+            compare_pixel("UPM P3 gradient, P3 red",
                           canvas, 10,10,
                           {1,0,0,1}, p3.get());
 
             canvas->translate(180, 0);
 
-            compare_pixel("gradient P3 green",
+            compare_pixel("UPM P3 gradient, P3 green",
                           canvas, 69,69,
                           {0,1,0,1}, p3.get());
         canvas->restore();
@@ -234,7 +263,7 @@ DEF_SIMPLE_GM(p3, canvas, 450, 1000) {
 
     canvas->translate(0,80);
 
-    // Draw a gradient from P3 red to P3 green interpolating in premul, and check the corners.
+    // Draw a gradient from P3 red to P3 green interpolating in premul P3, checking the corners.
     {
 
         SkPoint points[] = {{10.5,10.5}, {69.5,69.5}};
@@ -249,13 +278,68 @@ DEF_SIMPLE_GM(p3, canvas, 450, 1000) {
                                              nullptr/*local matrix*/));
         canvas->drawRect({10,10,70,70}, paint);
         canvas->save();
-            compare_pixel("gradient P3 red",
+            compare_pixel("PM P3 gradient, P3 red",
                           canvas, 10,10,
                           {1,0,0,1}, p3.get());
 
             canvas->translate(180, 0);
 
-            compare_pixel("gradient P3 green",
+            compare_pixel("PM P3 gradient, P3 green",
+                          canvas, 69,69,
+                          {0,1,0,1}, p3.get());
+        canvas->restore();
+    }
+
+    canvas->translate(0,80);
+
+    // Draw a gradient from P3 red to P3 green interpolating in unpremul sRGB, checking the corners.
+    {
+
+        SkPoint points[] = {{10.5,10.5}, {69.5,69.5}};
+        SkColor4f colors[] = {p3_to_srgb({1,0,0,1}), p3_to_srgb({0,1,0,1})};
+
+        SkPaint paint;
+        paint.setShader(SkGradientShader::MakeLinear(points, colors, srgb,
+                                                     nullptr, SK_ARRAY_COUNT(colors),
+                                                     SkShader::kClamp_TileMode));
+        canvas->drawRect({10,10,70,70}, paint);
+        canvas->save();
+            compare_pixel("UPM sRGB gradient, P3 red",
+                          canvas, 10,10,
+                          {1,0,0,1}, p3.get());
+
+            canvas->translate(180, 0);
+
+            compare_pixel("UPM sRGB gradient, P3 green",
+                          canvas, 69,69,
+                          {0,1,0,1}, p3.get());
+        canvas->restore();
+    }
+
+    canvas->translate(0,80);
+
+    // Draw a gradient from P3 red to P3 green interpolating in premul sRGB, checking the corners.
+    {
+
+        SkPoint points[] = {{10.5,10.5}, {69.5,69.5}};
+        SkColor4f colors[] = {p3_to_srgb({1,0,0,1}), p3_to_srgb({0,1,0,1})};
+
+        SkPaint paint;
+        paint.setShader(
+                SkGradientShader::MakeLinear(points, colors, srgb,
+                                             nullptr, SK_ARRAY_COUNT(colors),
+                                             SkShader::kClamp_TileMode,
+                                             SkGradientShader::kInterpolateColorsInPremul_Flag,
+                                             nullptr/*local matrix*/));
+        canvas->drawRect({10,10,70,70}, paint);
+        canvas->save();
+            compare_pixel("PM P3 gradient, P3 red",
+                          canvas, 10,10,
+                          {1,0,0,1}, p3.get());
+
+            canvas->translate(180, 0);
+
+            compare_pixel("PM P3 gradient, P3 green",
                           canvas, 69,69,
                           {0,1,0,1}, p3.get());
         canvas->restore();

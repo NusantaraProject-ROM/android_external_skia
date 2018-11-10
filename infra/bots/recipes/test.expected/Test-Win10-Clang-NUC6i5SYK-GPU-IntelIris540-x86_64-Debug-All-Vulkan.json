@@ -315,6 +315,10 @@
       "rle4-height-negative.bmp",
       "_",
       "image",
+      "gen_platf",
+      "error",
+      "_",
+      "image",
       "_",
       "interlaced1.png",
       "_",
@@ -570,6 +574,7 @@
       "_",
       "varied_text_ignorable_clip_lcd",
       "--nonativeFonts",
+      "--reduceOpListSplitting",
       "--verbose"
     ],
     "env": {

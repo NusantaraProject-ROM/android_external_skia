@@ -333,8 +333,7 @@ func internalHardwareLabel(parts map[string]string) *int {
 	return nil
 }
 
-// linuxGceDimensions are the Swarming dimensions for Linux GCE
-// instances.
+// linuxGceDimensions are the Swarming dimensions for Linux GCE instances.
 func linuxGceDimensions(machineType string) []string {
 	return []string{
 		// Specify CPU to avoid running builds on bots with a more unique CPU.
@@ -345,6 +344,13 @@ func linuxGceDimensions(machineType string) []string {
 		fmt.Sprintf("os:%s", DEFAULT_OS_LINUX_GCE),
 		fmt.Sprintf("pool:%s", CONFIG.Pool),
 	}
+}
+
+func wasmGceDimensions() []string {
+	// There's limited parallelism for WASM builds, so we can get away with the medium
+	// instance instead of the beefy large instance.
+	// Docker being intsalled is the most important part.
+	return append(linuxGceDimensions(MACHINE_TYPE_MEDIUM), "docker_installed:true")
 }
 
 // deriveCompileTaskName returns the name of a compile task based on the given
@@ -396,7 +402,12 @@ func deriveCompileTaskName(jobName string, parts map[string]string) string {
 			ec = []string{"PathKit"}
 		}
 		if strings.Contains(jobName, "CanvasKit") {
-			ec = []string{"CanvasKit"}
+			if parts["cpu_or_gpu"] == "CPU" {
+				ec = []string{"CanvasKit_CPU"}
+			} else {
+				ec = []string{"CanvasKit"}
+			}
+
 		}
 		if len(ec) > 0 {
 			jobNameMap["extra_config"] = strings.Join(ec, "_")
@@ -539,7 +550,11 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 				d["machine_type"] = MACHINE_TYPE_MEDIUM
 			}
 		} else {
-			if strings.Contains(parts["os"], "Win") {
+			if strings.Contains(parts["extra_config"], "CanvasKit") {
+				// GPU is defined for the WebGL version of CanvasKit, but
+				// it can still run on a GCE instance.
+				return wasmGceDimensions()
+			} else if strings.Contains(parts["os"], "Win") {
 				gpu, ok := map[string]string{
 					"GT610":         "10de:104a-23.21.13.9101",
 					"GTX660":        "10de:11c0-24.21.13.9882",
@@ -606,11 +621,10 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 		d["gpu"] = "none"
 		if d["os"] == DEFAULT_OS_DEBIAN {
 			if strings.Contains(parts["extra_config"], "PathKit") || strings.Contains(parts["extra_config"], "CanvasKit") {
-				// The build isn't really parallelized for pathkit, so
-				// the bulky machines don't buy us much. All we really need is
-				// docker, which was manually installed on the MEDIUM and LARGE
-				// Debian machines and should be on any newly-created Debian
-				// machines (after Aug 2018).
+				return wasmGceDimensions()
+			}
+			if parts["role"] == "BuildStats" {
+				// Doesn't require a lot of resources
 				return linuxGceDimensions(MACHINE_TYPE_MEDIUM)
 			}
 			// Use many-core machines for Build tasks.
@@ -812,7 +826,7 @@ func compile(b *specs.TasksCfgBuilder, name string, parts map[string]string) str
 		if strings.Contains(name, "Clang") {
 			task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("clang_linux"))
 		}
-		if strings.Contains(name, "Vulkan") {
+		if strings.Contains(name, "Vulkan") || parts["extra_config"] == "Mini" {
 			task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("linux_vulkan_sdk"))
 		}
 		if parts["target_arch"] == "mips64el" || parts["target_arch"] == "loongson3a" {
@@ -974,16 +988,19 @@ func buildstats(b *specs.TasksCfgBuilder, name string, parts map[string]string, 
 	task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("bloaty"))
 	b.MustAddTask(name, task)
 
-	// Always upload the results (just don't run the task otherwise.)
-	uploadName := fmt.Sprintf("%s%s%s", PREFIX_UPLOAD, jobNameSchema.Sep, name)
-	extraProps := map[string]string{
-		"gs_bucket": CONFIG.GsBucketNano,
+	// Upload release results (for tracking in perf)
+	// We have some jobs that are FYI (e.g. Debug-CanvasKit)
+	if strings.Contains(name, "Release") {
+		uploadName := fmt.Sprintf("%s%s%s", PREFIX_UPLOAD, jobNameSchema.Sep, name)
+		extraProps := map[string]string{
+			"gs_bucket": CONFIG.GsBucketNano,
+		}
+		uploadTask := kitchenTask(name, "upload_buildstats_results", "swarm_recipe.isolate", SERVICE_ACCOUNT_UPLOAD_NANO, linuxGceDimensions(MACHINE_TYPE_SMALL), extraProps, OUTPUT_NONE)
+		uploadTask.CipdPackages = append(uploadTask.CipdPackages, CIPD_PKGS_GSUTIL...)
+		uploadTask.Dependencies = append(uploadTask.Dependencies, name)
+		b.MustAddTask(uploadName, uploadTask)
+		return uploadName
 	}
-	uploadTask := kitchenTask(name, "upload_buildstats_results", "swarm_recipe.isolate", SERVICE_ACCOUNT_UPLOAD_NANO, linuxGceDimensions(MACHINE_TYPE_SMALL), extraProps, OUTPUT_NONE)
-	uploadTask.CipdPackages = append(uploadTask.CipdPackages, CIPD_PKGS_GSUTIL...)
-	uploadTask.Dependencies = append(uploadTask.Dependencies, name)
-	b.MustAddTask(uploadName, uploadTask)
-	return uploadName
 
 	return name
 }
@@ -1135,6 +1152,10 @@ func perf(b *specs.TasksCfgBuilder, name string, parts map[string]string, compil
 	if strings.Contains(parts["extra_config"], "Skpbench") {
 		recipe = "skpbench"
 		isolate = relpath("skpbench_skia_bundled.isolate")
+	} else if strings.Contains(name, "PathKit") {
+		recipe = "perf_pathkit"
+	} else if strings.Contains(name, "CanvasKit") {
+		recipe = "perf_canvaskit"
 	}
 	task := kitchenTask(name, recipe, isolate, "", swarmDimensions(parts), nil, OUTPUT_PERF)
 	task.CipdPackages = append(task.CipdPackages, pkgs...)

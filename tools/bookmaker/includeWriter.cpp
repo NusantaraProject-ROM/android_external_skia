@@ -890,46 +890,67 @@ void IncludeWriter::methodOut(Definition* method, const Definition& child) {
         this->indentIn(IndentKind::kMethodOut);
         fIndentNext = false;
     }
-    this->writeCommentHeader();
-    fIndent += 4;
-    this->descriptionOut(method, SkipFirstLine::kNo, Phrase::kNo);
-    // compute indention column
-    size_t column = 0;
-    bool hasParmReturn = false;
-    for (auto methodPart : method->fChildren) {
-        if (MarkType::kParam == methodPart->fMarkType) {
-            column = SkTMax(column, methodPart->fName.length());
-            hasParmReturn = true;
-        } else if (MarkType::kReturn == methodPart->fMarkType) {
-            hasParmReturn = true;
+    if (method->fChildren.end() != std::find_if(method->fChildren.begin(), method->fChildren.end(),
+            [](const Definition* def) { return MarkType::kPopulate == def->fMarkType; } )) {
+        int commentIndex = child.fParentIndex;
+        auto iter = child.fParent->fTokens.begin();
+        std::advance(iter, commentIndex);
+        SkDEBUGCODE(bool sawMethod = false);
+        while (--commentIndex >= 0) {
+            std::advance(iter, -1);
+            if (Bracket::kSlashStar == iter->fBracket) {
+                SkASSERT(sawMethod);
+                break;
+            }
+            SkASSERT(!sawMethod);
+            SkDEBUGCODE(sawMethod = MarkType::kMethod == iter->fMarkType);
         }
-    }
-    if (hasParmReturn) {
         this->lf(2);
-        column += fIndent + sizeof("@return ");
-        int saveIndent = fIndent;
+        this->writeString("/");
+        this->writeBlock(iter->length(), iter->fContentStart);
+        this->lfcr();
+    } else {
+        this->writeCommentHeader();
+        fIndent += 4;
+        this->descriptionOut(method, SkipFirstLine::kNo, Phrase::kNo);
+        // compute indention column
+        size_t column = 0;
+        bool hasParmReturn = false;
         for (auto methodPart : method->fChildren) {
             if (MarkType::kParam == methodPart->fMarkType) {
-                this->writeString("@param");
-                this->writeSpace();
-                this->writeString(methodPart->fName.c_str());
+                column = SkTMax(column, methodPart->fName.length());
+                hasParmReturn = true;
             } else if (MarkType::kReturn == methodPart->fMarkType) {
-                this->writeString("@return");
-            } else {
-                continue;
+                hasParmReturn = true;
             }
-            this->indentToColumn(column);
-            fIndent = column;
-            this->descriptionOut(methodPart, SkipFirstLine::kNo, Phrase::kYes);
-            fIndent = saveIndent;
+        }
+        if (hasParmReturn) {
+            this->lf(2);
+            column += fIndent + sizeof("@return ");
+            int saveIndent = fIndent;
+            for (auto methodPart : method->fChildren) {
+                if (MarkType::kParam == methodPart->fMarkType) {
+                    this->writeString("@param");
+                    this->writeSpace();
+                    this->writeString(methodPart->fName.c_str());
+                } else if (MarkType::kReturn == methodPart->fMarkType) {
+                    this->writeString("@return");
+                } else {
+                    continue;
+                }
+                this->indentToColumn(column);
+                fIndent = column;
+                this->descriptionOut(methodPart, SkipFirstLine::kNo, Phrase::kYes);
+                fIndent = saveIndent;
+                this->lfcr();
+            }
+        } else {
             this->lfcr();
         }
-    } else {
+        fIndent -= 4;
         this->lfcr();
+        this->writeCommentTrailer(OneLine::kNo);
     }
-    fIndent -= 4;
-    this->lfcr();
-    this->writeCommentTrailer(OneLine::kNo);
     fBmhMethod = nullptr;
     fMethodDef = nullptr;
     fEnumDef = nullptr;
@@ -1196,6 +1217,10 @@ void IncludeWriter::structSizeMembers(const Definition& child) {
                 }
                 break;
             }
+            if (Bracket::kAngle == token.fBracket) {
+                // in template param
+                continue;
+            }
             SkASSERT(0); // incomplete
         }
         if (Definition::Type::kKeyWord == token.fType) {
@@ -1212,6 +1237,7 @@ void IncludeWriter::structSizeMembers(const Definition& child) {
                 case KeyWord::kUint32_t:
                 case KeyWord::kUint64_t:
                 case KeyWord::kUintPtr_t:
+                case KeyWord::kUnsigned:
                 case KeyWord::kSize_t:
                 case KeyWord::kFloat:
                 case KeyWord::kBool:
@@ -1531,7 +1557,6 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
                 continue;
             }
             const char* bodyEnd = fDeferComment ? fDeferComment->fContentStart - 1 :
-                    fAttrDeprecated ? fAttrDeprecated->fContentStart - 1 :
                     child.fContentStart;
             if (Definition::Type::kBracket == def->fType && Bracket::kDebugCode == def->fBracket) {
                 auto tokenIter = def->fParent->fTokens.begin();
@@ -1576,11 +1601,6 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
             }
             this->methodOut(method, child);
             sawConst = false;
-            if (fAttrDeprecated) {
-                startDef = fAttrDeprecated;
-                this->setStartBack(fAttrDeprecated->fContentStart, fAttrDeprecated);
-                fAttrDeprecated = nullptr;
-            }
             continue;
         }
         if (Definition::Type::kKeyWord == child.fType) {
@@ -1886,9 +1906,6 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
                 }
                 continue;
             }
-            if (fAttrDeprecated) {
-                continue;
-            }
             if (KeyWord::kDefine == child.fKeyWord && this->defineOut(child)) {
                 fDeferComment = nullptr;
                 continue;
@@ -1974,10 +1991,6 @@ bool IncludeWriter::populate(Definition* def, ParentPair* prevPair, RootDefiniti
             if (child.fMemberStart) {
                 memberStart = &child;
                 staticOnly = false;
-            }
-            if (kAttrDeprecatedLen == (size_t) (child.fContentEnd - child.fContentStart) &&
-                    !strncmp(gAttrDeprecated, child.fStart, kAttrDeprecatedLen)) {
-                fAttrDeprecated = &child;
             }
             continue;
         }

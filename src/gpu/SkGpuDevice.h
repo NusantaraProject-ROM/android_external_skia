@@ -105,6 +105,10 @@ public:
                           const SkRect& dst, const SkPaint&) override;
     void drawBitmapLattice(const SkBitmap&, const SkCanvas::Lattice&,
                            const SkRect& dst, const SkPaint&) override;
+    void drawImageSet(const SkCanvas::ImageSetEntry[], int count, float alpha, SkFilterQuality,
+                      SkBlendMode) override;
+
+    void drawDrawable(SkDrawable*, const SkMatrix*, SkCanvas* canvas) override;
 
     void drawSpecial(SkSpecialImage*, int left, int top, const SkPaint& paint,
                      SkImage*, const SkMatrix&) override;
@@ -129,7 +133,6 @@ private:
     sk_sp<GrRenderTargetContext> fRenderTargetContext;
 
     SkISize                      fSize;
-    bool                         fOpaque;
 
     enum Flags {
         kNeedClear_Flag = 1 << 0,  //!< Surface requires an initial clear

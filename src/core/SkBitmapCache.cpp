@@ -7,6 +7,7 @@
 
 #include "SkAtomics.h"
 #include "SkBitmapCache.h"
+#include "SkBitmapProvider.h"
 #include "SkImage.h"
 #include "SkResourceCache.h"
 #include "SkMipMap.h"
@@ -36,13 +37,6 @@ SkBitmapCacheDesc SkBitmapCacheDesc::Make(uint32_t imageID, SkColorType colorTyp
              colorSpace ? colorSpace->toXYZD50Hash() : 0,
              colorSpace ? colorSpace->transferFnHash() : 0,
              subset };
-}
-
-SkBitmapCacheDesc SkBitmapCacheDesc::Make(const SkBitmap& bm) {
-    SkASSERT(bm.pixelRef());
-    SkIPoint origin = bm.pixelRefOrigin();
-    SkIRect bounds = SkIRect::MakeXYWH(origin.fX, origin.fY, bm.width(), bm.height());
-    return Make(bm.getGenerationID(), bm.colorType(), bm.colorSpace(), bounds);
 }
 
 SkBitmapCacheDesc SkBitmapCacheDesc::Make(const SkImage* image) {
@@ -342,12 +336,18 @@ static SkResourceCache::DiscardableFactory get_fact(SkResourceCache* localCache)
                       : SkResourceCache::GetDiscardableFactory();
 }
 
-const SkMipMap* SkMipMapCache::AddAndRef(const SkBitmap& src, SkResourceCache* localCache) {
+const SkMipMap* SkMipMapCache::AddAndRef(const SkBitmapProvider& provider,
+                                         SkResourceCache* localCache) {
+    SkBitmap src;
+    if (!provider.asBitmap(&src)) {
+        return nullptr;
+    }
+
     SkMipMap* mipmap = SkMipMap::Build(src, get_fact(localCache));
     if (mipmap) {
-        MipMapRec* rec = new MipMapRec(SkBitmapCacheDesc::Make(src), mipmap);
+        MipMapRec* rec = new MipMapRec(provider.makeCacheDesc(), mipmap);
         CHECK_LOCAL(localCache, add, Add, rec);
-        src.pixelRef()->notifyAddedToCache();
+        provider.notifyAddedToCache();
     }
     return mipmap;
 }

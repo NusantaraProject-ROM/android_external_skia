@@ -15,6 +15,7 @@
 #include "SkYUVAIndex.h"
 
 class GrTexture;
+struct SkYUVSizeInfo;
 
 // Wraps the 3 or 4 planes of a YUVA image for consumption by the GPU.
 // Initially any direct rendering will be done by passing the individual planes to a shader.
@@ -22,8 +23,8 @@ class GrTexture;
 // proxy will be stored and used for any future rendering.
 class SkImage_GpuYUVA : public SkImage_GpuBase {
 public:
-    SkImage_GpuYUVA(sk_sp<GrContext>, uint32_t uniqueID, SkYUVColorSpace,
-                    sk_sp<GrTextureProxy> proxies[], const SkYUVAIndex yuvaIndices[4], SkISize size,
+    SkImage_GpuYUVA(sk_sp<GrContext>, int width, int height, uint32_t uniqueID, SkYUVColorSpace,
+                    sk_sp<GrTextureProxy> proxies[], const SkYUVAIndex yuvaIndices[4],
                     GrSurfaceOrigin, sk_sp<SkColorSpace>, SkBudgeted);
     ~SkImage_GpuYUVA() override;
 
@@ -31,6 +32,8 @@ public:
 
     GrTextureProxy* peekProxy() const override { return this->asTextureProxyRef().get(); }
     sk_sp<GrTextureProxy> asTextureProxyRef() const override;
+
+    virtual bool onIsTextureBacked() const override { return SkToBool(fProxies[0].get()); }
 
     /**
         Create a new SkImage_GpuYUVA that's very similar to SkImage created by MakeFromYUVATextures.
@@ -60,8 +63,10 @@ public:
         @param context             Gpu context
         @param yuvColorSpace       color range of expected YUV pixels
         @param yuvaFormats         formats of promised gpu textures for each YUVA plane
+        @param yuvaSizeInfo        width, height, and colortype of promised gpu textures
         @param yuvaIndices         mapping from yuv plane index to texture representing that plane
-        @param imageSize           width and height of promised gpu texture
+        @param width               width of promised gpu texture
+        @param height              height of promised gpu texture
         @param imageOrigin         one of: kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin
         @param imageColorSpace     range of colors; may be nullptr
         @param textureFulfillProc  function called to get actual gpu texture
@@ -73,8 +78,10 @@ public:
     static sk_sp<SkImage> MakePromiseYUVATexture(GrContext* context,
                                                  SkYUVColorSpace yuvColorSpace,
                                                  const GrBackendFormat yuvaFormats[],
+                                                 const SkYUVSizeInfo& yuvaSizeInfo,
                                                  const SkYUVAIndex yuvaIndices[4],
-                                                 SkISize imageSize,
+                                                 int width,
+                                                 int height,
                                                  GrSurfaceOrigin imageOrigin,
                                                  sk_sp<SkColorSpace> imageColorSpace,
                                                  TextureFulfillProc textureFulfillProc,
@@ -85,8 +92,9 @@ public:
     static sk_sp<SkImage> MakeFromYUVATextures(GrContext* context,
                                                SkYUVColorSpace yuvColorSpace,
                                                const GrBackendTexture yuvaTextures[],
-                                               SkYUVAIndex yuvaIndices[4],
-                                               SkISize imageSize,
+                                               const SkYUVAIndex yuvaIndices[4],
+                                               int width,
+                                               int height,
                                                GrSurfaceOrigin imageOrigin,
                                                sk_sp<SkColorSpace> imageColorSpace);
 
@@ -98,7 +106,7 @@ private:
     // This is only allocated when the image needs to be flattened rather than
     // using the separate YUVA planes. From thence forth we will only use the
     // the RGBProxy.
-    sk_sp<GrTextureProxy>            fRGBProxy;
+    mutable sk_sp<GrTextureProxy>    fRGBProxy;
     const SkYUVColorSpace            fYUVColorSpace;
     GrSurfaceOrigin                  fOrigin;
 
