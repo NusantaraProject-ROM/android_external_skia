@@ -25,6 +25,7 @@ public:
 
     void visitProxies(const VisitProxyFunc& func, VisitorType) const override { func(fSrc.get()); }
 
+#ifdef SK_DEBUG
     SkString dumpInfo() const override {
         SkString string;
         string.append(INHERITED::dumpInfo());
@@ -35,6 +36,7 @@ public:
                       fDstPoint.fX, fDstPoint.fY);
         return string;
     }
+#endif
 
 private:
     friend class GrOpMemoryPool; // for ctor
@@ -53,7 +55,7 @@ private:
 
     void onPrepare(GrOpFlushState*) override {}
 
-    void onExecute(GrOpFlushState* state) override;
+    void onExecute(GrOpFlushState*, const SkRect& chainBounds) override;
 
     GrPendingIOResource<GrSurfaceProxy, kRead_GrIOType>  fSrc;
     SkIRect                                              fSrcRect;

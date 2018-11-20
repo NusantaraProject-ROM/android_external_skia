@@ -11,12 +11,14 @@
 #include "SkColorPriv.h"
 #include "SkImageGenerator.h"
 #include "SkPath.h"
+#include "SkTextUtils.h"
 #include "SkYUVAIndex.h"
 
 #if SK_SUPPORT_GPU
 #include "GrBackendSurface.h"
 #include "GrContextPriv.h"
 #include "GrGpu.h"
+#include "SkImage_GpuYUVA.h"
 #endif
 
 static const int kTileWidthHeight = 128;
@@ -502,13 +504,13 @@ public:
     YUVGenerator(const SkImageInfo& ii,
                  SkYUVColorSpace yuvColorSpace,
                  SkYUVAIndex yuvaIndices[SkYUVAIndex::kIndexCount],
-                 SkBitmap bitmaps[SkYUVSizeInfo::kMaxCount])
+                 SkBitmap bitmaps[SkYUVASizeInfo::kMaxCount])
             : SkImageGenerator(ii)
             , fYUVColorSpace(yuvColorSpace) {
         memcpy(fYUVAIndices, yuvaIndices, sizeof(fYUVAIndices));
 
         SkAssertResult(SkYUVAIndex::AreValidIndices(fYUVAIndices, &fNumBitmaps));
-        SkASSERT(fNumBitmaps > 0 && fNumBitmaps <= SkYUVSizeInfo::kMaxCount);
+        SkASSERT(fNumBitmaps > 0 && fNumBitmaps <= SkYUVASizeInfo::kMaxCount);
 
         for (int i = 0; i < fNumBitmaps; ++i) {
             fYUVBitmaps[i] = bitmaps[i];
@@ -567,7 +569,7 @@ protected:
         return fFlattened.readPixels(info, pixels, rowBytes, 0, 0);
     }
 
-    bool onQueryYUVA8(SkYUVSizeInfo* size,
+    bool onQueryYUVA8(SkYUVASizeInfo* size,
                       SkYUVAIndex yuvaIndices[SkYUVAIndex::kIndexCount],
                       SkYUVColorSpace* yuvColorSpace) const override {
 
@@ -576,13 +578,11 @@ protected:
 
         int i = 0;
         for ( ; i < fNumBitmaps; ++i) {
-            size->fColorTypes[i] = fYUVBitmaps[i].colorType();
             size->fSizes[i].fWidth = fYUVBitmaps[i].width();
             size->fSizes[i].fHeight = fYUVBitmaps[i].height();
             size->fWidthBytes[i] = fYUVBitmaps[i].rowBytes();
         }
-        for ( ; i < SkYUVSizeInfo::kMaxCount; ++i) {
-            size->fColorTypes[i] = kUnknown_SkColorType;
+        for ( ; i < SkYUVASizeInfo::kMaxCount; ++i) {
             size->fSizes[i].fWidth = 0;
             size->fSizes[i].fHeight = 0;
             size->fWidthBytes[i] = 0;
@@ -591,8 +591,8 @@ protected:
         return true;
     }
 
-    bool onGetYUVA8Planes(const SkYUVSizeInfo&, const SkYUVAIndex[SkYUVAIndex::kIndexCount],
-                          void* planes[SkYUVSizeInfo::kMaxCount]) override {
+    bool onGetYUVA8Planes(const SkYUVASizeInfo&, const SkYUVAIndex[SkYUVAIndex::kIndexCount],
+                          void* planes[SkYUVASizeInfo::kMaxCount]) override {
         for (int i = 0; i < fNumBitmaps; ++i) {
             planes[i] = fYUVBitmaps[i].getPixels();
         }
@@ -603,7 +603,7 @@ private:
     SkYUVColorSpace fYUVColorSpace;
     SkYUVAIndex     fYUVAIndices[SkYUVAIndex::kIndexCount];
     int             fNumBitmaps;
-    SkBitmap        fYUVBitmaps[SkYUVSizeInfo::kMaxCount];
+    SkBitmap        fYUVBitmaps[SkYUVASizeInfo::kMaxCount];
     SkBitmap        fFlattened;
 
 };
@@ -623,7 +623,6 @@ static void draw_col_label(SkCanvas* canvas, int x, int yuvColorSpace, bool opaq
     GR_STATIC_ASSERT(SK_ARRAY_COUNT(kYUVColorSpaceNames) == kLastEnum_SkYUVColorSpace+1);
 
     SkPaint textPaint;
-    textPaint.setTextAlign(SkPaint::kCenter_Align);
     sk_tool_utils::set_portable_typeface(&textPaint, nullptr, SkFontStyle::Bold());
     textPaint.setTextSize(16);
 
@@ -634,13 +633,14 @@ static void draw_col_label(SkCanvas* canvas, int x, int yuvColorSpace, bool opaq
     textPaint.measureText(colLabel.c_str(), colLabel.size(), &textRect);
     int y = textRect.height();
 
-    canvas->drawText(colLabel.c_str(), colLabel.size(), x, y, textPaint);
+    SkTextUtils::DrawString(canvas, colLabel, x, y, textPaint, SkTextUtils::kCenter_Align);
 
     colLabel.printf("%s", opaque ? "Opaque" : "Transparent");
+
     textPaint.measureText(colLabel.c_str(), colLabel.size(), &textRect);
     y += textRect.height();
 
-    canvas->drawText(colLabel.c_str(), colLabel.size(), x, y, textPaint);
+    SkTextUtils::DrawString(canvas, colLabel, x, y, textPaint, SkTextUtils::kCenter_Align);
 }
 
 static void draw_row_label(SkCanvas* canvas, int y, int yuvFormat) {
@@ -648,7 +648,6 @@ static void draw_row_label(SkCanvas* canvas, int y, int yuvFormat) {
     GR_STATIC_ASSERT(SK_ARRAY_COUNT(kYUVFormatNames) == kLast_YUVFormat+1);
 
     SkPaint textPaint;
-    textPaint.setTextAlign(SkPaint::kLeft_Align);
     sk_tool_utils::set_portable_typeface(&textPaint, nullptr, SkFontStyle::Bold());
     textPaint.setTextSize(16);
 
@@ -714,6 +713,7 @@ protected:
     }
 
     void createImages(GrContext* context) {
+        int counter = 0;
         for (bool opaque : { false, true }) {
             for (int cs = kJPEG_SkYUVColorSpace; cs <= kLastEnum_SkYUVColorSpace; ++cs) {
                 PlaneData planes;
@@ -724,7 +724,6 @@ protected:
                     SkYUVAIndex yuvaIndices[4];
                     create_YUV(planes, (YUVFormat) format, resultBMs, yuvaIndices, opaque);
 
-#if SK_SUPPORT_GPU
                     if (context) {
                         if (context->abandoned()) {
                             return;
@@ -760,16 +759,24 @@ protected:
                                 resultBMs[i].rowBytes());
                         }
 
-                        fImages[opaque][cs][format] = SkImage::MakeFromYUVATexturesCopy(
-                            context,
-                            (SkYUVColorSpace) cs,
-                            yuvaTextures,
-                            yuvaIndices,
-                            { fOriginalBMs[opaque].width(), fOriginalBMs[opaque].height() },
-                            kTopLeft_GrSurfaceOrigin);
-                    } else
-#endif
-                    {
+                        if (counter & 0x1) {
+                            fImages[opaque][cs][format] = SkImage::MakeFromYUVATexturesCopy(
+                                context,
+                                (SkYUVColorSpace)cs,
+                                yuvaTextures,
+                                yuvaIndices,
+                                { fOriginalBMs[opaque].width(), fOriginalBMs[opaque].height() },
+                                kTopLeft_GrSurfaceOrigin);
+                        } else {
+                            fImages[opaque][cs][format] = SkImage::MakeFromYUVATextures(
+                                context,
+                                (SkYUVColorSpace)cs,
+                                yuvaTextures,
+                                yuvaIndices,
+                                { fOriginalBMs[opaque].width(), fOriginalBMs[opaque].height() },
+                                kTopLeft_GrSurfaceOrigin);
+                        }
+                    } else {
                         fImages[opaque][cs][format] = make_yuv_gen_image(
                                                                 fOriginalBMs[opaque].info(),
                                                                 (SkYUVColorSpace) cs,
@@ -778,6 +785,7 @@ protected:
                     }
                 }
             }
+            ++counter;
         }
     }
 

@@ -46,7 +46,7 @@ public:
 
     RequiresDstTexture finalize(const GrCaps& caps, const GrAppliedClip* clip) override {
         static constexpr GrProcessorAnalysisColor kUnknownColor;
-        GrColor overrideColor;
+        SkPMColor4f overrideColor;
         fProcessors.finalize(kUnknownColor, GrProcessorAnalysisCoverage::kNone, clip, false, caps,
                              &overrideColor);
         return RequiresDstTexture::kNo;
@@ -576,8 +576,7 @@ DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(ProcessorOptimizationValidationTest, repor
                             }
                         }
                     }
-                    if (GrColorIsOpaque(input) && fp->preservesOpaqueInput() &&
-                        !GrColorIsOpaque(output)) {
+                    if (input4f.isOpaque() && fp->preservesOpaqueInput() && !output4f.isOpaque()) {
                         passing = false;
 
                         if (opaqueMessage.isEmpty()) {

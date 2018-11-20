@@ -23,7 +23,6 @@
 #include "text/GrTextTarget.h"
 
 class GrBackendSemaphore;
-class GrCCPRAtlas;
 class GrClip;
 class GrColorSpaceXform;
 class GrCoverageCountingPathRenderer;
@@ -80,7 +79,7 @@ public:
      * @param CanClearFullscreen allows partial clears to be converted to fullscreen clears on
      *                           tiling platforms where that is an optimization.
      */
-    void clear(const SkIRect* rect, GrColor color, CanClearFullscreen);
+    void clear(const SkIRect* rect, const SkPMColor4f& color, CanClearFullscreen);
 
     /**
      *  Draw everywhere (respecting the clip) with the paint.
@@ -442,7 +441,7 @@ private:
                              std::unique_ptr<GrFragmentProcessor>,
                              sk_sp<GrTextureProxy>);
 
-    void internalClear(const GrFixedClip&, const GrColor, CanClearFullscreen);
+    void internalClear(const GrFixedClip&, const SkPMColor4f&, CanClearFullscreen);
 
     // Only consumes the GrPaint if successful.
     bool drawFilledDRRect(const GrClip& clip,
@@ -463,17 +462,21 @@ private:
     void drawShapeUsingPathRenderer(const GrClip&, GrPaint&&, GrAA, const SkMatrix&,
                                     const GrShape&);
 
-    // These perform processing specific to Gr[Mesh]DrawOp-derived ops before recording them into
-    // the op list. They return the id of the opList to which the op was added, or 0, if it was
-    // dropped (e.g., due to clipping or being combined).
-    uint32_t addDrawOp(const GrClip&, std::unique_ptr<GrDrawOp>);
+    // Allows caller of addDrawOp to know which op list an op will be added to.
+    using WillAddOpFn = void(GrOp*, uint32_t opListID);
+    // These perform processing specific to GrDrawOp-derived ops before recording them into an
+    // op list. Before adding the op to an op list the WillAddOpFn is called. Note that it
+    // will not be called in the event that the op is discarded. Moreover, the op may merge into
+    // another op after the function is called (either before addDrawOp returns or some time later).
+    void addDrawOp(const GrClip&, std::unique_ptr<GrDrawOp>,
+                   const std::function<WillAddOpFn>& = std::function<WillAddOpFn>());
 
     // Makes a copy of the proxy if it is necessary for the draw and places the texture that should
     // be used by GrXferProcessor to access the destination color in 'result'. If the return
     // value is false then a texture copy could not be made.
     bool SK_WARN_UNUSED_RESULT setupDstProxy(GrRenderTargetProxy*,
                                              const GrClip&,
-                                             const SkRect& opBounds,
+                                             const GrOp& op,
                                              GrXferProcessor::DstProxy* result);
 
     GrRenderTargetOpList* getRTOpList();

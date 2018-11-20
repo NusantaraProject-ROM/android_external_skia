@@ -68,7 +68,7 @@ public:
             func(fProxy.get());
         }
 
-        void onExecute(GrOpFlushState*) override {
+        void onExecute(GrOpFlushState*, const SkRect& chainBounds) override {
             REPORTER_ASSERT(fTest->fReporter, fTest->fHasOpTexture);
             REPORTER_ASSERT(fTest->fReporter, fTest->fHasClipTexture);
         }
@@ -324,7 +324,7 @@ private:
         return RequiresDstTexture::kNo;
     }
     void onPrepare(GrOpFlushState*) override {}
-    void onExecute(GrOpFlushState* state) override {
+    void onExecute(GrOpFlushState* state, const SkRect& chainBounds) override {
         *fTestExecuteValue = 2;
     }
 
@@ -347,7 +347,8 @@ DEF_GPUTEST(LazyProxyFailedInstantiationTest, reporter, /* options */) {
                                                      kRGBA_8888_GrPixelConfig, nullptr);
         REPORTER_ASSERT(reporter, rtc);
 
-        rtc->clear(nullptr, 0xbaaaaaad, GrRenderTargetContext::CanClearFullscreen::kYes);
+        rtc->clear(nullptr, SkPMColor4f::FromBytes_RGBA(0xbaaaaaad),
+                   GrRenderTargetContext::CanClearFullscreen::kYes);
 
         int executeTestValue = 0;
         rtc->priv().testingOnly_addDrawOp(LazyFailedInstantiationTestOp::Make(
@@ -397,7 +398,7 @@ private:
         return RequiresDstTexture::kNo;
     }
     void onPrepare(GrOpFlushState*) override {}
-    void onExecute(GrOpFlushState* state) override {}
+    void onExecute(GrOpFlushState* state, const SkRect& chainBounds) override {}
 
     sk_sp<GrSurfaceProxy> fLazyProxy;
 
@@ -423,7 +424,8 @@ DEF_GPUTEST(LazyProxyUninstantiateTest, reporter, /* options */) {
                 kRGBA_8888_GrPixelConfig, nullptr);
         REPORTER_ASSERT(reporter, rtc);
 
-        rtc->clear(nullptr, 0xbaaaaaad, GrRenderTargetContext::CanClearFullscreen::kYes);
+        rtc->clear(nullptr, SkPMColor4f::FromBytes_RGBA(0xbaaaaaad),
+                   GrRenderTargetContext::CanClearFullscreen::kYes);
 
         int instantiateTestValue = 0;
         int releaseTestValue = 0;

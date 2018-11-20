@@ -8,7 +8,7 @@
 #ifndef GrTextBlobCache_DEFINED
 #define GrTextBlobCache_DEFINED
 
-#include "GrTextContext.h"
+#include "GrTextBlob.h"
 #include "SkMessageBus.h"
 #include "SkRefCnt.h"
 #include "SkTArray.h"
@@ -124,6 +124,8 @@ public:
     static void PostPurgeBlobMessage(uint32_t blobID, uint32_t cacheID);
 
     void purgeStaleBlobs();
+
+    size_t usedBytes() const { return fCurrentSize; }
 
 private:
     using BitmapBlobList = SkTInternalLList<GrTextBlob>;

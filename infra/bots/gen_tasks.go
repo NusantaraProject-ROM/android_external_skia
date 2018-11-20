@@ -446,8 +446,9 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 			"Mac":        DEFAULT_OS_MAC,
 			"Ubuntu14":   DEFAULT_OS_UBUNTU,
 			"Ubuntu17":   "Ubuntu-17.04",
+			"Ubuntu18":   "Ubuntu-18.04",
 			"Win":        DEFAULT_OS_WIN,
-			"Win10":      "Windows-10-17134.228",
+			"Win10":      "Windows-10-17134.345",
 			"Win2k8":     "Windows-2008ServerR2-SP1",
 			"Win2016":    DEFAULT_OS_WIN,
 			"Win7":       "Windows-7-SP1",
@@ -557,14 +558,14 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 			} else if strings.Contains(parts["os"], "Win") {
 				gpu, ok := map[string]string{
 					"GT610":         "10de:104a-23.21.13.9101",
-					"GTX660":        "10de:11c0-24.21.13.9882",
-					"GTX960":        "10de:1401-24.21.13.9882",
+					"GTX660":        "10de:11c0-25.21.14.1634",
+					"GTX960":        "10de:1401-25.21.14.1634",
 					"IntelHD4400":   "8086:0a16-20.19.15.4963",
-					"IntelIris540":  "8086:1926-24.20.100.6229",
+					"IntelIris540":  "8086:1926-25.20.100.6326",
 					"IntelIris6100": "8086:162b-20.19.15.4963",
 					"RadeonHD7770":  "1002:683d-24.20.13001.1010",
 					"RadeonR9M470X": "1002:6646-24.20.13001.1010",
-					"QuadroP400":    "10de:1cb3-23.21.13.9103",
+					"QuadroP400":    "10de:1cb3-25.21.14.1678",
 				}[parts["cpu_or_gpu_value"]]
 				if !ok {
 					glog.Fatalf("Entry %q not found in Win GPU mapping.", parts["cpu_or_gpu_value"])
@@ -581,6 +582,10 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 				}[parts["cpu_or_gpu_value"]]
 				if !ok {
 					glog.Fatalf("Entry %q not found in Ubuntu GPU mapping.", parts["cpu_or_gpu_value"])
+				}
+				if parts["os"] == "Ubuntu18" && parts["cpu_or_gpu_value"] == "QuadroP400" {
+					// Ubuntu18 has a slightly newer GPU driver.
+					gpu = "10de:1cb3-390.87"
 				}
 				d["gpu"] = gpu
 			} else if strings.Contains(parts["os"], "Mac") {
@@ -826,7 +831,7 @@ func compile(b *specs.TasksCfgBuilder, name string, parts map[string]string) str
 		if strings.Contains(name, "Clang") {
 			task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("clang_linux"))
 		}
-		if strings.Contains(name, "Vulkan") || parts["extra_config"] == "Mini" {
+		if strings.Contains(name, "Vulkan") {
 			task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("linux_vulkan_sdk"))
 		}
 		if parts["target_arch"] == "mips64el" || parts["target_arch"] == "loongson3a" {
@@ -871,7 +876,7 @@ func compile(b *specs.TasksCfgBuilder, name string, parts map[string]string) str
 		}
 	}
 
-	task.MaxAttempts = 1
+	task.MaxAttempts = 2
 
 	// Add the task.
 	b.MustAddTask(name, task)
@@ -1020,12 +1025,16 @@ func calmbench(b *specs.TasksCfgBuilder, name string, parts map[string]string, c
 	usesGit(task, name)
 	task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("go"))
 	task.Dependencies = append(task.Dependencies, compileTaskName, compileParentName, ISOLATE_SKP_NAME, ISOLATE_SVG_NAME)
-	task.MaxAttempts = 1
+	task.MaxAttempts = 2
 	if parts["cpu_or_gpu_value"] == "QuadroP400" {
 		// Specify "rack" dimension for consistent test results.
 		// See https://bugs.chromium.org/p/chromium/issues/detail?id=784662&desc=2#c34
 		// for more context.
-		task.Dimensions = append(task.Dimensions, "rack:1")
+		if parts["os"] == "Ubuntu18" {
+			task.Dimensions = append(task.Dimensions, "rack:2")
+		} else {
+			task.Dimensions = append(task.Dimensions, "rack:1")
+		}
 	}
 	b.MustAddTask(name, task)
 
@@ -1112,7 +1121,7 @@ func test(b *specs.TasksCfgBuilder, name string, parts map[string]string, compil
 		task.Dependencies = append(task.Dependencies, deps...)
 	}
 	task.Expiration = 20 * time.Hour
-	task.MaxAttempts = 1
+	task.MaxAttempts = 2
 	timeout(task, 4*time.Hour)
 	if strings.Contains(parts["extra_config"], "Valgrind") {
 		timeout(task, 9*time.Hour)
@@ -1161,7 +1170,7 @@ func perf(b *specs.TasksCfgBuilder, name string, parts map[string]string, compil
 	task.CipdPackages = append(task.CipdPackages, pkgs...)
 	task.Dependencies = append(task.Dependencies, compileTaskName)
 	task.Expiration = 20 * time.Hour
-	task.MaxAttempts = 1
+	task.MaxAttempts = 2
 	timeout(task, 4*time.Hour)
 	if deps := getIsolatedCIPDDeps(parts); len(deps) > 0 {
 		task.Dependencies = append(task.Dependencies, deps...)
@@ -1186,7 +1195,11 @@ func perf(b *specs.TasksCfgBuilder, name string, parts map[string]string, compil
 		// Specify "rack" dimension for consistent test results.
 		// See https://bugs.chromium.org/p/chromium/issues/detail?id=784662&desc=2#c34
 		// for more context.
-		task.Dimensions = append(task.Dimensions, "rack:1")
+		if parts["os"] == "Ubuntu18" {
+			task.Dimensions = append(task.Dimensions, "rack:2")
+		} else {
+			task.Dimensions = append(task.Dimensions, "rack:1")
+		}
 	}
 	b.MustAddTask(name, task)
 
