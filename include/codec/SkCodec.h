@@ -20,7 +20,7 @@
 #include "SkSize.h"
 #include "SkStream.h"
 #include "SkTypes.h"
-#include "SkYUVSizeInfo.h"
+#include "SkYUVASizeInfo.h"
 
 #include <vector>
 
@@ -357,7 +357,7 @@ public:
      *  @param colorSpace Output parameter.  If non-NULL this is set to kJPEG,
      *                    otherwise this is ignored.
      */
-    bool queryYUV8(SkYUVSizeInfo* sizeInfo, SkYUVColorSpace* colorSpace) const {
+    bool queryYUV8(SkYUVASizeInfo* sizeInfo, SkYUVColorSpace* colorSpace) const {
         if (nullptr == sizeInfo) {
             return false;
         }
@@ -365,11 +365,9 @@ public:
         bool result = this->onQueryYUV8(sizeInfo, colorSpace);
         if (result) {
             for (int i = 0; i <= 2; ++i) {
-                SkASSERT(kAlpha_8_SkColorType == sizeInfo->fColorTypes[i]);
                 SkASSERT(sizeInfo->fSizes[i].fWidth > 0 && sizeInfo->fSizes[i].fHeight > 0 &&
                          sizeInfo->fWidthBytes[i] > 0);
             }
-            SkASSERT(kUnknown_SkColorType == sizeInfo->fColorTypes[3]);
             SkASSERT(!sizeInfo->fSizes[3].fWidth &&
                      !sizeInfo->fSizes[3].fHeight &&
                      !sizeInfo->fWidthBytes[3]);
@@ -387,11 +385,10 @@ public:
      *                    recommendation (but not smaller).
      *  @param planes     Memory for each of the Y, U, and V planes.
      */
-    Result getYUV8Planes(const SkYUVSizeInfo& sizeInfo, void* planes[SkYUVSizeInfo::kMaxCount]) {
+    Result getYUV8Planes(const SkYUVASizeInfo& sizeInfo, void* planes[SkYUVASizeInfo::kMaxCount]) {
         if (!planes || !planes[0] || !planes[1] || !planes[2]) {
             return kInvalidInput;
         }
-        SkASSERT(kUnknown_SkColorType == sizeInfo.fColorTypes[3]);
         SkASSERT(!planes[3]); // TODO: is this a fair assumption?
 
         if (!this->rewindIfNeeded()) {
@@ -723,12 +720,12 @@ protected:
                                void* pixels, size_t rowBytes, const Options&,
                                int* rowsDecoded) = 0;
 
-    virtual bool onQueryYUV8(SkYUVSizeInfo*, SkYUVColorSpace*) const {
+    virtual bool onQueryYUV8(SkYUVASizeInfo*, SkYUVColorSpace*) const {
         return false;
     }
 
-    virtual Result onGetYUV8Planes(const SkYUVSizeInfo&,
-                                   void*[SkYUVSizeInfo::kMaxCount] /*planes*/) {
+    virtual Result onGetYUV8Planes(const SkYUVASizeInfo&,
+                                   void*[SkYUVASizeInfo::kMaxCount] /*planes*/) {
         return kUnimplemented;
     }
 

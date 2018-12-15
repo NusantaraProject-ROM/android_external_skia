@@ -360,6 +360,10 @@
       "_",
       "image",
       "gen_platf",
+      "incInterlaced.png",
+      "_",
+      "image",
+      "gen_platf",
       "incInterlaced.gif",
       "_",
       "image",
@@ -504,8 +508,7 @@
     "name": "dm"
   },
   {
-    "name": "$result",
-    "recipe_result": null,
-    "status_code": 0
+    "jsonResult": null,
+    "name": "$result"
   }
 ]

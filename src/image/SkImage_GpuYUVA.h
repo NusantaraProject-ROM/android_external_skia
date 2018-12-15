@@ -12,10 +12,9 @@
 #include "GrContext.h"
 #include "SkCachedData.h"
 #include "SkImage_GpuBase.h"
-#include "SkYUVAIndex.h"
 
 class GrTexture;
-struct SkYUVSizeInfo;
+struct SkYUVASizeInfo;
 
 // Wraps the 3 or 4 planes of a YUVA image for consumption by the GPU.
 // Initially any direct rendering will be done by passing the individual planes to a shader.
@@ -23,8 +22,10 @@ struct SkYUVSizeInfo;
 // proxy will be stored and used for any future rendering.
 class SkImage_GpuYUVA : public SkImage_GpuBase {
 public:
+    friend class GrYUVAImageTextureMaker;
+
     SkImage_GpuYUVA(sk_sp<GrContext>, int width, int height, uint32_t uniqueID, SkYUVColorSpace,
-                    sk_sp<GrTextureProxy> proxies[], const SkYUVAIndex yuvaIndices[4],
+                    sk_sp<GrTextureProxy> proxies[], int numProxies, const SkYUVAIndex [4],
                     GrSurfaceOrigin, sk_sp<SkColorSpace>, SkBudgeted);
     ~SkImage_GpuYUVA() override;
 
@@ -34,6 +35,24 @@ public:
     sk_sp<GrTextureProxy> asTextureProxyRef() const override;
 
     virtual bool onIsTextureBacked() const override { return SkToBool(fProxies[0].get()); }
+
+    virtual bool isYUVA() const override { return true; }
+    virtual bool asYUVATextureProxiesRef(sk_sp<GrTextureProxy> proxies[4],
+                                         SkYUVAIndex yuvaIndices[4],
+                                         SkYUVColorSpace* yuvColorSpace) const override {
+        for (int i = 0; i < 4; ++i) {
+            proxies[i] = fProxies[i];
+            yuvaIndices[i] = fYUVAIndices[i];
+        }
+        *yuvColorSpace = fYUVColorSpace;
+        return true;
+    }
+
+    bool setupMipmapsForPlanes() const;
+
+    // Returns a ref-ed texture proxy with miplevels
+    sk_sp<GrTextureProxy> asMippedTextureProxyRef() const;
+
 
     /**
         Create a new SkImage_GpuYUVA that's very similar to SkImage created by MakeFromYUVATextures.
@@ -63,7 +82,7 @@ public:
         @param context             Gpu context
         @param yuvColorSpace       color range of expected YUV pixels
         @param yuvaFormats         formats of promised gpu textures for each YUVA plane
-        @param yuvaSizeInfo        width, height, and colortype of promised gpu textures
+        @param yuvaSizes           width and height of promised gpu textures
         @param yuvaIndices         mapping from yuv plane index to texture representing that plane
         @param width               width of promised gpu texture
         @param height              height of promised gpu texture
@@ -78,7 +97,7 @@ public:
     static sk_sp<SkImage> MakePromiseYUVATexture(GrContext* context,
                                                  SkYUVColorSpace yuvColorSpace,
                                                  const GrBackendFormat yuvaFormats[],
-                                                 const SkYUVSizeInfo& yuvaSizeInfo,
+                                                 const SkISize yuvaSizes[],
                                                  const SkYUVAIndex yuvaIndices[4],
                                                  int width,
                                                  int height,
@@ -89,27 +108,19 @@ public:
                                                  PromiseDoneProc promiseDoneProc,
                                                  TextureContext textureContexts[]);
 
-    static sk_sp<SkImage> MakeFromYUVATextures(GrContext* context,
-                                               SkYUVColorSpace yuvColorSpace,
-                                               const GrBackendTexture yuvaTextures[],
-                                               const SkYUVAIndex yuvaIndices[4],
-                                               int width,
-                                               int height,
-                                               GrSurfaceOrigin imageOrigin,
-                                               sk_sp<SkColorSpace> imageColorSpace);
-
 private:
     // This array will usually only be sparsely populated.
     // The actual non-null fields are dictated by the 'fYUVAIndices' indices
-    sk_sp<GrTextureProxy>            fProxies[4];
+    mutable sk_sp<GrTextureProxy>    fProxies[4];
+    int                              fNumProxies;
     SkYUVAIndex                      fYUVAIndices[4];
+    const SkYUVColorSpace            fYUVColorSpace;
+    GrSurfaceOrigin                  fOrigin;
+
     // This is only allocated when the image needs to be flattened rather than
     // using the separate YUVA planes. From thence forth we will only use the
     // the RGBProxy.
     mutable sk_sp<GrTextureProxy>    fRGBProxy;
-    const SkYUVColorSpace            fYUVColorSpace;
-    GrSurfaceOrigin                  fOrigin;
-
     typedef SkImage_GpuBase INHERITED;
 };
 

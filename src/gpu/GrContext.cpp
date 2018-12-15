@@ -6,6 +6,7 @@
  */
 
 #include "GrContext.h"
+#include <unordered_map>
 #include "GrBackendSemaphore.h"
 #include "GrClip.h"
 #include "GrContextOptions.h"
@@ -33,11 +34,11 @@
 #include "SkMakeUnique.h"
 #include "SkSurface_Gpu.h"
 #include "SkTaskGroup.h"
-#include "SkUnPreMultiplyPriv.h"
+#include "SkTraceMemoryDump.h"
 #include "effects/GrConfigConversionEffect.h"
 #include "effects/GrSkSLFP.h"
+#include "ccpr/GrCoverageCountingPathRenderer.h"
 #include "text/GrTextBlobCache.h"
-#include <unordered_map>
 
 #define ASSERT_OWNED_PROXY(P) \
     SkASSERT(!(P) || !((P)->peekTexture()) || (P)->peekTexture()->getContext() == this)
@@ -304,8 +305,15 @@ void GrContext::purgeUnlockedResources(bool scratchResourcesOnly) {
 
 void GrContext::performDeferredCleanup(std::chrono::milliseconds msNotUsed) {
     ASSERT_SINGLE_OWNER
+
+    auto purgeTime = GrStdSteadyClock::now() - msNotUsed;
+
     fResourceCache->purgeAsNeeded();
-    fResourceCache->purgeResourcesNotUsedSince(GrStdSteadyClock::now() - msNotUsed);
+    fResourceCache->purgeResourcesNotUsedSince(purgeTime);
+
+    if (auto ccpr = fDrawingManager->getCoverageCountingPathRenderer()) {
+        ccpr->purgeCacheEntriesOlderThan(purgeTime);
+    }
 
     fTextBlobCache->purgeStaleBlobs();
 }
@@ -1114,6 +1122,8 @@ void GrContext::setResourceCacheLimits(int maxResources, size_t maxResourceBytes
 void GrContext::dumpMemoryStatistics(SkTraceMemoryDump* traceMemoryDump) const {
     ASSERT_SINGLE_OWNER
     fResourceCache->dumpMemoryStatistics(traceMemoryDump);
+    traceMemoryDump->dumpNumericValue("skia/gr_text_blob_cache", "size", "bytes",
+                                      fTextBlobCache->usedBytes());
 }
 
 //////////////////////////////////////////////////////////////////////////////
