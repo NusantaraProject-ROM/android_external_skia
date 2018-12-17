@@ -25,7 +25,9 @@ declare_args() {
   skia_use_egl = false
   skia_use_expat = true
   skia_use_fontconfig = is_linux
+  skia_use_fonthost_mac = is_mac
   skia_use_freetype = is_android || is_fuchsia || is_linux
+  skia_use_fixed_gamma_text = is_android
   skia_use_icu = !is_fuchsia && !is_ios && !is_win  # TODO: Windows
   skia_use_libjpeg_turbo = true
   skia_use_libpng = true
@@ -50,13 +52,11 @@ declare_args() {
   skia_enable_skpicture = true
   skia_enable_tools = is_skia_dev_build
   skia_enable_vulkan_debug_layers = is_skia_dev_build && is_debug
-  skia_vulkan_header = ""  # temporary as we remove the use from clients
   skia_qt_path = getenv("QT_PATH")
   skia_compile_processors = false
   skia_generate_workarounds = false
   skia_lex = false
 
-  skia_skqp_enable_driver_correctness_workarounds = false
   skia_skqp_global_error_tolerance = 0
 
   skia_llvm_path = ""
@@ -171,7 +171,7 @@ config("skia_private") {
   ]
 
   defines = [ "SK_GAMMA_APPLY_TO_A8" ]
-  if (is_android) {
+  if (skia_use_fixed_gamma_text) {
     defines += [
       "SK_GAMMA_EXPONENT=1.4",
       "SK_GAMMA_CONTRAST=0.0",
@@ -186,6 +186,7 @@ config("skia_private") {
   if (skia_enable_gpu) {
     include_dirs += [ "src/gpu" ]
     if (is_skia_dev_build && skia_use_vulkan) {
+      include_dirs += [ "third_party/vulkan" ]
       include_dirs += [ "tools/gpu/vk" ]
     }
   }
@@ -981,10 +982,15 @@ component("skia") {
     }
   }
 
+  if (skia_use_fonthost_mac) {
+    sources += [
+      "src/ports/SkFontHost_mac.cpp",
+    ]
+  }
+
   if (is_mac) {
     sources += [
       "src/ports/SkDebug_stdio.cpp",
-      "src/ports/SkFontHost_mac.cpp",
       "src/ports/SkImageEncoder_CG.cpp",
       "src/ports/SkImageGeneratorCG.cpp",
     ]
@@ -1149,6 +1155,10 @@ if (skia_enable_tools) {
       ":skia.h",
       "modules/skottie",
     ]
+
+    # We add this directory to simulate the client already have
+    # vulkan/vulkan_core.h on their path.
+    include_dirs = [ "third_party/vulkan" ]
   }
 
   template("test_lib") {
@@ -1954,16 +1964,13 @@ if (skia_enable_tools) {
 
   if (!is_win) {
     test_lib("skqp_lib") {
-      public_include_dirs = [ "tools/skqp" ]
+      public_include_dirs = [ "tools/skqp/src" ]
       defines =
           [ "SK_SKQP_GLOBAL_ERROR_TOLERANCE=$skia_skqp_global_error_tolerance" ]
-      if (skia_skqp_enable_driver_correctness_workarounds) {
-        defines += [ "SK_SKQP_ENABLE_DRIVER_CORRECTNESS_WORKAROUNDS" ]
-      }
       sources = [
         "dm/DMGpuTestProcs.cpp",
-        "tools/skqp/gm_knowledge.cpp",
-        "tools/skqp/gm_runner.cpp",
+        "tools/skqp/src/skqp.cpp",
+        "tools/skqp/src/skqp_model.cpp",
       ]
       deps = [
         ":gm",
@@ -1975,13 +1982,22 @@ if (skia_enable_tools) {
     }
     test_app("skqp") {
       sources = [
-        "tools/skqp/skqp.cpp",
+        "tools/skqp/src/skqp_main.cpp",
       ]
       deps = [
         ":skia",
         ":skqp_lib",
         ":tool_utils",
-        "//third_party/googletest",
+      ]
+    }
+    test_app("jitter_gms") {
+      sources = [
+        "tools/skqp/jitter_gms.cpp",
+      ]
+      deps = [
+        ":gm",
+        ":skia",
+        ":skqp_lib",
       ]
     }
   }
@@ -1989,7 +2005,7 @@ if (skia_enable_tools) {
     test_app("skqp_app") {
       is_shared_library = true
       sources = [
-        "tools/skqp/jni/org_skia_skqp_SkQPRunner.cpp",
+        "tools/skqp/src/jni_skqp.cpp",
       ]
       deps = [
         ":skia",

@@ -4,12 +4,15 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-#include "SkTypes.h"
 
+#include "SkTypes.h"
 
 #if defined(SK_BUILD_FOR_ANDROID) && __ANDROID_API__ >= 26
 #define GL_GLEXT_PROTOTYPES
 #define EGL_EGLEXT_PROTOTYPES
+
+#include "vk/GrVkVulkan.h"
+
 #include "GrAHardwareBufferImageGenerator.h"
 
 #include <android/hardware_buffer.h>
@@ -548,7 +551,7 @@ sk_sp<GrTextureProxy> GrAHardwareBufferImageGenerator::makeProxy(GrContext* cont
 
                 return tex;
             },
-            desc, fSurfaceOrigin, GrMipMapped::kNo, textureType, SkBackingFit::kExact,
+            backendFormat, desc, fSurfaceOrigin, GrMipMapped::kNo, SkBackingFit::kExact,
             SkBudgeted::kNo);
 
     if (!texProxy) {

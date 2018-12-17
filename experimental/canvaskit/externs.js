@@ -27,18 +27,26 @@ var CanvasKit = {
 	Color: function() {},
 	/** @return {CanvasKit.SkRect} */
 	LTRBRect: function() {},
+	MakeBlurMaskFilter: function() {},
 	MakeCanvas: function() {},
 	MakeCanvasSurface: function() {},
 	MakeImageShader: function() {},
+	/** @return {LinearCanvasGradient} */
 	MakeLinearGradientShader: function() {},
-	MakeRadialGradientShader: function() {},
 	MakeNimaActor: function() {},
+	MakeRadialGradientShader: function() {},
+	MakeSWCanvasSurface: function() {},
 	MakeSkDashPathEffect: function() {},
 	MakeSkVertices: function() {},
 	MakeSurface: function() {},
+	/** @return {RadialCanvasGradient} */
+	MakeTwoPointConicalGradientShader: function() {},
+	MakeWebGLCanvasSurface: function() {},
 	currentContext: function() {},
+	getColorComponents: function() {},
 	getSkDataBytes: function() {},
 	initFonts: function() {},
+	multiplyByAlpha: function() {},
 	setCurrentContext: function() {},
 
 	// private API (i.e. things declared in the bindings that we use
@@ -49,8 +57,14 @@ var CanvasKit = {
 	_MakeRadialGradientShader: function() {},
 	_MakeSkDashPathEffect: function() {},
 	_MakeSkVertices: function() {},
+	_MakeTwoPointConicalGradientShader: function() {},
+	_getRasterDirectSurface: function() {},
 	_getRasterN32PremulSurface: function() {},
 	_getWebGLSurface: function() {},
+
+	// The testing object is meant to expose internal functions
+	// for more fine-grained testing, e.g. parseColor
+	_testing: {},
 
 	// Objects and properties on CanvasKit
 
@@ -69,10 +83,15 @@ var CanvasKit = {
 	SkCanvas: {
 		// public API (from C++ bindings)
 		clear: function() {},
+		clipPath: function() {},
 		drawPaint: function() {},
 		drawPath: function() {},
+		drawRect: function() {},
+		drawShadow: function() {},
 		drawText: function() {},
+		drawVertices: function() {},
 		flush: function() {},
+		restore: function() {},
 		rotate: function() {},
 		save: function() {},
 		scale: function() {},
@@ -90,11 +109,62 @@ var CanvasKit = {
 		_encodeToDataWithFormat: function() {},
 	},
 
+	SkMatrix: {
+		identity: function() {},
+		mapPoints: function() {},
+		multiply: function() {},
+		rotated: function() {},
+		scaled: function() {},
+		skewed: function() {},
+		translated: function() {},
+	},
+
+	SkPaint: {
+		// public API (from C++ bindings)
+		/** @return {CanvasKit.SkPaint} */
+		copy: function() {},
+		getBlendMode: function() {},
+		getColor: function() {},
+		getStrokeCap: function() {},
+		getStrokeJoin: function() {},
+		getStrokeMiter: function() {},
+		getStrokeWidth: function() {},
+		getTextSize: function() {},
+		measureText: function() {},
+		setAntiAlias: function() {},
+		setBlendMode: function() {},
+		setColor: function() {},
+		setMaskFilter: function() {},
+		setPathEffect: function() {},
+		setShader: function() {},
+		setStrokeCap: function() {},
+		setStrokeJoin: function() {},
+		setStrokeMiter: function() {},
+		setStrokeWidth: function() {},
+		setStyle: function() {},
+		setTextSize: function() {},
+
+		//private API
+		delete: function() {},
+	},
+
 	SkPath: {
 		// public API (from C++ bindings)
+		computeTightBounds: function() {},
+		/** @return {CanvasKit.SkPath} */
+		copy: function() {},
+		countPoints: function() {},
+		equals: function() {},
+		getBounds: function() {},
+		getFillType: function() {},
+		getPoint: function() {},
+		setFillType: function() {},
+		toSVGString: function() {},
 
 		// private API
+		_addArc: function() {},
 		_addPath: function() {},
+		_addRect: function() {},
 		_arc: function() {},
 		_arcTo: function() {},
 		_close: function() {},
@@ -111,23 +181,8 @@ var CanvasKit = {
 		_transform: function() {},
 		_trim: function() {},
 		delete: function() {},
-	},
-
-	SkPaint: {
-		// public API (from C++ bindings)
-		/** @return {CanvasKit.SkPaint} */
-		copy: function() {},
-		measureText: function() {},
-		setAntiAlias: function() {},
-		setColor: function() {},
-		setPathEffect: function() {},
-		setShader: function() {},
-		setStrokeWidth: function() {},
-		setStyle: function() {},
-		setTextSize: function() {},
-
-		//private API
-		delete: function() {},
+		dump: function() {},
+		dumpHex: function() {},
 	},
 
 	SkRect: {
@@ -153,8 +208,10 @@ var CanvasKit = {
 
 	SkVertices: {
 		// public API (from C++ bindings)
-		/** @return {CanvasKit.SkVertices} */
-		applyBones: function() {},
+		bounds: function() {},
+		mode: function() {},
+		uniqueID: function() {},
+		vertexCount: function() {},
 
 		// private API
 		/** @return {CanvasKit.SkVertices} */
@@ -164,22 +221,127 @@ var CanvasKit = {
 	// Constants and Enums
 	gpu: {},
 	skottie: {},
-	PaintStyle: {
-		FILL: {},
-		STROKE: {},
-		STROKE_AND_FILL: {},
+
+	TRANSPARENT: {},
+	RED: {},
+	BLUE: {},
+	YELLOW: {},
+	CYAN: {},
+	BLACK: {},
+	WHITE: {},
+
+	AlphaType: {
+		Opaque: {},
+		Premul: {},
+		Unpremul: {},
+	},
+
+	BlendMode: {
+		Clear: {},
+		Src: {},
+		Dst: {},
+		SrcOver: {},
+		DstOver: {},
+		SrcIn: {},
+		DstIn: {},
+		SrcOut: {},
+		DstOut: {},
+		SrcATop: {},
+		DstATop: {},
+		Xor: {},
+		Plus: {},
+		Modulate: {},
+		Screen: {},
+		Overlay: {},
+		Darken: {},
+		Lighten: {},
+		ColorDodge: {},
+		ColorBurn: {},
+		HardLight: {},
+		SoftLight: {},
+		Difference: {},
+		Exclusion: {},
+		Multiply: {},
+		Hue: {},
+		Saturation: {},
+		Color: {},
+		Luminosity: {},
+	},
+
+	BlurStyle: {
+		Normal: {},
+		Solid: {},
+		Outer: {},
+		Inner: {},
+	},
+
+	ClipOp: {
+		Difference: {},
+		Intersect: {},
+	},
+
+	ColorType: {
+		Alpha_8: {},
+		RGB_565: {},
+		ARGB_4444: {},
+		RGBA_8888: {},
+		RGB_888x: {},
+		BGRA_8888: {},
+		RGBA_1010102: {},
+		RGB_101010x: {},
+		Gray_8: {},
+		RGBA_F16: {},
+		RGBA_F32: {},
 	},
 
 	FillType: {
-		WINDING: {},
-		EVENODD: {},
-		INVERSE_WINDING: {},
-		INVERSE_EVENODD: {},
+		Winding: {},
+		EvenOdd: {},
+		InverseWinding: {},
+		InverseEvenOdd: {},
 	},
 
 	ImageFormat: {
 		PNG: {},
 		JPEG: {},
+	},
+
+	PaintStyle: {
+		Fill: {},
+		Stroke: {},
+		StrokeAndFill: {},
+	},
+
+	PathOp: {
+		Difference: {},
+		Intersect: {},
+		Union: {},
+		XOR: {},
+		ReverseDifference: {},
+	},
+
+	StrokeCap: {
+		Butt: {},
+		Round: {},
+		Square: {},
+	},
+
+	StrokeJoin: {
+		Miter: {},
+		Round: {},
+		Bevel: {},
+	},
+
+	TileMode: {
+		Clamp: {},
+		Repeat: {},
+		Mirror: {},
+	},
+
+	VertexMode: {
+		Triangles: {},
+		TrianglesStrip: {},
+		TriangleFan: {},
 	},
 
 	// Things Enscriptem adds for us
@@ -213,7 +375,9 @@ var CanvasKit = {
 // Public API things that are newly declared in the JS should go here.
 // It's not enough to declare them above, because closure can still erase them
 // unless they go on the prototype.
+CanvasKit.SkPath.prototype.addArc = function() {};
 CanvasKit.SkPath.prototype.addPath = function() {};
+CanvasKit.SkPath.prototype.addRect = function() {};
 CanvasKit.SkPath.prototype.arc = function() {};
 CanvasKit.SkPath.prototype.arcTo = function() {};
 CanvasKit.SkPath.prototype.close = function() {};
@@ -233,6 +397,7 @@ CanvasKit.SkPath.prototype.trim = function() {};
 CanvasKit.SkSurface.prototype.flush = function() {};
 CanvasKit.SkSurface.prototype.dispose = function() {};
 
+/** @return {CanvasKit.SkVertices} */
 CanvasKit.SkVertices.prototype.applyBones = function() {};
 
 CanvasKit.SkImage.prototype.encodeToData = function() {};
@@ -244,5 +409,56 @@ StrokeOpts.prototype.miter_limit;
 StrokeOpts.prototype.cap;
 StrokeOpts.prototype.join;
 
+// Define everything created in the canvas2d spec here
+var HTMLCanvas = {};
+HTMLCanvas.prototype.getContext = function() {};
+HTMLCanvas.prototype.toDataURL = function() {};
+HTMLCanvas.prototype.dispose = function() {};
+
+var CanvasRenderingContext2D = {};
+CanvasRenderingContext2D.prototype.addHitRegion = function() {};
+CanvasRenderingContext2D.prototype.arc = function() {};
+CanvasRenderingContext2D.prototype.arcTo = function() {};
+CanvasRenderingContext2D.prototype.beginPath = function() {};
+CanvasRenderingContext2D.prototype.bezierCurveTo = function() {};
+CanvasRenderingContext2D.prototype.clearHitRegions = function() {};
+CanvasRenderingContext2D.prototype.clearRect = function() {};
+CanvasRenderingContext2D.prototype.clip = function() {};
+CanvasRenderingContext2D.prototype.closePath = function() {};
+CanvasRenderingContext2D.prototype.createLinearGradient = function() {};
+CanvasRenderingContext2D.prototype.createRadialGradient = function() {};
+CanvasRenderingContext2D.prototype.drawFocusIfNeeded = function() {};
+CanvasRenderingContext2D.prototype.ellipse = function() {};
+CanvasRenderingContext2D.prototype.fill = function() {};
+CanvasRenderingContext2D.prototype.fillRect = function() {};
+CanvasRenderingContext2D.prototype.fillText = function() {};
+CanvasRenderingContext2D.prototype.getLineDash = function() {};
+CanvasRenderingContext2D.prototype.lineTo = function() {};
+CanvasRenderingContext2D.prototype.measureText = function() {};
+CanvasRenderingContext2D.prototype.moveTo = function() {};
+CanvasRenderingContext2D.prototype.quadraticCurveTo = function() {};
+CanvasRenderingContext2D.prototype.rect = function() {};
+CanvasRenderingContext2D.prototype.removeHitRegion = function() {};
+CanvasRenderingContext2D.prototype.resetTransform = function() {};
+CanvasRenderingContext2D.prototype.restore = function() {};
+CanvasRenderingContext2D.prototype.rotate = function() {};
+CanvasRenderingContext2D.prototype.save = function() {};
+CanvasRenderingContext2D.prototype.scale = function() {};
+CanvasRenderingContext2D.prototype.scrollPathIntoView = function() {};
+CanvasRenderingContext2D.prototype.setLineDash = function() {};
+CanvasRenderingContext2D.prototype.setTransform = function() {};
+CanvasRenderingContext2D.prototype.stroke = function() {};
+CanvasRenderingContext2D.prototype.strokeRect = function() {};
+CanvasRenderingContext2D.prototype.strokeText = function() {};
+CanvasRenderingContext2D.prototype.transform = function() {};
+CanvasRenderingContext2D.prototype.translate = function() {};
+
+var LinearCanvasGradient = {};
+LinearCanvasGradient.prototype.addColorStop = function() {};
+var RadialCanvasGradient = {};
+RadialCanvasGradient.prototype.addColorStop = function() {};
+
 // Not sure why this is needed - might be a bug in emsdk that this isn't properly declared.
-function loadWebAssemblyModule() {}
+function loadWebAssemblyModule() {};
+
+var DOMMatrix = {};

@@ -9,7 +9,6 @@
 #define GrRenderTargetContext_DEFINED
 
 #include "../private/GrRenderTargetProxy.h"
-#include "GrColor.h"
 #include "GrContext.h"
 #include "GrContextPriv.h"
 #include "GrPaint.h"
@@ -128,22 +127,34 @@ public:
                                  const SkRect& rect,
                                  const SkMatrix& localMatrix);
 
+    /** Used with drawQuadSet */
+    struct QuadSetEntry {
+        SkRect fRect;
+        SkPMColor4f fColor; // Overrides any color on the GrPaint
+        SkMatrix fLocalMatrix;
+        GrQuadAAFlags fAAFlags;
+    };
+
+    void drawQuadSet(const GrClip& clip, GrPaint&& paint, GrAA aa, const SkMatrix& viewMatrix,
+                     const QuadSetEntry[], int cnt);
+
     /**
      * Creates an op that draws a subrectangle of a texture. The passed color is modulated by the
      * texture's color. 'srcRect' specifies the rectangle of the texture to draw. 'dstRect'
      * specifies the rectangle to draw in local coords which will be transformed by 'viewMatrix' to
      * device space.
      */
-    void drawTexture(const GrClip& clip, sk_sp<GrTextureProxy>, GrSamplerState::Filter, GrColor,
-                     const SkRect& srcRect, const SkRect& dstRect, GrQuadAAFlags,
-                     SkCanvas::SrcRectConstraint, const SkMatrix& viewMatrix,
-                     sk_sp<GrColorSpaceXform> texXform, sk_sp<GrColorSpaceXform> colorXform);
+    void drawTexture(const GrClip& clip, sk_sp<GrTextureProxy>, GrSamplerState::Filter,
+                     const SkPMColor4f&, const SkRect& srcRect, const SkRect& dstRect,
+                     GrQuadAAFlags, SkCanvas::SrcRectConstraint, const SkMatrix& viewMatrix,
+                     sk_sp<GrColorSpaceXform> texXform);
 
     /** Used with drawTextureSet */
     struct TextureSetEntry {
         sk_sp<GrTextureProxy> fProxy;
         SkRect fSrcRect;
         SkRect fDstRect;
+        float fAlpha;
         GrQuadAAFlags fAAFlags;
     };
     /**
@@ -151,8 +162,7 @@ public:
      * texture color xform. The textures must all have the same GrTextureType and GrConfig.
      */
     void drawTextureSet(const GrClip&, const TextureSetEntry[], int cnt, GrSamplerState::Filter,
-                        GrColor, const SkMatrix& viewMatrix, sk_sp<GrColorSpaceXform> texXform,
-                        sk_sp<GrColorSpaceXform> colorXform);
+                        const SkMatrix& viewMatrix, sk_sp<GrColorSpaceXform> texXform);
 
     /**
      * Draw a roundrect using a paint.

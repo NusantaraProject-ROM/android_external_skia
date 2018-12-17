@@ -657,7 +657,7 @@ static Json::Value make_json_regionop(SkClipOp op) {
         default:
             SkASSERT(false);
             return Json::Value("<invalid region op>");
-    };
+    }
 }
 
 static Json::Value make_json_pointmode(SkCanvas::PointMode mode) {
@@ -671,7 +671,7 @@ static Json::Value make_json_pointmode(SkCanvas::PointMode mode) {
         default:
             SkASSERT(false);
             return Json::Value("<invalid point mode>");
-    };
+    }
 }
 
 static void store_scalar(Json::Value* target, const char* key, SkScalar value,
@@ -818,7 +818,7 @@ static void apply_paint_color(const SkPaint& paint, Json::Value* target) {
         colorValue.append(Json::Value(SkColorGetR(color)));
         colorValue.append(Json::Value(SkColorGetG(color)));
         colorValue.append(Json::Value(SkColorGetB(color)));
-        (*target)[SKDEBUGCANVAS_ATTRIBUTE_COLOR] = colorValue;;
+        (*target)[SKDEBUGCANVAS_ATTRIBUTE_COLOR] = colorValue;
     }
 }
 
@@ -1530,19 +1530,17 @@ Json::Value SkDrawImageRectCommand::toJSON(UrlDataManager& urlDataManager) const
 }
 
 SkDrawImageSetCommand::SkDrawImageSetCommand(const SkCanvas::ImageSetEntry set[], int count,
-                                             float alpha, SkFilterQuality filterQuality,
-                                             SkBlendMode mode)
+                                             SkFilterQuality filterQuality, SkBlendMode mode)
         : INHERITED(kDrawImageSet_OpType)
         , fSet(count)
         , fCount(count)
-        , fAlpha(alpha)
         , fFilterQuality(filterQuality)
         , fMode(mode) {
     std::copy_n(set, count, fSet.get());
 }
 
 void SkDrawImageSetCommand::execute(SkCanvas* canvas) const {
-    canvas->experimental_DrawImageSetV0(fSet.get(), fCount, fAlpha, fFilterQuality, fMode);
+    canvas->experimental_DrawImageSetV1(fSet.get(), fCount, fFilterQuality, fMode);
 }
 
 SkDrawImageNineCommand::SkDrawImageNineCommand(const SkImage* image, const SkIRect& center,

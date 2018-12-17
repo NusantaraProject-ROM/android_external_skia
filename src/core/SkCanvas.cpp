@@ -1794,13 +1794,13 @@ void SkCanvas::drawImageLattice(const SkImage* image, const Lattice& lattice, co
     }
 }
 
-void SkCanvas::experimental_DrawImageSetV0(const ImageSetEntry imageSet[], int cnt, float alpha,
+void SkCanvas::experimental_DrawImageSetV1(const ImageSetEntry imageSet[], int cnt,
                                            SkFilterQuality filterQuality, SkBlendMode mode) {
     TRACE_EVENT0("skia", TRACE_FUNC);
     RETURN_ON_NULL(imageSet);
     RETURN_ON_FALSE(cnt);
 
-    this->onDrawImageSet(imageSet, cnt, alpha, filterQuality, mode);
+    this->onDrawImageSet(imageSet, cnt, filterQuality, mode);
 }
 
 void SkCanvas::drawBitmap(const SkBitmap& bitmap, SkScalar dx, SkScalar dy, const SkPaint* paint) {
@@ -2404,12 +2404,12 @@ void SkCanvas::onDrawImageLattice(const SkImage* image, const Lattice& lattice, 
     LOOPER_END
 }
 
-void SkCanvas::onDrawImageSet(const ImageSetEntry imageSet[], int count, float alpha,
+void SkCanvas::onDrawImageSet(const ImageSetEntry imageSet[], int count,
                               SkFilterQuality filterQuality, SkBlendMode mode) {
     SkPaint paint;
-    LOOPER_BEGIN(paint, nullptr);
+    LOOPER_BEGIN(paint, nullptr)
     while (iter.next()) {
-        iter.fDevice->drawImageSet(imageSet, count, alpha, filterQuality, mode);
+        iter.fDevice->drawImageSet(imageSet, count, filterQuality, mode);
     }
     LOOPER_END
 }
@@ -2529,7 +2529,17 @@ void SkCanvas::drawString(const SkString& string, SkScalar x, SkScalar y, const 
     this->drawText(string.c_str(), string.size(), x, y, paint);
 }
 
-// These will become non-virtual, so they always call the (virtual) onDraw... method
+// These call the (virtual) onDraw... method
+void SkCanvas::drawSimpleText(const void* text, size_t byteLength, SkTextEncoding,
+                              SkScalar x, SkScalar y, const SkFont& font, const SkPaint& paint) {
+    TRACE_EVENT0("skia", TRACE_FUNC);
+    if (byteLength) {
+        sk_msan_assert_initialized(text, SkTAddOffset<const void>(text, byteLength));
+        SkPaint tmp(paint);
+        font.LEGACY_applyToPaint(&tmp);
+        this->onDrawText(text, byteLength, x, y, tmp);
+    }
+}
 void SkCanvas::drawText(const void* text, size_t byteLength, SkScalar x, SkScalar y,
                         const SkPaint& paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);

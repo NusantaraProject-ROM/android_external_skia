@@ -54,6 +54,10 @@ class SkTextBlob;
 class SkTextBlobRunIterator;
 class SkTypeface;
 
+#ifndef SK_SUPPORT_LEGACY_PAINT_TEXTMEASURE
+#define SK_SUPPORT_LEGACY_PAINT_TEXTMEASURE
+#endif
+
 /** \class SkPaint
     SkPaint controls options applied when drawing and measuring. SkPaint collects all
     options outside of the SkCanvas clip and SkCanvas matrix.
@@ -185,22 +189,6 @@ public:
     */
     void reset();
 
-    /** \enum SkPaint::Hinting
-        Deprecated.
-        Hinting adjusts the glyph outlines so that the shape provides a uniform
-        look at a given point size on font engines that support it. Hinting may have a
-        muted effect or no effect at all depending on the platform.
-
-        The four levels roughly control corresponding features on platforms that use FreeType
-        as the font engine.
-    */
-    enum Hinting : uint8_t {
-        kNo_Hinting     = 0, //!< glyph outlines unchanged
-        kSlight_Hinting = 1, //!< minimal modification to improve constrast
-        kNormal_Hinting = 2, //!< glyph outlines modified to improve constrast
-        kFull_Hinting   = 3, //!< modifies glyph outlines for maximum constrast
-    };
-
     /** Sets level of glyph outline adjustment.
         Does not check for valid values of hintingLevel.
 
@@ -209,29 +197,12 @@ public:
     */
     void setHinting(SkFontHinting hintingLevel);
 
-#ifdef SK_SUPPORT_LEGACY_NESTED_HINTINGENUM
-    /** Deprecated. Returns level of glyph outline adjustment.
-
-        @return  one of: kNo_Hinting, kSlight_Hinting, kNormal_Hinting, kFull_Hinting
-     */
-    Hinting getHinting() const { return (Hinting)fBitfields.fHinting; }
-
-    /** Deprecated. Sets level of glyph outline adjustment.
-        Does not check for valid values of h.
-
-        @param h  one of: kNo_Hinting, kSlight_Hinting, kNormal_Hinting, kFull_Hinting
-    */
-    void setHinting(Hinting h) {
-        this->setHinting((SkFontHinting)h);
-    }
-#else
     /** Returns level of glyph outline adjustment.
 
         @return  one of: SkFontHinting::kNone, SkFontHinting::kSlight, SkFontHinting::kNormal,
                          SkFontHinting::kFull
      */
     SkFontHinting getHinting() const { return (SkFontHinting)fBitfields.fHinting; }
-#endif
 
     /** \enum SkPaint::Flags
         The bit values stored in Flags.
@@ -286,7 +257,7 @@ public:
         return SkToBool(this->getFlags() & kAntiAlias_Flag);
     }
 
-    /** Requests, but does not require, that SkPath edge pixels draw opaque or with
+    /** Requests, but does not require, that edge pixels draw opaque or with
         partial transparency.
 
         Sets kAntiAlias_Flag if aa is true.
@@ -325,7 +296,8 @@ public:
         return SkToBool(this->getFlags() & kLinearText_Flag);
     }
 
-    /** Returns true if text is converted to SkPath before drawing and measuring.
+    /** Requests, but does not require, that glyphs are converted to SkPath
+        before drawing and measuring.
         By default, kLinearText_Flag is clear.
 
         Sets kLinearText_Flag if linearText is true.
@@ -947,6 +919,12 @@ public:
                          kGlyphID_TextEncoding
     */
     void setTextEncoding(TextEncoding encoding);
+    // Experimental
+    void setTextEncoding(SkTextEncoding encoding) {
+        this->setTextEncoding((TextEncoding)encoding);
+    }
+
+#ifdef SK_SUPPORT_LEGACY_PAINT_TEXTMEASURE
 
 #ifdef SK_SUPPORT_LEGACY_FONTMETRICS_IN_PAINT
     /**
@@ -1078,6 +1056,7 @@ public:
     SkScalar measureText(const void* text, size_t length) const {
         return this->measureText(text, length, nullptr);
     }
+#endif
 
     /** Returns the bytes of text that fit within maxWidth.
         The text fragment fits if its advance width is less than or equal to maxWidth.
@@ -1096,6 +1075,7 @@ public:
     size_t  breakText(const void* text, size_t length, SkScalar maxWidth,
                       SkScalar* measuredWidth = nullptr) const;
 
+#ifdef SK_SUPPORT_LEGACY_PAINT_TEXTMEASURE
     /** Retrieves the advance and bounds for each glyph in text, and returns
         the glyph count in text.
         Both widths and bounds may be nullptr.
@@ -1145,6 +1125,11 @@ public:
     void getPosTextPath(const void* text, size_t length,
                         const SkPoint pos[], SkPath* path) const;
 
+#ifdef SK_SUPPORT_LEGACY_TEXTINTERCEPTS
+public:
+#else
+private:
+#endif
     /** Returns the number of intervals that intersect bounds.
         bounds describes a pair of lines parallel to the text advance.
         The return count is zero or a multiple of two, and is at most twice the number of glyphs in
@@ -1212,6 +1197,7 @@ public:
     */
     int getPosTextHIntercepts(const void* text, size_t length, const SkScalar xpos[],
                               SkScalar constY, const SkScalar bounds[2], SkScalar* intervals) const;
+public:
 
     /** Returns the number of intervals that intersect bounds.
         bounds describes a pair of lines parallel to the text advance.
@@ -1246,6 +1232,7 @@ public:
         @return  union of bounds of all glyphs
     */
     SkRect getFontBounds() const;
+#endif
 
     /** Returns true if SkPaint prevents all drawing;
         otherwise, the SkPaint may or may not allow drawing.

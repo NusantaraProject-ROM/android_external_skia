@@ -142,7 +142,7 @@ void SkPicturePlayback::handleOp(SkReadBuffer* reader,
                                  uint32_t size,
                                  SkCanvas* canvas,
                                  const SkMatrix& initialMatrix) {
-#define BREAK_ON_READ_ERROR(r) if (!r->isValid()) { break; }
+#define BREAK_ON_READ_ERROR(r) if (!r->isValid()) break
 
     switch (op) {
         case NOOP: {
@@ -354,7 +354,6 @@ void SkPicturePlayback::handleOp(SkReadBuffer* reader,
             if (!reader->validate(cnt >= 0)) {
                 break;
             }
-            float alpha = SkScalarToFloat(reader->readScalar());
             SkFilterQuality filterQuality = (SkFilterQuality)reader->readUInt();
             SkBlendMode mode = (SkBlendMode)reader->readUInt();
             SkAutoTArray<SkCanvas::ImageSetEntry> set(cnt);
@@ -362,11 +361,12 @@ void SkPicturePlayback::handleOp(SkReadBuffer* reader,
                 set[i].fImage = sk_ref_sp(fPictureData->getImage(reader));
                 reader->readRect(&set[i].fSrcRect);
                 reader->readRect(&set[i].fDstRect);
+                set[i].fAlpha = reader->readScalar();
                 set[i].fAAFlags = reader->readUInt();
             }
             BREAK_ON_READ_ERROR(reader);
 
-            canvas->experimental_DrawImageSetV0(set.get(), cnt, alpha, filterQuality, mode);
+            canvas->experimental_DrawImageSetV1(set.get(), cnt, filterQuality, mode);
         } break;
         case DRAW_OVAL: {
             const SkPaint* paint = fPictureData->getPaint(reader);

@@ -74,16 +74,10 @@ struct SkBitmapProcState : public SkBitmapProcInfo {
                                  int count,
                                  SkPMColor colors[]);
 
-    typedef U16CPU (*FixedTileProc)(SkFixed);   // returns 0..0xFFFF
-    typedef U16CPU (*IntTileProc)(int value, int count);   // returns 0..count-1
-
     SkMatrixPriv::MapXYProc fInvProc;           // chooseProcs
     SkFractionalInt     fInvSxFractionalInt;
     SkFractionalInt     fInvKyFractionalInt;
 
-    FixedTileProc       fTileProcX;         // chooseProcs
-    FixedTileProc       fTileProcY;         // chooseProcs
-    IntTileProc         fIntTileProcY;      // chooseProcs
     SkFixed             fFilterOneX;
     SkFixed             fFilterOneY;
 
@@ -135,7 +129,6 @@ private:
 
     MatrixProc chooseMatrixProc(bool trivial_matrix);
     bool chooseProcs(); // caller must have called init() first (on our base-class)
-    bool chooseScanlineProcs(bool trivialMatrix, bool clampClamp);
     ShaderProc32 chooseShaderProc32();
 
     // Return false if we failed to setup for fast translate (e.g. overflow)
