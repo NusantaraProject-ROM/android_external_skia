@@ -1273,7 +1273,11 @@ bool SkOpSegment::moveMultiples() {
         }
         SkOpPtT* startPtT = test->ptT();
         SkOpPtT* testPtT = startPtT;
+        int safetyHatch = 1000000;
         do {  // iterate through all spans associated with start
+            if (!--safetyHatch) {
+                return false;
+            }
             SkOpSpanBase* oppSpan = testPtT->span();
             if (oppSpan->spanAddsCount() == addCount) {
                 continue;
@@ -1559,7 +1563,11 @@ bool SkOpSegment::sortAngles() {
             baseAngle = toAngle;
         }
         SkOpPtT* ptT = span->ptT(), * stopPtT = ptT;
+        int safetyNet = 1000000;
         do {
+            if (!--safetyNet) {
+                return false;
+            }
             SkOpSpanBase* oSpan = ptT->span();
             if (oSpan == span) {
                 continue;

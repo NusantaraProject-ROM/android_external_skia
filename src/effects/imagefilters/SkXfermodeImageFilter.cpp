@@ -315,10 +315,14 @@ sk_sp<SkSpecialImage> SkXfermodeImageFilter_Base::filterImageGPU(
 
     paint.setPorterDuffXPFactory(SkBlendMode::kSrc);
 
+    SkColorType colorType = outputProperties.colorType();
+    GrBackendFormat format =
+            context->contextPriv().caps()->getBackendFormatFromColorType(colorType);
+
     sk_sp<GrRenderTargetContext> renderTargetContext(
         context->contextPriv().makeDeferredRenderTargetContext(
-                                    SkBackingFit::kApprox, bounds.width(), bounds.height(),
-                                    SkColorType2GrPixelConfig(outputProperties.colorType()),
+                                    format, SkBackingFit::kApprox, bounds.width(), bounds.height(),
+                                    SkColorType2GrPixelConfig(colorType),
                                     sk_ref_sp(outputProperties.colorSpace())));
     if (!renderTargetContext) {
         return nullptr;
@@ -346,5 +350,5 @@ std::unique_ptr<GrFragmentProcessor> SkXfermodeImageFilter_Base::makeFGFrag(
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 void SkXfermodeImageFilter::RegisterFlattenables() {
-    SK_REGISTER_FLATTENABLE(SkXfermodeImageFilter_Base)
+    SK_REGISTER_FLATTENABLE(SkXfermodeImageFilter_Base);
 }

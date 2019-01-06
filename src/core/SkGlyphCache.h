@@ -35,7 +35,6 @@ public:
     SkGlyphCache(const SkDescriptor& desc,
                  std::unique_ptr<SkScalerContext> scaler,
                  const SkFontMetrics&);
-    ~SkGlyphCache() override;
 
     const SkDescriptor& getDescriptor() const;
 
@@ -138,6 +137,10 @@ public:
     SkVector rounding() const override;
 
     const SkGlyph& getGlyphMetrics(SkGlyphID glyphID, SkPoint position) override;
+
+    bool hasImage(const SkGlyph& glyph) override;
+
+    bool hasPath(const SkGlyph& glyph) override;
 
     /** Return the approx RAM usage for this cache. */
     size_t getMemoryUsed() const { return fMemoryUsed; }

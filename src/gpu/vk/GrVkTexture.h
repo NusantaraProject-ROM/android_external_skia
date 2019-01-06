@@ -8,6 +8,8 @@
 #ifndef GrVkTexture_DEFINED
 #define GrVkTexture_DEFINED
 
+#include "GrVkVulkan.h"
+
 #include "GrTexture.h"
 #include "GrVkImage.h"
 
@@ -30,6 +32,8 @@ public:
     ~GrVkTexture() override;
 
     GrBackendTexture getBackendTexture() const override;
+
+    GrBackendFormat backendFormat() const override { return this->getBackendFormat(); }
 
     void textureParamsModified() override {}
 

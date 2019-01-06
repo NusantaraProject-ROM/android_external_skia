@@ -36,6 +36,7 @@ class SkData;
 class SkDraw;
 class SkDrawable;
 struct SkDrawShadowRec;
+class SkFont;
 class SkGlyphRunBuilder;
 class SkImage;
 class SkImageFilter;
@@ -162,7 +163,7 @@ public:
     */
     SkCanvas(int width, int height, const SkSurfaceProps* props = nullptr);
 
-    /** Deprecated.
+    /** Private. For internal use only.
     */
     explicit SkCanvas(sk_sp<SkBaseDevice> device);
 
@@ -1828,6 +1829,7 @@ public:
         sk_sp<const SkImage> fImage;
         SkRect fSrcRect;
         SkRect fDstRect;
+        float fAlpha;
         unsigned fAAFlags;  // QuadAAFlags
     };
 
@@ -1839,7 +1841,7 @@ public:
      * current implementation only antialiases if all edges are flagged, however.
      * Results are undefined if an image's src rect is not within the image's bounds.
      */
-    void experimental_DrawImageSetV0(const ImageSetEntry imageSet[], int cnt, float alpha,
+    void experimental_DrawImageSetV1(const ImageSetEntry imageSet[], int cnt,
                                      SkFilterQuality quality, SkBlendMode mode);
 
     /** Draws text, with origin at (x, y), using clip, SkMatrix, and SkPaint paint.
@@ -1863,6 +1865,10 @@ public:
     */
     void drawText(const void* text, size_t byteLength, SkScalar x, SkScalar y,
                   const SkPaint& paint);
+
+    // Experimental
+    void drawSimpleText(const void* text, size_t byteLength, SkTextEncoding encoding,
+                        SkScalar x, SkScalar y, const SkFont& font, const SkPaint& paint);
 
     /** Draws null terminated string, with origin at (x, y), using clip, SkMatrix, and
         SkPaint paint.
@@ -2468,8 +2474,8 @@ protected:
     virtual void onDrawImageLattice(const SkImage* image, const Lattice& lattice, const SkRect& dst,
                                     const SkPaint* paint);
 
-    virtual void onDrawImageSet(const ImageSetEntry imageSet[], int count, float alpha,
-                                SkFilterQuality, SkBlendMode);
+    virtual void onDrawImageSet(const ImageSetEntry imageSet[], int count, SkFilterQuality,
+                                SkBlendMode);
 
     virtual void onDrawBitmap(const SkBitmap& bitmap, SkScalar dx, SkScalar dy,
                               const SkPaint* paint);
@@ -2750,7 +2756,7 @@ public:
     }
 
     /** Restores SkCanvas to saved state immediately. Subsequent calls and
-        ~SkAutoCanvasRestore have no effect.
+        ~SkAutoCanvasRestore() have no effect.
     */
     void restore() {
         if (fCanvas) {
@@ -2768,6 +2774,8 @@ private:
     SkAutoCanvasRestore& operator=(SkAutoCanvasRestore&&) = delete;
     SkAutoCanvasRestore& operator=(const SkAutoCanvasRestore&) = delete;
 };
+
+// Private
 #define SkAutoCanvasRestore(...) SK_REQUIRE_LOCAL_VAR(SkAutoCanvasRestore)
 
 #endif
