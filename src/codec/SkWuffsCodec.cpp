@@ -198,11 +198,11 @@ private:
 
     // Incremental decoding state.
     uint8_t* fIncrDecDst;
-    bool     fIncrDecHaveFrameConfig;
     size_t   fIncrDecRowBytes;
 
     std::unique_ptr<SkSwizzler> fSwizzler;
     SkPMColor                   fColorTable[256];
+    bool                        fColorTableFilled;
 
     uint64_t                  fNumFullyReceivedFrames;
     std::vector<SkWuffsFrame> fFrames;
@@ -319,9 +319,9 @@ SkWuffsCodec::SkWuffsCodec(SkEncodedInfo&&                                      
       fPixelBuffer(pixbuf),
       fIOBuffer((wuffs_base__io_buffer){}),
       fIncrDecDst(nullptr),
-      fIncrDecHaveFrameConfig(false),
       fIncrDecRowBytes(0),
       fSwizzler(nullptr),
+      fColorTableFilled(false),
       fNumFullyReceivedFrames(0),
       fFramesComplete(false),
       fDecoderIsSuspended(false) {
@@ -382,12 +382,20 @@ SkCodec::Result SkWuffsCodec::onStartIncrementalDecode(const SkImageInfo&      d
     }
 
     fSpySampler.reset();
-    fIncrDecDst = static_cast<uint8_t*>(dst);
-    fIncrDecHaveFrameConfig = false;
-    fIncrDecRowBytes = rowBytes;
     fSwizzler = nullptr;
+    fColorTableFilled = false;
 
-    return SkCodec::kSuccess;
+    const char* status = this->decodeFrameConfig();
+    if (status == nullptr) {
+        fIncrDecDst = static_cast<uint8_t*>(dst);
+        fIncrDecRowBytes = rowBytes;
+        return SkCodec::kSuccess;
+    } else if (status == wuffs_base__suspension__short_read) {
+        return SkCodec::kIncompleteInput;
+    } else {
+        SkCodecPrintf("decodeFrameConfig: %s", status);
+        return SkCodec::kErrorInInput;
+    }
 }
 
 static bool independent_frame(SkCodec* codec, int frameIndex) {
@@ -415,97 +423,34 @@ SkCodec::Result SkWuffsCodec::onIncrementalDecode(int* rowsDecoded) {
         return SkCodec::kInternalError;
     }
 
-    if (!fIncrDecHaveFrameConfig) {
-        const char* status = this->decodeFrameConfig();
-        if (status == nullptr) {
-            // No-op.
-        } else if (status == wuffs_base__suspension__short_read) {
-            return SkCodec::kIncompleteInput;
-        } else {
-            SkCodecPrintf("decodeFrameConfig: %s", status);
-            return SkCodec::kErrorInInput;
-        }
-        fIncrDecHaveFrameConfig = true;
-    }
-
-    SkCodec::Result result = SkCodec::kSuccess;
-    const char*     status = this->decodeFrame();
-    if (status == nullptr) {
-        // No-op.
-    } else if (status == wuffs_base__suspension__short_read) {
-        result = SkCodec::kIncompleteInput;
-    } else {
-        SkCodecPrintf("decodeFrame: %s", status);
-        return SkCodec::kErrorInInput;
-    }
-
+    // In Wuffs, a paletted image is always 1 byte per pixel.
+    static constexpr size_t src_bpp = 1;
+    wuffs_base__table_u8 pixels = fPixelBuffer.plane(0);
+    int scaledHeight = dstInfo().height();
     const bool independent = independent_frame(this, options().fFrameIndex);
-    wuffs_base__rect_ie_u32 r = fFrameConfig.bounds();
+    wuffs_base__rect_ie_u32 frame_rect = fFrameConfig.bounds();
     if (!fSwizzler) {
-        SkIRect swizzleRect = SkIRect::MakeLTRB(r.min_incl_x, 0, r.max_excl_x, 1);
-        fSwizzler = SkSwizzler::Make(this->getEncodedInfo(), fColorTable, dstInfo(), Options(),
-                                     &swizzleRect);
+        auto bounds = SkIRect::MakeLTRB(frame_rect.min_incl_x, frame_rect.min_incl_y,
+                                        frame_rect.max_excl_x, frame_rect.max_excl_y);
+        fSwizzler = SkSwizzler::Make(this->getEncodedInfo(), fColorTable, dstInfo(),
+                                     this->options(), &bounds);
         fSwizzler->setSampleX(fSpySampler.sampleX());
         fSwizzler->setSampleY(fSpySampler.sampleY());
+        scaledHeight = get_scaled_dimension(dstInfo().height(), fSpySampler.sampleY());
 
-        if (independent) {
-            auto fillInfo = dstInfo().makeWH(fSwizzler->fillWidth(),
-                                             get_scaled_dimension(this->dstInfo().height(),
-                                                                  fSwizzler->sampleY()));
+        // Zero-initialize wuffs' buffer covering the frame rect. This will later be used to
+        // determine how we write to the output, even if the image was incomplete. This ensures
+        // that we do not swizzle uninitialized memory.
+        for (uint32_t y = frame_rect.min_incl_y; y < frame_rect.max_excl_y; y++) {
+            uint8_t* s = pixels.ptr + (y * pixels.stride) + (frame_rect.min_incl_x * src_bpp);
+            sk_bzero(s, frame_rect.width() * src_bpp);
+        }
+
+        // If the frame rect does not fill the output, ensure that those pixels are not
+        // left uninitialized either.
+        if (independent && bounds != this->bounds()) {
+            auto fillInfo = dstInfo().makeWH(fSwizzler->fillWidth(), scaledHeight);
             SkSampler::Fill(fillInfo, fIncrDecDst, fIncrDecRowBytes, options().fZeroInitialized);
-        }
-    }
-
-    wuffs_base__slice_u8 palette = fPixelBuffer.palette();
-    SkASSERT(palette.len == 4 * 256);
-    auto proc = choose_pack_color_proc(false, dstInfo().colorType());
-    for (int i = 0; i < 256; i++) {
-        uint8_t* p = palette.ptr + 4 * i;
-        fColorTable[i] = proc(p[3], p[2], p[1], p[0]);
-    }
-
-    std::unique_ptr<uint8_t[]> tmpBuffer;
-    if (!independent) {
-        tmpBuffer.reset(new uint8_t[dstInfo().minRowBytes()]);
-    }
-    wuffs_base__table_u8 pixels = fPixelBuffer.plane(0);
-    const int            sampleY = fSwizzler->sampleY();
-    const int            scaledHeight = get_scaled_dimension(dstInfo().height(), sampleY);
-    for (uint32_t y = r.min_incl_y; y < r.max_excl_y; y++) {
-        // In Wuffs, a paletted image is always 1 byte per pixel.
-        static constexpr size_t src_bpp = 1;
-
-        int dstY = y;
-        if (sampleY != 1) {
-            if (!fSwizzler->rowNeeded(y)) {
-                continue;
-            }
-            dstY /= sampleY;
-            if (dstY >= scaledHeight) {
-                break;
-            }
-        }
-
-        // We don't adjust d by (r.min_incl_x * dst_bpp) as we have already
-        // accounted for that in swizzleRect, above.
-        uint8_t* d = fIncrDecDst + (dstY * fIncrDecRowBytes);
-
-        // The Wuffs model is that the dst buffer is the image, not the frame.
-        // The expectation is that you allocate the buffer once, but re-use it
-        // for the N frames, regardless of each frame's top-left co-ordinate.
-        //
-        // To get from the start (in the X-direction) of the image to the start
-        // of the frame, we adjust s by (r.min_incl_x * src_bpp).
-        uint8_t* s = pixels.ptr + (y * pixels.stride) + (r.min_incl_x * src_bpp);
-        if (independent) {
-            fSwizzler->swizzle(d, s);
-        } else {
-            SkASSERT(tmpBuffer.get());
-            fSwizzler->swizzle(tmpBuffer.get(), s);
-            d = SkTAddOffset<uint8_t>(d, fSwizzler->swizzleOffsetBytes());
-            const auto* swizzled = SkTAddOffset<uint32_t>(tmpBuffer.get(),
-                                                          fSwizzler->swizzleOffsetBytes());
-            blend(reinterpret_cast<uint32_t*>(d), swizzled, fSwizzler->swizzleWidth());
         }
     }
 
@@ -530,12 +475,89 @@ SkCodec::Result SkWuffsCodec::onIncrementalDecode(int* rowsDecoded) {
         *rowsDecoded = scaledHeight;
     }
 
+    SkCodec::Result result = SkCodec::kSuccess;
+    const char*     status = this->decodeFrame();
+    if (status != nullptr) {
+        if (status == wuffs_base__suspension__short_read) {
+            result = SkCodec::kIncompleteInput;
+        } else {
+            SkCodecPrintf("decodeFrame: %s", status);
+            result = SkCodec::kErrorInInput;
+        }
+
+        if (!independent) {
+            // For a dependent frame, we cannot blend the partial result, since
+            // that will overwrite the contribution from prior frames with all
+            // zeroes that were written to |pixels| above.
+            return result;
+        }
+    }
+
+    // If the frame's dirty rect is empty, no need to swizzle.
+    wuffs_base__rect_ie_u32 dirty_rect = wuffs_gif__decoder__frame_dirty_rect(fDecoder.get());
+    if (!dirty_rect.is_empty()) {
+        if (!fColorTableFilled) {
+            fColorTableFilled = true;
+            wuffs_base__slice_u8 palette = fPixelBuffer.palette();
+            SkASSERT(palette.len == 4 * 256);
+            auto proc = choose_pack_color_proc(false, dstInfo().colorType());
+            for (int i = 0; i < 256; i++) {
+                uint8_t* p = palette.ptr + 4 * i;
+                fColorTable[i] = proc(p[3], p[2], p[1], p[0]);
+            }
+        }
+
+        std::unique_ptr<uint8_t[]> tmpBuffer;
+        if (!independent) {
+            tmpBuffer.reset(new uint8_t[dstInfo().minRowBytes()]);
+        }
+        const int sampleY = fSwizzler->sampleY();
+        for (uint32_t y = dirty_rect.min_incl_y; y < dirty_rect.max_excl_y; y++) {
+            int dstY = y;
+            if (sampleY != 1) {
+                if (!fSwizzler->rowNeeded(y)) {
+                    continue;
+                }
+                dstY /= sampleY;
+                if (dstY >= scaledHeight) {
+                    break;
+                }
+            }
+
+            // We don't adjust d by (frame_rect.min_incl_x * dst_bpp) as we
+            // have already accounted for that in swizzleRect, above.
+            uint8_t* d = fIncrDecDst + (dstY * fIncrDecRowBytes);
+
+            // The Wuffs model is that the dst buffer is the image, not the frame.
+            // The expectation is that you allocate the buffer once, but re-use it
+            // for the N frames, regardless of each frame's top-left co-ordinate.
+            //
+            // To get from the start (in the X-direction) of the image to the start
+            // of the frame, we adjust s by (frame_rect.min_incl_x * src_bpp).
+            //
+            // We adjust (in the X-direction) by the frame rect, not the dirty
+            // rect, because the swizzler (which operates on rows) was
+            // configured with the frame rect's X range.
+            uint8_t* s = pixels.ptr + (y * pixels.stride) + (frame_rect.min_incl_x * src_bpp);
+            if (independent) {
+                fSwizzler->swizzle(d, s);
+            } else {
+                SkASSERT(tmpBuffer.get());
+                fSwizzler->swizzle(tmpBuffer.get(), s);
+                d = SkTAddOffset<uint8_t>(d, fSwizzler->swizzleOffsetBytes());
+                const auto* swizzled = SkTAddOffset<uint32_t>(tmpBuffer.get(),
+                                                              fSwizzler->swizzleOffsetBytes());
+                blend(reinterpret_cast<uint32_t*>(d), swizzled, fSwizzler->swizzleWidth());
+            }
+        }
+    }
+
     if (result == SkCodec::kSuccess) {
         fSpySampler.reset();
         fIncrDecDst = nullptr;
-        fIncrDecHaveFrameConfig = false;
         fIncrDecRowBytes = 0;
         fSwizzler = nullptr;
+        fColorTableFilled = false;
     } else {
         // Make fSpySampler return whatever fSwizzler would have for fillWidth.
         fSpySampler.fFillWidth = fSwizzler->fillWidth();

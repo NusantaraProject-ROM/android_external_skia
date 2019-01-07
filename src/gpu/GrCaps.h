@@ -192,7 +192,7 @@ public:
      * If this returns false then the caller should implement a fallback where a temporary texture
      * is created, pixels are written to it, and then that is copied or drawn into the the surface.
      */
-    virtual bool surfaceSupportsWritePixels(const GrSurface*) const = 0;
+    bool surfaceSupportsWritePixels(const GrSurface*) const;
 
     /**
      * Backends may have restrictions on what types of surfaces support GrGpu::readPixels().
@@ -239,15 +239,13 @@ public:
 
     bool wireframeMode() const { return fWireframeMode; }
 
-    bool sampleShadingSupport() const { return fSampleShadingSupport; }
-
     bool fenceSyncSupport() const { return fFenceSyncSupport; }
     bool crossContextTextureSupport() const { return fCrossContextTextureSupport; }
     /**
      * Returns whether or not we will be able to do a copy given the passed in params
      */
-    virtual bool canCopySurface(const GrSurfaceProxy* dst, const GrSurfaceProxy* src,
-                                const SkIRect& srcRect, const SkIPoint& dstPoint) const = 0;
+    bool canCopySurface(const GrSurfaceProxy* dst, const GrSurfaceProxy* src,
+                        const SkIRect& srcRect, const SkIPoint& dstPoint) const;
 
     bool dynamicStateArrayGeometryProcessorTextureSupport() const {
         return fDynamicStateArrayGeometryProcessorTextureSupport;
@@ -272,46 +270,35 @@ public:
     bool validateSurfaceDesc(const GrSurfaceDesc&, GrMipMapped) const;
 
     /**
-     * Returns true if the GrBackendTexture can be used with the supplied SkColorType. If it is
-     * compatible, the passed in GrPixelConfig will be set to a config that matches the backend
-     * format and requested SkColorType.
+     * If the GrBackendRenderTarget can be used with the supplied SkColorType the return will be
+     * the config that matches the backend format and requested SkColorType. Otherwise, kUnknown is
+     * returned.
      */
-    virtual bool validateBackendTexture(const GrBackendTexture& tex, SkColorType ct,
-                                        GrPixelConfig*) const = 0;
-    virtual bool validateBackendRenderTarget(const GrBackendRenderTarget&, SkColorType,
-                                             GrPixelConfig*) const = 0;
+    virtual GrPixelConfig validateBackendRenderTarget(const GrBackendRenderTarget&,
+                                                      SkColorType) const = 0;
 
-    // TODO: replace validateBackendTexture and validateBackendRenderTarget with calls to
-    // getConfigFromBackendFormat?
+    // TODO: replace validateBackendRenderTarget with calls to getConfigFromBackendFormat?
     // TODO: it seems like we could pass the full SkImageInfo and validate its colorSpace too
-    virtual bool getConfigFromBackendFormat(const GrBackendFormat& format, SkColorType ct,
-                                            GrPixelConfig*) const = 0;
+    // Returns kUnknown if a valid config could not be determined.
+    virtual GrPixelConfig getConfigFromBackendFormat(const GrBackendFormat& format,
+                                                     SkColorType ct) const = 0;
 
     /**
-     * Special method only for YUVA images. Returns true if the format can be used for a
-     * YUVA plane, and the passed in GrPixelConfig will be set to a config that matches
-     * the backend texture.
+     * Special method only for YUVA images. Returns a config that matches the backend format or
+     * kUnknown if a config could not be determined.
      */
-    virtual bool getYUVAConfigFromBackendTexture(const GrBackendTexture& tex,
-                                                 GrPixelConfig*) const = 0;
+    virtual GrPixelConfig getYUVAConfigFromBackendFormat(const GrBackendFormat& format) const = 0;
 
-    /**
-     * Special method only for YUVA images. Returns true if the format can be used for a
-     * YUVA plane, and the passed in GrPixelConfig will be set to a config that matches
-     * the backend format.
-     */
-    virtual bool getYUVAConfigFromBackendFormat(const GrBackendFormat& format,
-                                                GrPixelConfig*) const = 0;
-
+    /** These are used when creating a new texture internally. */
     virtual GrBackendFormat getBackendFormatFromGrColorType(GrColorType ct,
                                                             GrSRGBEncoded srgbEncoded) const = 0;
     GrBackendFormat getBackendFormatFromColorType(SkColorType ct) const;
 
     /**
-     * Creates a GrBackendFormat which matches the backend texture. If the backend texture is
-     * invalid, the function will return the default GrBackendFormat.
+     * The CLAMP_TO_BORDER wrap mode for texture coordinates was added to desktop GL in 1.3, and
+     * GLES 3.2, but is also available in extensions. Vulkan and Metal always have support.
      */
-    GrBackendFormat createFormatFromBackendTexture(const GrBackendTexture&) const;
+    bool clampToBorderSupport() const { return fClampToBorderSupport; }
 
     const GrDriverBugWorkarounds& workarounds() const { return fDriverBugWorkarounds; }
 
@@ -320,12 +307,6 @@ protected:
         overrides requested by the client. Note that overrides will only reduce the caps never
         expand them. */
     void applyOptionsOverrides(const GrContextOptions& options);
-
-    /**
-     * Subclasses implement this to actually create a GrBackendFormat to match backend texture. At
-     * this point, the backend texture has already been validated.
-     */
-    virtual GrBackendFormat onCreateFormatFromBackendTexture(const GrBackendTexture&) const = 0;
 
     sk_sp<GrShaderCaps> fShaderCaps;
 
@@ -349,6 +330,7 @@ protected:
     bool fMustClearUploadedBufferData                : 1;
     bool fSupportsAHardwareBufferImages              : 1;
     bool fHalfFloatVertexAttributeSupport            : 1;
+    bool fClampToBorderSupport                       : 1;
 
     // Driver workaround
     bool fBlacklistCoverageCounting                  : 1;
@@ -358,7 +340,6 @@ protected:
     // ANGLE performance workaround
     bool fPreferVRAMUseOverFlushes                   : 1;
 
-    bool fSampleShadingSupport                       : 1;
     // TODO: this may need to be an enum to support different fence types
     bool fFenceSyncSupport                           : 1;
 
@@ -389,6 +370,9 @@ protected:
 private:
     virtual void onApplyOptionsOverrides(const GrContextOptions&) {}
     virtual void onDumpJSON(SkJSONWriter*) const {}
+    virtual bool onSurfaceSupportsWritePixels(const GrSurface*) const = 0;
+    virtual bool onCanCopySurface(const GrSurfaceProxy* dst, const GrSurfaceProxy* src,
+                                  const SkIRect& srcRect, const SkIPoint& dstPoint) const = 0;
 
     // Backends should implement this if they have any extra requirements for use of window
     // rectangles for a specific GrBackendRenderTarget outside of basic support.

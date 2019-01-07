@@ -13,12 +13,14 @@
 #include "GrContextPriv.h"
 #include "GrDrawOpTest.h"
 #include "GrGeometryProcessor.h"
+#include "GrGpu.h"
 #include "GrMemoryPool.h"
 #include "GrMeshDrawOp.h"
 #include "GrOpFlushState.h"
 #include "GrQuad.h"
 #include "GrQuadPerEdgeAA.h"
 #include "GrResourceProvider.h"
+#include "GrResourceProviderPriv.h"
 #include "GrShaderCaps.h"
 #include "GrTexture.h"
 #include "GrTexturePriv.h"
@@ -52,9 +54,11 @@ static bool filter_has_effect_for_rect_stays_rect(const GrPerspQuad& quad, const
            SkScalarFraction(qt) != SkScalarFraction(srcRect.fTop);
 }
 
-static SkRect compute_domain(Domain domain, GrSamplerState::Filter filter,
-                             GrSurfaceOrigin origin, const SkRect& srcRect, float iw, float ih) {
-    static constexpr SkRect kLargeRect = {-2, -2, 2, 2};
+// if normalizing the domain then pass 1/width, 1/height, 1 for iw, ih, h. Otherwise pass
+// 1, 1, and height.
+static SkRect compute_domain(Domain domain, GrSamplerState::Filter filter, GrSurfaceOrigin origin,
+                             const SkRect& srcRect, float iw, float ih, float h) {
+    static constexpr SkRect kLargeRect = {-100000, -100000, 1000000, 1000000};
     if (domain == Domain::kNo) {
         // Either the quad has no domain constraint and is batched with a domain constrained op
         // (in which case we want a domain that doesn't restrict normalized tex coords), or the
@@ -73,7 +77,7 @@ static SkRect compute_domain(Domain domain, GrSamplerState::Filter filter,
     ltrb *= Sk4f(iw, ih, iw, ih);
     if (origin == kBottomLeft_GrSurfaceOrigin) {
         static const Sk4f kMul = {1.f, -1.f, 1.f, -1.f};
-        static const Sk4f kAdd = {0.f, 1.f, 0.f, 1.f};
+        const Sk4f kAdd = {0.f, h, 0.f, h};
         ltrb = SkNx_shuffle<0, 3, 2, 1>(kMul * ltrb + kAdd);
     }
 
@@ -82,8 +86,10 @@ static SkRect compute_domain(Domain domain, GrSamplerState::Filter filter,
     return domainRect;
 }
 
-static GrPerspQuad compute_src_quad(GrSurfaceOrigin origin, const SkRect& srcRect,
-                                    float iw, float ih) {
+// If normalizing the src quad then pass 1/width, 1/height, 1 for iw, ih, h. Otherwise pass
+// 1, 1, and height.
+static GrPerspQuad compute_src_quad(GrSurfaceOrigin origin, const SkRect& srcRect, float iw,
+                                    float ih, float h) {
     // Convert the pixel-space src rectangle into normalized texture coordinates
     SkRect texRect = {
         iw * srcRect.fLeft,
@@ -92,8 +98,8 @@ static GrPerspQuad compute_src_quad(GrSurfaceOrigin origin, const SkRect& srcRec
         ih * srcRect.fBottom
     };
     if (origin == kBottomLeft_GrSurfaceOrigin) {
-        texRect.fTop = 1.f - texRect.fTop;
-        texRect.fBottom = 1.f - texRect.fBottom;
+        texRect.fTop = h - texRect.fTop;
+        texRect.fBottom = h - texRect.fBottom;
     }
     return GrPerspQuad(texRect, SkMatrix::I());
 }
@@ -303,13 +309,21 @@ private:
         TRACE_EVENT0("skia", TRACE_FUNC);
         auto origin = proxy->origin();
         const auto* texture = proxy->peekTexture();
-        float iw = 1.f / texture->width();
-        float ih = 1.f / texture->height();
+        float iw, ih, h;
+        if (proxy->textureType() == GrTextureType::kRectangle) {
+            iw = ih = 1.f;
+            h = texture->height();
+        } else {
+            iw = 1.f / texture->width();
+            ih = 1.f / texture->height();
+            h = 1.f;
+        }
 
         for (int i = start; i < start + cnt; ++i) {
             const auto q = fQuads[i];
-            GrPerspQuad srcQuad = compute_src_quad(origin, q.srcRect(), iw, ih);
-            SkRect domain = compute_domain(q.domain(), this->filter(), origin, q.srcRect(), iw, ih);
+            GrPerspQuad srcQuad = compute_src_quad(origin, q.srcRect(), iw, ih, h);
+            SkRect domain =
+                    compute_domain(q.domain(), this->filter(), origin, q.srcRect(), iw, ih, h);
             v = GrQuadPerEdgeAA::Tessellate(v, spec, q.quad(), q.color(), srcQuad, domain,
                                             q.aaFlags());
         }
@@ -350,11 +364,20 @@ private:
         }
 
         VertexSpec vertexSpec(quadType, wideColor ? ColorType::kHalf : ColorType::kByte,
-                              GrQuadType::kRect, /* hasLocal */ true, domain, aaType);
+                              GrQuadType::kRect, /* hasLocal */ true, domain, aaType,
+                              /* alpha as coverage */ true);
+
+        GrSamplerState samplerState = GrSamplerState(GrSamplerState::WrapMode::kClamp,
+                                                     this->filter());
+        GrGpu* gpu = target->resourceProvider()->priv().gpu();
+        uint32_t extraSamplerKey = gpu->getExtraSamplerKeyForProgram(
+                samplerState, fProxies[0].fProxy->backendFormat());
 
         sk_sp<GrGeometryProcessor> gp = GrQuadPerEdgeAA::MakeTexturedProcessor(
                 vertexSpec, *target->caps().shaderCaps(),
-                textureType, config, this->filter(), std::move(fTextureColorSpaceXform));
+                textureType, config, samplerState, extraSamplerKey,
+                std::move(fTextureColorSpaceXform));
+
         GrPipeline::InitArgs args;
         args.fProxy = target->proxy();
         args.fCaps = &target->caps();
@@ -384,7 +407,7 @@ private:
         GrMesh* meshes = target->allocMeshes(numProxies);
         const GrBuffer* vbuffer;
         int vertexOffsetInBuffer = 0;
-        int numQuadVerticesLeft = numTotalQuads * 4;
+        int numQuadVerticesLeft = numTotalQuads * vertexSpec.verticesPerQuad();
         int numAllocatedVertices = 0;
         void* vdata = nullptr;
 
@@ -394,7 +417,7 @@ private:
             for (unsigned p = 0; p < op.fProxyCnt; ++p) {
                 int quadCnt = op.fProxies[p].fQuadCnt;
                 auto* proxy = op.fProxies[p].fProxy;
-                int meshVertexCnt = quadCnt * 4;
+                int meshVertexCnt = quadCnt * vertexSpec.verticesPerQuad();
                 if (numAllocatedVertices < meshVertexCnt) {
                     vdata = target->makeVertexSpaceAtLeast(
                             vertexSize, meshVertexCnt, numQuadVerticesLeft, &vbuffer,
@@ -409,19 +432,10 @@ private:
 
                 op.tess(vdata, vertexSpec, proxy, q, quadCnt);
 
-                if (quadCnt > 1) {
-                    meshes[m].setPrimitiveType(GrPrimitiveType::kTriangles);
-                    sk_sp<const GrBuffer> ibuffer =
-                            target->resourceProvider()->refQuadIndexBuffer();
-                    if (!ibuffer) {
-                        SkDebugf("Could not allocate quad indices\n");
-                        return;
-                    }
-                    meshes[m].setIndexedPatterned(ibuffer.get(), 6, 4, quadCnt,
-                                                  GrResourceProvider::QuadCountOfQuadBuffer());
-                } else {
-                    meshes[m].setPrimitiveType(GrPrimitiveType::kTriangleStrip);
-                    meshes[m].setNonIndexedNonInstanced(4);
+                if (!GrQuadPerEdgeAA::ConfigureMeshIndices(target, &(meshes[m]), vertexSpec,
+                                                           quadCnt)) {
+                    SkDebugf("Could not allocate indices");
+                    return;
                 }
                 meshes[m].setVertexData(vbuffer, vertexOffsetInBuffer);
                 if (dynamicStateArrays) {
@@ -464,8 +478,7 @@ private:
         if (fProxyCnt > 1 || that->fProxyCnt > 1 ||
             thisProxy->uniqueID() != thatProxy->uniqueID()) {
             // We can't merge across different proxies. Check if 'this' can be chained with 'that'.
-            if (thisProxy->config() == thatProxy->config() &&
-                thisProxy->textureType() == thatProxy->textureType() &&
+            if (GrTextureProxy::ProxiesAreCompatibleAsDynamicState(thisProxy, thatProxy) &&
                 caps.dynamicStateArrayGeometryProcessorTextureSupport()) {
                 return CombineResult::kMayChain;
             }

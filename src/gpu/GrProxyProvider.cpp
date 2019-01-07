@@ -104,13 +104,16 @@ void GrProxyProvider::adoptUniqueKeyFromSurface(GrTextureProxy* proxy, const GrS
     fUniquelyKeyedProxies.add(proxy);
 }
 
-void GrProxyProvider::removeUniqueKeyFromProxy(const GrUniqueKey& key, GrTextureProxy* proxy) {
+void GrProxyProvider::removeUniqueKeyFromProxy(GrTextureProxy* proxy) {
     ASSERT_SINGLE_OWNER
-    if (this->isAbandoned() || !proxy) {
+    SkASSERT(proxy);
+    SkASSERT(proxy->getUniqueKey().isValid());
+
+    if (this->isAbandoned()) {
         return;
     }
 
-    this->processInvalidProxyUniqueKey(key, proxy, true);
+    this->processInvalidUniqueKey(proxy->getUniqueKey(), proxy, InvalidateGPUResource::kYes);
 }
 
 sk_sp<GrTextureProxy> GrProxyProvider::findProxyByUniqueKey(const GrUniqueKey& key,
@@ -220,9 +223,6 @@ sk_sp<GrTextureProxy> GrProxyProvider::createTextureProxy(sk_sp<SkImage> srcImag
     if (SkToBool(descFlags & kRenderTarget_GrSurfaceFlag)) {
         if (fCaps->usesMixedSamples() && sampleCnt > 1) {
             surfaceFlags |= GrInternalSurfaceFlags::kMixedSampled;
-        }
-        if (fCaps->maxWindowRectangles() > 0) {
-            surfaceFlags |= GrInternalSurfaceFlags::kWindowRectsSupport;
         }
     }
 
@@ -415,8 +415,10 @@ sk_sp<GrTextureProxy> GrProxyProvider::createProxy(const GrBackendFormat& format
 sk_sp<GrTextureProxy> GrProxyProvider::wrapBackendTexture(const GrBackendTexture& backendTex,
                                                           GrSurfaceOrigin origin,
                                                           GrWrapOwnership ownership,
+                                                          GrIOType ioType,
                                                           ReleaseProc releaseProc,
                                                           ReleaseContext releaseCtx) {
+    SkASSERT(ioType != kWrite_GrIOType);
     if (this->isAbandoned()) {
         return nullptr;
     }
@@ -426,7 +428,7 @@ sk_sp<GrTextureProxy> GrProxyProvider::wrapBackendTexture(const GrBackendTexture
         return nullptr;
     }
 
-    sk_sp<GrTexture> tex = fResourceProvider->wrapBackendTexture(backendTex, ownership);
+    sk_sp<GrTexture> tex = fResourceProvider->wrapBackendTexture(backendTex, ownership, ioType);
     if (!tex) {
         return nullptr;
     }
@@ -516,10 +518,39 @@ sk_sp<GrSurfaceProxy> GrProxyProvider::wrapBackendTextureAsRenderTarget(
     }
     SkASSERT(!rt->asTexture());  // A GrRenderTarget that's not textureable
     SkASSERT(!rt->getUniqueKey().isValid());
-    // Make sure we match how we created the proxy with SkBudgeted::kNo
+    // This proxy should be unbudgeted because we're just wrapping an external resource
     SkASSERT(SkBudgeted::kNo == rt->resourcePriv().isBudgeted());
 
     return sk_sp<GrSurfaceProxy>(new GrRenderTargetProxy(std::move(rt), origin));
+}
+
+sk_sp<GrRenderTargetProxy> GrProxyProvider::wrapVulkanSecondaryCBAsRenderTarget(
+        const SkImageInfo& imageInfo, const GrVkDrawableInfo& vkInfo) {
+    if (this->isAbandoned()) {
+        return nullptr;
+    }
+
+    // This is only supported on a direct GrContext.
+    if (!fResourceProvider) {
+        return nullptr;
+    }
+
+    sk_sp<GrRenderTarget> rt = fResourceProvider->wrapVulkanSecondaryCBAsRenderTarget(imageInfo,
+                                                                                      vkInfo);
+
+    if (!rt) {
+        return nullptr;
+    }
+    SkASSERT(!rt->asTexture());  // A GrRenderTarget that's not textureable
+    SkASSERT(!rt->getUniqueKey().isValid());
+    // This proxy should be unbudgeted because we're just wrapping an external resource
+    SkASSERT(SkBudgeted::kNo == rt->resourcePriv().isBudgeted());
+
+    // All Vulkan surfaces uses top left origins.
+    return sk_sp<GrRenderTargetProxy>(
+            new GrRenderTargetProxy(std::move(rt),
+                                    kTopLeft_GrSurfaceOrigin,
+                                    GrRenderTargetProxy::WrapsVkSecondaryCB::kYes));
 }
 
 sk_sp<GrTextureProxy> GrProxyProvider::createLazyProxy(LazyInstantiateCallback&& callback,
@@ -570,9 +601,6 @@ sk_sp<GrTextureProxy> GrProxyProvider::createLazyProxy(LazyInstantiateCallback&&
         if (SkToBool(surfaceFlags & GrInternalSurfaceFlags::kMixedSampled)) {
             SkASSERT(fCaps->usesMixedSamples() && desc.fSampleCnt > 1);
         }
-        if (SkToBool(surfaceFlags & GrInternalSurfaceFlags::kWindowRectsSupport)) {
-            SkASSERT(fCaps->maxWindowRectangles() > 0);
-        }
     }
 #endif
 
@@ -601,9 +629,6 @@ sk_sp<GrRenderTargetProxy> GrProxyProvider::createLazyRenderTargetProxy(
     if (SkToBool(surfaceFlags & GrInternalSurfaceFlags::kMixedSampled)) {
         SkASSERT(fCaps->usesMixedSamples() && desc.fSampleCnt > 1);
     }
-    if (SkToBool(surfaceFlags & GrInternalSurfaceFlags::kWindowRectsSupport)) {
-        SkASSERT(fCaps->maxWindowRectangles() > 0);
-    }
 #endif
 
     using LazyInstantiationType = GrSurfaceProxy::LazyInstantiationType;
@@ -631,9 +656,6 @@ sk_sp<GrTextureProxy> GrProxyProvider::MakeFullyLazyProxy(LazyInstantiateCallbac
     GrInternalSurfaceFlags surfaceFlags = GrInternalSurfaceFlags::kNoPendingIO;
     if (Renderable::kYes == renderable) {
         desc.fFlags = kRenderTarget_GrSurfaceFlag;
-        if (caps.maxWindowRectangles() > 0) {
-            surfaceFlags |= GrInternalSurfaceFlags::kWindowRectsSupport;
-        }
     }
     desc.fWidth = -1;
     desc.fHeight = -1;
@@ -663,29 +685,37 @@ bool GrProxyProvider::IsFunctionallyExact(GrSurfaceProxy* proxy) {
                               proxy->worstCaseHeight() == proxy->height());
 }
 
-void GrProxyProvider::processInvalidProxyUniqueKey(const GrUniqueKey& key) {
+void GrProxyProvider::processInvalidUniqueKey(const GrUniqueKey& key, GrTextureProxy* proxy,
+                                              InvalidateGPUResource invalidateGPUResource) {
+    SkASSERT(key.isValid());
+
+    if (!proxy) {
+        proxy = fUniquelyKeyedProxies.find(key);
+    }
+    SkASSERT(!proxy || proxy->getUniqueKey() == key);
+
+    // Locate the corresponding GrGpuResource (if it needs to be invalidated) before clearing the
+    // proxy's unique key. We must do it in this order because 'key' may alias the proxy's key.
+    sk_sp<GrGpuResource> invalidGpuResource;
+    if (InvalidateGPUResource::kYes == invalidateGPUResource) {
+        if (proxy && proxy->isInstantiated()) {
+            invalidGpuResource = sk_ref_sp(proxy->peekSurface());
+        }
+        if (!invalidGpuResource && fResourceProvider) {
+            invalidGpuResource = fResourceProvider->findByUniqueKey<GrGpuResource>(key);
+        }
+        SkASSERT(!invalidGpuResource || invalidGpuResource->getUniqueKey() == key);
+    }
+
     // Note: this method is called for the whole variety of GrGpuResources so often 'key'
     // will not be in 'fUniquelyKeyedProxies'.
-    GrTextureProxy* proxy = fUniquelyKeyedProxies.find(key);
     if (proxy) {
-        this->processInvalidProxyUniqueKey(key, proxy, false);
+        fUniquelyKeyedProxies.remove(key);
+        proxy->cacheAccess().clearUniqueKey();
     }
-}
 
-void GrProxyProvider::processInvalidProxyUniqueKey(const GrUniqueKey& key, GrTextureProxy* proxy,
-                                                   bool invalidateSurface) {
-    SkASSERT(proxy);
-    SkASSERT(proxy->getUniqueKey().isValid());
-    SkASSERT(proxy->getUniqueKey() == key);
-
-    fUniquelyKeyedProxies.remove(key);
-    proxy->cacheAccess().clearUniqueKey();
-
-    if (invalidateSurface && proxy->isInstantiated()) {
-        GrSurface* surface = proxy->peekSurface();
-        if (surface) {
-            surface->resourcePriv().removeUniqueKey();
-        }
+    if (invalidGpuResource) {
+        invalidGpuResource->resourcePriv().removeUniqueKey();
     }
 }
 
@@ -703,7 +733,7 @@ void GrProxyProvider::removeAllUniqueKeys() {
     for (UniquelyKeyedProxyHash::Iter iter(&fUniquelyKeyedProxies); !iter.done(); ++iter) {
         GrTextureProxy& tmp = *iter;
 
-        this->processInvalidProxyUniqueKey(tmp.getUniqueKey(), &tmp, false);
+        this->processInvalidUniqueKey(tmp.getUniqueKey(), &tmp, InvalidateGPUResource::kNo);
     }
     SkASSERT(!fUniquelyKeyedProxies.count());
 }

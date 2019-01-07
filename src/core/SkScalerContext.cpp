@@ -555,10 +555,6 @@ void SkScalerContext::getFontMetrics(SkFontMetrics* fm) {
     this->generateFontMetrics(fm);
 }
 
-SkUnichar SkScalerContext::generateGlyphToChar(uint16_t glyph) {
-    return 0;
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 
 bool SkScalerContext::internalGetPath(SkPackedGlyphID glyphID, SkPath* devPath) {
@@ -1111,17 +1107,6 @@ SkDescriptor* SkScalerContext::CreateDescriptorAndEffectsUsingPaint(
     SkScalerContextRec rec;
     MakeRecAndEffects(font, paint, surfaceProps, scalerContextFlags, deviceMatrix, &rec, effects);
     return AutoDescriptorGivenRecAndEffects(rec, *effects, ad);
-}
-
-SkDescriptor* SkScalerContext::CreateDescriptorAndEffectsUsingPaint(
-    const SkPaint& paint, const SkSurfaceProps& surfaceProps,
-    SkScalerContextFlags scalerContextFlags,
-    const SkMatrix& deviceMatrix, SkAutoDescriptor* ad,
-    SkScalerContextEffects* effects)
-{
-    return CreateDescriptorAndEffectsUsingPaint(SkFont::LEGACY_ExtractFromPaint(paint), paint,
-                                                surfaceProps, scalerContextFlags,
-                                                deviceMatrix, ad, effects);
 }
 
 static size_t calculate_size_and_flatten(const SkScalerContextRec& rec,

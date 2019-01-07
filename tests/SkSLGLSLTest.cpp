@@ -1147,8 +1147,8 @@ DEF_TEST(SkSLFragCoord, r) {
          "uniform float u_skRTHeight;\n"
          "out vec4 sk_FragColor;\n"
          "void main() {\n"
-         "    vec2 _sktmpCoord = gl_FragCoord.xy;\n"
-         "    vec4 sk_FragCoord = vec4(_sktmpCoord.x, u_skRTHeight - _sktmpCoord.y, 1.0, 1.0);\n"
+         "    vec4 sk_FragCoord = vec4(gl_FragCoord.x, u_skRTHeight - gl_FragCoord.y, "
+                 "gl_FragCoord.z, gl_FragCoord.w);\n"
          "    sk_FragColor.xy = sk_FragCoord.xy;\n"
          "}\n",
          &inputs);
@@ -1562,7 +1562,7 @@ DEF_TEST(SkSLRectangleTexture, r) {
          "out vec4 sk_FragColor;\n"
          "uniform sampler2DRect test;\n"
          "void main() {\n"
-         "    sk_FragColor = texture(test, textureSize(test) * vec2(0.5));\n"
+         "    sk_FragColor = texture(test, vec2(0.5));\n"
          "}\n");
     test(r,
          "uniform sampler2DRect test;"
@@ -1574,7 +1574,7 @@ DEF_TEST(SkSLRectangleTexture, r) {
          "out vec4 sk_FragColor;\n"
          "uniform sampler2DRect test;\n"
          "void main() {\n"
-         "    sk_FragColor = texture(test, vec3(textureSize(test), 1.0) * vec3(0.5));\n"
+         "    sk_FragColor = texture(test, vec3(0.5));\n"
          "}\n");
 }
 

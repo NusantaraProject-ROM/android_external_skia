@@ -238,9 +238,7 @@ bool GrTextBlob::VertexRegenerator::doRegen(GrTextBlob::VertexRegenerator::Resul
     if (regenTexCoords) {
         fSubRun->resetBulkUseToken();
 
-        const SkDescriptor* desc = (fRun->fOverrideDescriptor && !fSubRun->drawAsDistanceFields())
-                                           ? fRun->fOverrideDescriptor->getDesc()
-                                           : fRun->fDescriptor.getDesc();
+        const SkDescriptor* desc = fSubRun->desc();
 
         if (!*fLazyCache || (*fLazyCache)->getDescriptor() != *desc) {
             SkScalerContextEffects effects;
@@ -271,9 +269,8 @@ bool GrTextBlob::VertexRegenerator::doRegen(GrTextBlob::VertexRegenerator::Resul
             if (regenGlyphs) {
                 // Get the id from the old glyph, and use the new strike to lookup
                 // the glyph.
-                GrGlyph::PackedID id = fBlob->fGlyphs[glyphOffset]->fPackedID;
-                fBlob->fGlyphs[glyphOffset] =
-                        strike->getGlyph(id, fSubRun->maskFormat(), fLazyCache->get());
+                SkPackedGlyphID id = fBlob->fGlyphs[glyphOffset]->fPackedID;
+                fBlob->fGlyphs[glyphOffset] = strike->getGlyph(id, fLazyCache->get());
                 SkASSERT(id == fBlob->fGlyphs[glyphOffset]->fPackedID);
             }
             glyph = fBlob->fGlyphs[glyphOffset];
@@ -317,6 +314,11 @@ bool GrTextBlob::VertexRegenerator::doRegen(GrTextBlob::VertexRegenerator::Resul
         fSubRun->setAtlasGeneration(fBrokenRun
                                     ? GrDrawOpAtlas::kInvalidAtlasGeneration
                                     : fFullAtlasManager->atlasGeneration(fSubRun->maskFormat()));
+    } else {
+        // For the non-texCoords case we need to ensure that we update the associated use tokens
+        fFullAtlasManager->setUseTokenBulk(*fSubRun->bulkUseToken(),
+                                           fUploadTarget->tokenTracker()->nextDrawToken(),
+                                           fSubRun->maskFormat());
     }
     return true;
 }

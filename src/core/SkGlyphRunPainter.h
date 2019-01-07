@@ -82,6 +82,7 @@ public:
 
     using ARGBFallback =
     std::function<void(const SkPaint& fallbackPaint, // The run paint maybe with a new text size
+                       const SkFont& fallbackFont,
                        SkSpan<const SkGlyphID> fallbackGlyphIDs, // Colored glyphs
                        SkSpan<const SkPoint> fallbackPositions,  // Positions of above glyphs
                        SkScalar fallbackTextScale,               // Scale factor for glyph
@@ -97,21 +98,23 @@ public:
     template <typename PerEmptyT, typename PerPath>
     void drawGlyphRunAsPathWithARGBFallback(
             SkGlyphCacheInterface* cache, const SkGlyphRun& glyphRun,
-            SkPoint origin, const SkMatrix& viewMatrix, SkScalar textScale,
+            SkPoint origin, const SkPaint& paint, const SkMatrix& viewMatrix, SkScalar textScale,
             PerEmptyT&& perEmpty, PerPath&& perPath, ARGBFallback&& fallbackARGB);
 
     template <typename PerEmptyT, typename PerSDFT, typename PerPathT>
     void drawGlyphRunAsSDFWithARGBFallback(
             SkGlyphCacheInterface* cache, const SkGlyphRun& glyphRun,
-            SkPoint origin, const SkMatrix& viewMatrix, SkScalar textRatio,
+            SkPoint origin, const SkPaint& runPaint, const SkMatrix& viewMatrix, SkScalar textRatio,
             PerEmptyT&& perEmpty, PerSDFT&& perSDF, PerPathT&& perPath, ARGBFallback&& perFallback);
 
+    // TODO: Make this the canonical check for Skia.
+    static bool ShouldDrawAsPath(const SkPaint& paint, const SkFont& font, const SkMatrix& matrix);
+
 private:
-    static bool ShouldDrawAsPath(const SkPaint& paint, const SkMatrix& matrix);
     void ensureBitmapBuffers(size_t runSize);
 
     void processARGBFallback(
-            SkScalar maxGlyphDimension, const SkPaint& runPaint,
+            SkScalar maxGlyphDimension, const SkPaint& fallbackPaint, const SkFont& fallbackFont,
             const SkMatrix& viewMatrix, SkScalar textScale, ARGBFallback argbFallback);
 
     // The props as on the actual device.

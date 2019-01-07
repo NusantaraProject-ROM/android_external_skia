@@ -202,7 +202,8 @@ void GrCoverageCountingPathRenderer::preFlush(GrOnFlushResourceProvider* onFlush
         if (stashedAtlasProxy) {
             // Instantiate the proxy so we can clear the underlying texture's unique key.
             onFlushRP->instatiateProxy(stashedAtlasProxy.get());
-            onFlushRP->removeUniqueKeyFromProxy(fStashedAtlasKey, stashedAtlasProxy.get());
+            SkASSERT(fStashedAtlasKey == stashedAtlasProxy->getUniqueKey());
+            onFlushRP->removeUniqueKeyFromProxy(stashedAtlasProxy.get());
         } else {
             fStashedAtlasKey.reset();  // Indicate there is no stashed atlas to copy from.
         }
@@ -276,8 +277,9 @@ void GrCoverageCountingPathRenderer::preFlush(GrOnFlushResourceProvider* onFlush
     if (!resources->finalize(onFlushRP, std::move(stashedAtlasProxy), out)) {
         return;
     }
+
     // Verify the stashed atlas got released so its texture could be recycled.
-    SkASSERT(!stashedAtlasProxy);
+    SkASSERT(!stashedAtlasProxy);  // NOLINT(bugprone-use-after-move)
 
     // Commit flushing paths to the resources once they are successfully completed.
     for (auto& flushingPaths : fFlushingPaths) {

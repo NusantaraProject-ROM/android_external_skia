@@ -72,13 +72,14 @@ public:
 
 protected:
     SkCanvas::SaveLayerStrategy getSaveLayerStrategy(const SaveLayerRec& rec) override;
+    bool onDoSaveBehind(const SkRect*) override;
     void onDrawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
                         const SkPaint& paint) override;
 
 private:
     class TrackLayerDevice;
 
-
+    static SkScalar SetupForPath(SkPaint* paint, SkFont* font);
 };
 
 using SkDiscardableHandleId = uint32_t;
@@ -124,7 +125,10 @@ public:
     // Methods used internally in skia ------------------------------------------
     class SkGlyphCacheState;
 
-    SkGlyphCacheState* getOrCreateCache(const SkPaint&, const SkSurfaceProps&, const SkMatrix&,
+    SkGlyphCacheState* getOrCreateCache(const SkPaint&,
+                                        const SkFont& font,
+                                        const SkSurfaceProps&,
+                                        const SkMatrix&,
                                         SkScalerContextFlags flags,
                                         SkScalerContextEffects* effects);
 

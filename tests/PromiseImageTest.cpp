@@ -10,7 +10,6 @@
 #include "GrBackendSurface.h"
 #include "GrContextPriv.h"
 #include "GrGpu.h"
-#include "SkDeferredDisplayListRecorder.h"
 #include "SkImage_Gpu.h"
 
 using namespace sk_gpu_test;
@@ -104,7 +103,7 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(PromiseImageTest, reporter, ctxInfo) {
                 nullptr, kWidth, kHeight, GrColorType::kRGBA_8888, true, GrMipMapped::kNo);
         REPORTER_ASSERT(reporter, backendTex.isValid());
 
-        GrBackendFormat backendFormat = gpu->caps()->createFormatFromBackendTexture(backendTex);
+        GrBackendFormat backendFormat = backendTex.getBackendFormat();
         REPORTER_ASSERT(reporter, backendFormat.isValid());
 
         PromiseTextureChecker promiseChecker(backendTex);

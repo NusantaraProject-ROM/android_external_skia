@@ -69,7 +69,7 @@ public:
     static bool ShouldDither(const SkPaint&, SkColorType);
 
     // returns -1 if buffer is invalid for specified encoding
-    static int ValidCountText(const void* text, size_t length, SkPaint::TextEncoding);
+    static int ValidCountText(const void* text, size_t length, SkTextEncoding);
 
     static SkTypeface* GetTypefaceOrDefault(const SkPaint& paint) {
         return paint.getTypeface() ? paint.getTypeface() : SkTypeface::GetDefaultTypeface();
@@ -77,6 +77,10 @@ public:
 
     static sk_sp<SkTypeface> RefTypefaceOrDefault(const SkPaint& paint) {
         return paint.getTypeface() ? paint.refTypeface() : SkTypeface::MakeDefault();
+    }
+
+    static SkTextEncoding GetEncoding(const SkPaint& paint) {
+        return paint.getTextEncoding();
     }
 
     /** Serializes SkPaint into a buffer. A companion unflatten() call
@@ -97,6 +101,8 @@ public:
     */
     static bool Unflatten(SkPaint* paint, SkReadBuffer& buffer);
 
+private:
+    static bool Unflatten_PreV68(SkPaint* paint, SkReadBuffer& buffer);
 };
 
 #endif

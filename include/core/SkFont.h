@@ -44,6 +44,9 @@ public:
     */
     SkFont(sk_sp<SkTypeface> typeface, SkScalar size);
 
+    // Experimental
+    explicit SkFont(sk_sp<SkTypeface> typeface);
+
 
     /** Constructs SkFont with default values with SkTypeface and size in points,
         horizontal scale, and horizontal skew. Horizontal scale emulates condensed
@@ -61,10 +64,12 @@ public:
     /** Compares SkFont and font, and returns true if they are equivalent.
         May return false if SkTypeface has identical contents but different pointers.
 
-        @param font  SkPaint to compare
+        @param font  font to compare
         @return      true if SkFont pair are equivalent
     */
     bool operator==(const SkFont& font) const;
+    // Experimental
+    bool operator!=(const SkFont& font) const { return !(*this == font); }
 
     /** If true, instructs the font manager to always hint glyphs.
         Returned value is only meaningful if platform uses FreeType as the font manager.
@@ -246,7 +251,7 @@ public:
         If maxGlyphCount is not sufficient to store all the glyphs, no glyphs are copied.
         The total glyph count is returned for subsequent buffer reallocation.
 
-        @param text          character storage encoded with SkPaint::TextEncoding
+        @param text          character storage encoded with SkTextEncoding
         @param byteLength    length of character storage in bytes
         @param encoding      one of: kUTF8_SkTextEncoding, kUTF16_SkTextEncoding,
                              kUTF32_SkTextEncoding, kGlyphID_SkTextEncoding
@@ -268,7 +273,7 @@ public:
 
     /** Returns number of glyphs represented by text.
 
-        @param text          character storage encoded with SkPaint::TextEncoding
+        @param text          character storage encoded with SkTextEncoding
         @param byteLength    length of character storage in bytes
         @param encoding      one of: kUTF8_SkTextEncoding, kUTF16_SkTextEncoding,
                              kUTF32_SkTextEncoding, kGlyphID_SkTextEncoding
@@ -295,11 +300,29 @@ public:
      */
     bool containsText(const void* text, size_t byteLength, SkTextEncoding encoding) const;
 
+    /** Returns the bytes of text that fit within maxWidth.
+        The text fragment fits if its advance width is less than or equal to maxWidth.
+        Measures only while the advance is less than or equal to maxWidth.
+        Returns the advance or the text fragment in measuredWidth if it not nullptr.
+        Uses encoding to decode text, SkTypeface to get the font metrics,
+        and text size to scale the metrics.
+        Does not scale the advance or bounds by fake bold.
+
+        @param text           character codes or glyph indices to be measured
+        @param length         number of bytes of text to measure
+        @param encoding       text encoding
+        @param maxWidth       advance limit; text is measured while advance is less than maxWidth
+        @param measuredWidth  returns the width of the text less than or equal to maxWidth
+        @return               bytes of text that fit, always less than or equal to length
+    */
+    size_t breakText(const void* text, size_t length, SkTextEncoding encoding, SkScalar maxWidth,
+                     SkScalar* measuredWidth = nullptr) const;
+
     /** Returns the advance width of text.
         The advance is the normal distance to move before drawing additional text.
         Returns the bounding box of text if bounds is not nullptr.
 
-        @param text        character storage encoded with SkPaint::TextEncoding
+        @param text        character storage encoded with SkTextEncoding
         @param byteLength  length of character storage in bytes
         @param encoding    one of: kUTF8_SkTextEncoding, kUTF16_SkTextEncoding,
                            kUTF32_SkTextEncoding, kGlyphID_SkTextEncoding
@@ -307,7 +330,13 @@ public:
         @return            number of glyphs represented by text of length byteLength
     */
     SkScalar measureText(const void* text, size_t byteLength, SkTextEncoding encoding,
-                         SkRect* bounds = nullptr) const;
+                         SkRect* bounds = nullptr) const {
+        return this->measureText(text, byteLength, encoding, bounds, nullptr);
+    }
+
+    // Experimental
+    SkScalar measureText(const void* text, size_t byteLength, SkTextEncoding encoding,
+                         SkRect* bounds, const SkPaint*) const;
 
     /** DEPRECATED
         Retrieves the advance and bounds for each glyph in glyphs.
@@ -353,7 +382,7 @@ public:
         @param count       number of glyphs
         @param widths      returns text advances for each glyph; may be nullptr
         @param bounds      returns bounds for each glyph relative to (0, 0); may be nullptr
-        @param paint       optional, specifies stroking, patheffect and maskfilter
+        @param paint       optional, specifies stroking, SkPathEffect and SkMaskFilter
      */
     void getWidthsBounds(const uint16_t glyphs[], int count, SkScalar widths[], SkRect bounds[],
                          const SkPaint* paint) const;
@@ -362,12 +391,12 @@ public:
     /** Experimental.
         Retrieves the bounds for each glyph in glyphs.
         bounds must be an array of count entries.
-        If paint is not nullptr, its stroking, patheffect and maskfilter fields will be respected.
+        If paint is not nullptr, its stroking, SkPathEffect, and SkMaskFilter fields are respected.
 
         @param glyphs      array of glyph indices to be measured
         @param count       number of glyphs
         @param bounds      returns bounds for each glyph relative to (0, 0); may be nullptr
-        @param paint       optional, specifies stroking, patheffect and maskfilter
+        @param paint       optional, specifies stroking, SkPathEffect, and SkMaskFilter
      */
     void getBounds(const uint16_t glyphs[], int count, SkRect bounds[],
                    const SkPaint* paint) const {
@@ -451,6 +480,12 @@ public:
     */
     static SkFont LEGACY_ExtractFromPaint(const SkPaint& paint);
 
+    /** Experimental.
+     *  Dumps fields of the font to SkDebugf. May change its output over time, so clients should
+     *  not rely on this for anything specific. Used to aid in debugging.
+     */
+    void dump() const;
+
 private:
     enum PrivFlags {
         kForceAutoHinting_PrivFlag      = 1 << 0,
@@ -460,7 +495,7 @@ private:
         kEmbolden_PrivFlag              = 1 << 4,
     };
 
-    static constexpr unsigned kAllFlags = 0x07F;
+    static constexpr unsigned kAllFlags = 0x1F;
 
     sk_sp<SkTypeface> fTypeface;
     SkScalar    fSize;
@@ -471,8 +506,17 @@ private:
     uint8_t     fHinting;
 
     SkScalar setupForAsPaths(SkPaint*);
+    bool hasSomeAntiAliasing() const;
 
+    void glyphsToUnichars(const SkGlyphID glyphs[], int count, SkUnichar text[]) const;
+
+    friend class GrTextBlob;
     friend class SkCanonicalizeFont;
+    friend class SkFontPriv;
+    friend class SkGlyphRunListPainter;
+    friend class SkPaint;
+    friend class SkTextBlobCacheDiffCanvas;
+    friend class SVGTextBuilder;
 };
 
 #endif
