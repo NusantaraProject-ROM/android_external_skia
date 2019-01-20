@@ -96,6 +96,8 @@ bool GrGLInterface::validate() const {
         !fFunctions.fStencilOp ||
         !fFunctions.fStencilOpSeparate ||
         !fFunctions.fTexImage2D ||
+        !fFunctions.fTexParameterf ||
+        !fFunctions.fTexParameterfv ||
         !fFunctions.fTexParameteri ||
         !fFunctions.fTexParameteriv ||
         !fFunctions.fTexSubImage2D ||
@@ -577,17 +579,6 @@ bool GrGLInterface::validate() const {
 
     if (fExtensions.has("GL_EXT_window_rectangles")) {
         if (!fFunctions.fWindowRectangles) {
-            RETURN_FALSE_INTERFACE;
-        }
-    }
-
-    if ((kGL_GrGLStandard == fStandard && glVer >= GR_GL_VER(4,0)) ||
-        fExtensions.has("GL_ARB_sample_shading")) {
-        if (!fFunctions.fMinSampleShading) {
-            RETURN_FALSE_INTERFACE;
-        }
-    } else if (kGLES_GrGLStandard == fStandard && fExtensions.has("GL_OES_sample_shading")) {
-        if (!fFunctions.fMinSampleShading) {
             RETURN_FALSE_INTERFACE;
         }
     }

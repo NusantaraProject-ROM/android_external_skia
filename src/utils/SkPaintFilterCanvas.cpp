@@ -220,39 +220,6 @@ void SkPaintFilterCanvas::onDrawDrawable(SkDrawable* drawable, const SkMatrix* m
     }
 }
 
-void SkPaintFilterCanvas::onDrawText(const void* text, size_t byteLength, SkScalar x, SkScalar y,
-                                     const SkPaint& paint) {
-    AutoPaintFilter apf(this, kText_Type, paint);
-    if (apf.shouldDraw()) {
-        this->SkNWayCanvas::onDrawText(text, byteLength, x, y, *apf.paint());
-    }
-}
-
-void SkPaintFilterCanvas::onDrawPosText(const void* text, size_t byteLength, const SkPoint pos[],
-                                        const SkPaint& paint) {
-    AutoPaintFilter apf(this, kText_Type, paint);
-    if (apf.shouldDraw()) {
-        this->SkNWayCanvas::onDrawPosText(text, byteLength, pos, *apf.paint());
-    }
-}
-
-void SkPaintFilterCanvas::onDrawPosTextH(const void* text, size_t byteLength, const SkScalar xpos[],
-                                         SkScalar constY, const SkPaint& paint) {
-    AutoPaintFilter apf(this, kText_Type, paint);
-    if (apf.shouldDraw()) {
-        this->SkNWayCanvas::onDrawPosTextH(text, byteLength, xpos, constY, *apf.paint());
-    }
-}
-
-void SkPaintFilterCanvas::onDrawTextRSXform(const void* text, size_t byteLength,
-                                            const SkRSXform xform[], const SkRect* cull,
-                                            const SkPaint& paint) {
-    AutoPaintFilter apf(this, kText_Type, paint);
-    if (apf.shouldDraw()) {
-        this->SkNWayCanvas::onDrawTextRSXform(text, byteLength, xform, cull, *apf.paint());
-    }
-}
-
 void SkPaintFilterCanvas::onDrawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
                                          const SkPaint& paint) {
     AutoPaintFilter apf(this, kTextBlob_Type, paint);

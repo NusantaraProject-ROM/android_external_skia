@@ -2,15 +2,108 @@ SkFont Reference
 ===
 
 
-<a name='Advance'></a>
-
-<a name='Engine'></a>
-
 <pre style="padding: 1em 1em 1em 1em;width: 62.5em; background-color: #f0f0f0">
 class <a href='SkFont_Reference#SkFont'>SkFont</a> {
     // <i><a href='SkFont_Reference#SkFont'>SkFont</a> interface</i>
 };
 </pre>
+
+<a name='Advance'></a>
+
+<a name='Engine'></a>
+
+<a name='Size'></a>
+
+<a href='#Font_Size'>Font_Size</a> adjusts the overall <a href='undocumented#Text'>text</a> <a href='undocumented#Size'>size</a> in <a href='SkPoint_Reference#Point'>points</a>.
+<a href='#Font_Size'>Font_Size</a> can be set to any positive value or zero.
+<a href='#Font_Size'>Font_Size</a> defaults to 12.
+<a href='#Font_Size'>Font_Size</a>
+
+<a name='Scale_X'></a>
+
+<a href='#Font_Scale_X'>Font_Scale_X</a> adjusts the <a href='undocumented#Text'>text</a> horizontal scale.
+<a href='undocumented#Text'>Text</a> scaling approximates condensed and expanded type faces when the actual face
+is not available.
+<a href='#Font_Scale_X'>Font_Scale_X</a> can be set to any value.
+<a href='#Font_Scale_X'>Font_Scale_X</a> defaults to 1.
+
+<a name='Skew_X'></a>
+
+<a href='#Font_Skew_X'>Font_Skew_X</a> adjusts the <a href='undocumented#Text'>text</a> horizontal slant.
+<a href='undocumented#Text'>Text</a> skewing approximates italic and oblique type faces when the actual face
+is not available.
+<a href='#Font_Skew_X'>Font_Skew_X</a> can be set to any value.
+<a href='#Font_Skew_X'>Font_Skew_X</a> defaults to 0.
+
+<a name='Embolden'></a>
+
+<a href='#Font_Embolden'>Font_Embolden</a> approximates the bold <a href='SkFont_Reference#Font'>font</a> style accompanying a normal <a href='SkFont_Reference#Font'>font</a> when a bold <a href='SkFont_Reference#Font'>font</a> face
+is not available. Skia does not provide <a href='SkFont_Reference#Font'>font</a> substitution; it is up to the client to find the
+bold <a href='SkFont_Reference#Font'>font</a> face using the platform <a href='#Font_Manager'>Font_Manager</a>.
+
+Use <a href='#Font_Skew_X'>Font_Skew_X</a> to approximate an italic <a href='SkFont_Reference#Font'>font</a> style when the italic <a href='SkFont_Reference#Font'>font</a> face
+is not available.
+
+A FreeType based port may define SK_USE_FREETYPE_EMBOLDEN at compile time to direct
+the  <a href='SkFont_Reference#Font_Engine'>font engine</a> to create the bold <a href='undocumented#Glyph'>Glyphs</a>. Otherwise, the extra bold is computed
+by increasing the stroke width and setting the <a href='SkPaint_Reference#SkPaint'>SkPaint</a>::<a href='#SkPaint_Style'>Style</a> to
+<a href='SkPaint_Reference#SkPaint'>SkPaint</a>::<a href='#SkPaint_kStrokeAndFill_Style'>kStrokeAndFill_Style</a> as needed.
+
+<a href='#Font_Embolden'>Font_Embolden</a> is disabled by default.
+
+<a name='Hinting_Spacing'></a>
+
+If Hinting is set to <a href='undocumented#SkFontHinting'>SkFontHinting</a>::<a href='#SkFontHinting_kFull'>kFull</a>, <a href='#Font_Hinting_Spacing'>Hinting_Spacing</a> adjusts the character
+spacing by the difference of the hinted and unhinted <a href='#Left_Side_Bearing'>Left_Side_Bearing</a> and
+<a href='#Right_Side_Bearing'>Right_Side_Bearing</a>. <a href='#Font_Hinting_Spacing'>Hinting_Spacing</a> only applies to platforms that use
+FreeType as their <a href='#Font_Engine'>Font_Engine</a>.
+
+<a href='#Font_Hinting_Spacing'>Hinting_Spacing</a> is not related to <a href='undocumented#Text'>text</a> kerning, where the space between
+a specific pair of characters is adjusted using <a href='undocumented#Data'>data</a> in the <a href='SkFont_Reference#Font'>font</a> kerning tables.
+
+<a name='Linear'></a>
+
+<a href='#Font_Linear'>Font_Linear</a> selects whether <a href='undocumented#Text'>text</a> is rendered as a <a href='undocumented#Glyph'>Glyph</a> or as a <a href='SkPath_Reference#Path'>Path</a>.
+If <a href='#Font_Linear'>Font_Linear</a> is set, it has the same effect as setting Hinting to <a href='undocumented#SkFontHinting'>SkFontHinting</a>::<a href='#SkFontHinting_kNormal'>kNormal</a>.
+If <a href='#Font_Linear'>Font_Linear</a> is clear, it is the same as setting Hinting to <a href='undocumented#SkFontHinting'>SkFontHinting</a>::<a href='#SkFontHinting_kNone'>kNone</a>.
+
+<a name='Subpixel'></a>
+
+<a href='#Font_Subpixel'>Font_Subpixel</a> uses the <a href='undocumented#Pixel'>pixel</a> transparency to represent a fractional offset.
+As the opaqueness of the <a href='SkColor_Reference#Color'>color</a> increases, the edge of the <a href='undocumented#Glyph'>glyph</a> appears to move
+towards the outside of the <a href='undocumented#Pixel'>pixel</a>.
+
+<a name='Anti_Alias'></a>
+
+When set, <a href='#Paint_Anti_Alias'>Anti_Alias</a> positions <a href='undocumented#Glyph'>glyphs</a> within a <a href='undocumented#Pixel'>pixel</a>, using <a href='SkColor_Reference#Alpha'>alpha</a> and
+possibly RGB striping. It can take advantage of the organization of RGB stripes
+that create a <a href='SkColor_Reference#Color'>color</a>, and relies on the small <a href='undocumented#Size'>size</a> of the stripe and visual perception
+to make the <a href='SkColor_Reference#Color'>color</a> fringing imperceptible.
+
+<a href='#Paint_Anti_Alias'>Anti_Alias</a> can be enabled on devices that orient stripes horizontally
+or vertically, and that order the <a href='SkColor_Reference#Color'>color</a> components as RGB or BGR. Internally, the
+<a href='undocumented#Glyph'>glyph</a> cache may store multiple copies of the same <a href='undocumented#Glyph'>glyph</a> with different <a href='SkFont_Reference#Subpixel'>sub-pixel</a>
+positions, requiring more memory.
+
+<a name='Force_Hinting'></a>
+
+If Hinting is set to <a href='undocumented#SkFontHinting'>SkFontHinting</a>::<a href='#SkFontHinting_kNormal'>kNormal</a> or <a href='undocumented#SkFontHinting'>SkFontHinting</a>::<a href='#SkFontHinting_kFull'>kFull</a>, <a href='#Font_Force_Hinting'>Force_Hinting</a>
+instructs the <a href='#Font_Manager'>Font_Manager</a> to always hint <a href='undocumented#Glyph'>Glyphs</a>.
+<a href='#Font_Force_Hinting'>Force_Hinting</a> has no effect if Hinting is set to <a href='undocumented#SkFontHinting'>SkFontHinting</a>::<a href='#SkFontHinting_kNone'>kNone</a> or
+<a href='undocumented#SkFontHinting'>SkFontHinting</a>::<a href='#SkFontHinting_kSlight'>kSlight</a>.
+
+<a href='#Font_Force_Hinting'>Force_Hinting</a> only affects platforms that use FreeType as the <a href='#Font_Manager'>Font_Manager</a>.
+
+<a name='Embedded_Bitmaps'></a>
+
+<a href='#Font_Embedded_Bitmaps'>Embedded_Bitmaps</a> allows selecting custom sized <a href='SkBitmap_Reference#Bitmap'>bitmap</a> <a href='undocumented#Glyph'>Glyphs</a>.
+<a href='#Font_Embedded_Bitmaps'>Embedded_Bitmaps</a> when set chooses an embedded <a href='SkBitmap_Reference#Bitmap'>bitmap</a> <a href='undocumented#Glyph'>glyph</a> over an outline contained
+in a <a href='SkFont_Reference#Font'>font</a> if the platform supports this option.
+
+FreeType selects the <a href='SkBitmap_Reference#Bitmap'>bitmap</a> <a href='undocumented#Glyph'>glyph</a> if available when <a href='#Font_Embedded_Bitmaps'>Embedded_Bitmaps</a> is set, and selects
+the outline <a href='undocumented#Glyph'>glyph</a> if <a href='#Font_Embedded_Bitmaps'>Embedded_Bitmaps</a> is clear.
+Windows may select the <a href='SkBitmap_Reference#Bitmap'>bitmap</a> <a href='undocumented#Glyph'>glyph</a> but is not required to do so.
+<a href='#OS_X'>OS_X</a> and iOS do not support this option.
 
 <a name='SkFont'></a>
 
@@ -27,17 +120,10 @@ class <a href='SkFont_Reference#SkFont'>SkFont</a> {
         kSubpixelAntiAlias,
     };
 
-    enum <a href='#SkFont_Hinting'>Hinting</a> : uint8_t {
-        <a href='#SkFont_kNo_Hinting'>kNo_Hinting</a> = 0,
-        <a href='#SkFont_kSlight_Hinting'>kSlight_Hinting</a> = 1,
-        <a href='#SkFont_kNormal_Hinting'>kNormal_Hinting</a> = 2,
-        <a href='#SkFont_kFull_Hinting'>kFull_Hinting</a> = 3,
-    };
-
     <a href='#SkFont_empty_constructor'>SkFont()</a>;
     <a href='#SkFont_SkTypeface_SkScalar'>SkFont</a>(<a href='undocumented#sk_sp'>sk_sp</a><<a href='undocumented#SkTypeface'>SkTypeface</a>> <a href='undocumented#Typeface'>typeface</a>, <a href='undocumented#SkScalar'>SkScalar</a> <a href='undocumented#Size'>size</a>);
     <a href='#SkFont_SkTypeface_SkScalar_SkScalar_SkScalar'>SkFont</a>(<a href='undocumented#sk_sp'>sk_sp</a><<a href='undocumented#SkTypeface'>SkTypeface</a>> <a href='undocumented#Typeface'>typeface</a>, <a href='undocumented#SkScalar'>SkScalar</a> <a href='undocumented#Size'>size</a>, <a href='undocumented#SkScalar'>SkScalar</a> scaleX, <a href='undocumented#SkScalar'>SkScalar</a> skewX);
-    bool operator==(const <a href='SkFont_Reference#SkFont'>SkFont</a>& <a href='SkFont_Reference#Font'>font</a>) const;
+    bool <a href='#SkFont_equal1_operator'>operator==</a>(const <a href='SkFont_Reference#SkFont'>SkFont</a>& <a href='SkFont_Reference#Font'>font</a>) const;
     bool <a href='#SkFont_isForceAutoHinting'>isForceAutoHinting</a>() const;
     bool <a href='#SkFont_isEmbeddedBitmaps'>isEmbeddedBitmaps</a>() const;
     bool <a href='#SkFont_isSubpixel'>isSubpixel</a>() const;
@@ -67,6 +153,8 @@ class <a href='SkFont_Reference#SkFont'>SkFont</a> {
     uint16_t <a href='#SkFont_unicharToGlyph'>unicharToGlyph</a>(<a href='undocumented#SkUnichar'>SkUnichar</a> uni) const;
     int <a href='#SkFont_countText'>countText</a>(const void* <a href='undocumented#Text'>text</a>, size_t byteLength, <a href='undocumented#SkTextEncoding'>SkTextEncoding</a> encoding) const;
     bool <a href='#SkFont_containsText'>containsText</a>(const void* <a href='undocumented#Text'>text</a>, size_t byteLength, <a href='undocumented#SkTextEncoding'>SkTextEncoding</a> encoding) const;
+    size_t <a href='#SkFont_breakText'>breakText</a>(const void* <a href='undocumented#Text'>text</a>, size_t length, <a href='undocumented#SkTextEncoding'>SkTextEncoding</a> encoding, <a href='undocumented#SkScalar'>SkScalar</a> maxWidth,
+                     <a href='undocumented#SkScalar'>SkScalar</a>* measuredWidth = nullptr) const;
     <a href='undocumented#SkScalar'>SkScalar</a> <a href='#SkFont_measureText'>measureText</a>(const void* <a href='undocumented#Text'>text</a>, size_t byteLength, <a href='undocumented#SkTextEncoding'>SkTextEncoding</a> encoding,
                          <a href='SkRect_Reference#SkRect'>SkRect</a>* bounds = nullptr) const;
     bool <a href='#SkFont_getPath'>getPath</a>(uint16_t glyphID, <a href='SkPath_Reference#SkPath'>SkPath</a>* <a href='SkPath_Reference#Path'>path</a>) const;
@@ -117,62 +205,6 @@ may have transparent pixels on glyph edges</td>
     <td style='text-align: center; border: 2px solid #dddddd; padding: 8px; '></td>
     <td style='text-align: left; border: 2px solid #dddddd; padding: 8px; '>
 glyph positioned in pixel using transparency</td>
-  </tr>
-</table>
-
-### Example
-
-<div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
-
-### See Also
-
-incomplete
-
-<a name='SkFont_Hinting'></a>
-
----
-
-<pre style="padding: 1em 1em 1em 1em;width: 62.5em; background-color: #f0f0f0">
-    enum <a href='#SkFont_Hinting'>Hinting</a> : uint8_t {
-        <a href='#SkFont_kNo_Hinting'>kNo_Hinting</a> = 0,
-        <a href='#SkFont_kSlight_Hinting'>kSlight_Hinting</a> = 1,
-        <a href='#SkFont_kNormal_Hinting'>kNormal_Hinting</a> = 2,
-        <a href='#SkFont_kFull_Hinting'>kFull_Hinting</a> = 3,
-    };
-
-</pre>
-
-Amount of <a href='SkFont_Reference#Font'>font</a> hinting applied to <a href='undocumented#Glyph'>glyph</a> outlines.
-
-### Constants
-
-<table style='border-collapse: collapse; width: 62.5em'>
-  <tr><th style='text-align: left; border: 2px solid #dddddd; padding: 8px; '>Const</th>
-<th style='text-align: center; border: 2px solid #dddddd; padding: 8px; '>Value</th>
-<th style='text-align: left; border: 2px solid #dddddd; padding: 8px; '>Description</th></tr>
-  <tr style='background-color: #f0f0f0; '>
-    <td style='text-align: left; border: 2px solid #dddddd; padding: 8px; '><a name='SkFont_kNo_Hinting'><code>SkFont::kNo_Hinting</code></a></td>
-    <td style='text-align: center; border: 2px solid #dddddd; padding: 8px; '></td>
-    <td style='text-align: left; border: 2px solid #dddddd; padding: 8px; '>
-glyph outlines unchanged</td>
-  </tr>
-  <tr>
-    <td style='text-align: left; border: 2px solid #dddddd; padding: 8px; '><a name='SkFont_kSlight_Hinting'><code>SkFont::kSlight_Hinting</code></a></td>
-    <td style='text-align: center; border: 2px solid #dddddd; padding: 8px; '></td>
-    <td style='text-align: left; border: 2px solid #dddddd; padding: 8px; '>
-minimal modification to improve constrast</td>
-  </tr>
-  <tr style='background-color: #f0f0f0; '>
-    <td style='text-align: left; border: 2px solid #dddddd; padding: 8px; '><a name='SkFont_kNormal_Hinting'><code>SkFont::kNormal_Hinting</code></a></td>
-    <td style='text-align: center; border: 2px solid #dddddd; padding: 8px; '></td>
-    <td style='text-align: left; border: 2px solid #dddddd; padding: 8px; '>
-glyph outlines modified to improve constrast</td>
-  </tr>
-  <tr>
-    <td style='text-align: left; border: 2px solid #dddddd; padding: 8px; '><a name='SkFont_kFull_Hinting'><code>SkFont::kFull_Hinting</code></a></td>
-    <td style='text-align: center; border: 2px solid #dddddd; padding: 8px; '></td>
-    <td style='text-align: left; border: 2px solid #dddddd; padding: 8px; '>
-modifies glyph outlines for maximum constrast</td>
   </tr>
 </table>
 
@@ -292,7 +324,7 @@ May return false if <a href='undocumented#SkTypeface'>SkTypeface</a> has identic
 ### Parameters
 
 <table>  <tr>    <td><a name='SkFont_equal1_operator_font'><code><strong>font</strong></code></a></td>
-    <td><a href='SkPaint_Reference#SkPaint'>SkPaint</a> to compare</td>
+    <td><a href='#SkFont_equal1_operator_font'>font</a> to compare</td>
   </tr>
 </table>
 
@@ -361,7 +393,7 @@ incomplete
 bool <a href='#SkFont_isSubpixel'>isSubpixel</a>()const
 </pre>
 
-Returns true if <a href='undocumented#Glyph'>glyphs</a> at different sub-pixel positions may differ on <a href='undocumented#Pixel'>pixel</a> edge coverage.
+Returns true if <a href='undocumented#Glyph'>glyphs</a> at different <a href='SkFont_Reference#Subpixel'>sub-pixel</a> positions may differ on <a href='undocumented#Pixel'>pixel</a> edge coverage.
 
 ### Return Value
 
@@ -481,12 +513,12 @@ incomplete
 void <a href='#SkFont_setSubpixel'>setSubpixel</a>(bool subpixel)
 </pre>
 
-Requests, but does not require, that <a href='undocumented#Glyph'>glyphs</a> respect sub-pixel positioning.
+Requests, but does not require, that <a href='undocumented#Glyph'>glyphs</a> respect <a href='SkFont_Reference#Subpixel'>sub-pixel</a> positioning.
 
 ### Parameters
 
 <table>  <tr>    <td><a name='SkFont_setSubpixel_subpixel'><code><strong>subpixel</strong></code></a></td>
-    <td>setting for sub-pixel positioning</td>
+    <td>setting for <a href='SkFont_Reference#Subpixel'>sub-pixel</a> positioning</td>
   </tr>
 </table>
 
@@ -925,7 +957,7 @@ The total <a href='undocumented#Glyph'>glyph</a> count is returned for subsequen
 ### Parameters
 
 <table>  <tr>    <td><a name='SkFont_textToGlyphs_text'><code><strong>text</strong></code></a></td>
-    <td>character storage encoded with <a href='SkPaint_Reference#SkPaint'>SkPaint</a>::<a href='#SkPaint_TextEncoding'>TextEncoding</a></td>
+    <td>character storage encoded with <a href='undocumented#SkTextEncoding'>SkTextEncoding</a></td>
   </tr>
   <tr>    <td><a name='SkFont_textToGlyphs_byteLength'><code><strong>byteLength</strong></code></a></td>
     <td>length of character storage in bytes</td>
@@ -1001,7 +1033,7 @@ Returns number of <a href='undocumented#Glyph'>glyphs</a> represented by <a href
 ### Parameters
 
 <table>  <tr>    <td><a name='SkFont_countText_text'><code><strong>text</strong></code></a></td>
-    <td>character storage encoded with <a href='SkPaint_Reference#SkPaint'>SkPaint</a>::<a href='#SkPaint_TextEncoding'>TextEncoding</a></td>
+    <td>character storage encoded with <a href='undocumented#SkTextEncoding'>SkTextEncoding</a></td>
   </tr>
   <tr>    <td><a name='SkFont_countText_byteLength'><code><strong>byteLength</strong></code></a></td>
     <td>length of character storage in bytes</td>
@@ -1052,7 +1084,7 @@ Returns true if <a href='#SkFont_containsText_byteLength'>byteLength</a> is zero
     <td>number of bytes in <a href='#SkFont_containsText_text'>text</a> array</td>
   </tr>
   <tr>    <td><a name='SkFont_containsText_encoding'><code><strong>encoding</strong></code></a></td>
-    <td><a href='#SkFont_containsText_text'>text</a> <a href='#SkFont_containsText_encoding'>encoding</a></td>
+    <td><a href='undocumented#Text_Encoding'>text encoding</a></td>
   </tr>
 </table>
 
@@ -1063,6 +1095,56 @@ true if all <a href='#SkFont_containsText_text'>text</a> corresponds to a non-ze
 ### Example
 
 <div><fiddle-embed name="882e8e0103048009a25cfc20400492f7"></fiddle-embed></div>
+
+### See Also
+
+incomplete
+
+<a name='SkFont_breakText'></a>
+
+---
+
+<pre style="padding: 1em 1em 1em 1em; width: 62.5em;background-color: #f0f0f0">
+size_t <a href='#SkFont_breakText'>breakText</a>(const void* <a href='undocumented#Text'>text</a>, size_t length, <a href='undocumented#SkTextEncoding'>SkTextEncoding</a> encoding, <a href='undocumented#SkScalar'>SkScalar</a> maxWidth,
+                 <a href='undocumented#SkScalar'>SkScalar</a>* measuredWidth = nullptr)const
+</pre>
+
+Returns the bytes of <a href='#SkFont_breakText_text'>text</a> that fit within <a href='#SkFont_breakText_maxWidth'>maxWidth</a>.
+The <a href='#SkFont_breakText_text'>text</a> fragment fits if its advance width is less than or equal to <a href='#SkFont_breakText_maxWidth'>maxWidth</a>.
+Measures only while the advance is less than or equal to <a href='#SkFont_breakText_maxWidth'>maxWidth</a>.
+Returns the advance or the <a href='#SkFont_breakText_text'>text</a> fragment in <a href='#SkFont_breakText_measuredWidth'>measuredWidth</a> if it not nullptr.
+Uses <a href='#SkFont_breakText_encoding'>encoding</a> to decode <a href='#SkFont_breakText_text'>text</a>, <a href='undocumented#SkTypeface'>SkTypeface</a> to get the  <a href='undocumented#Font_Metrics'>font metrics</a>,
+and <a href='#SkFont_breakText_text'>text</a> <a href='undocumented#Size'>size</a> to scale the metrics.
+Does not scale the advance or bounds by fake bold.
+
+### Parameters
+
+<table>  <tr>    <td><a name='SkFont_breakText_text'><code><strong>text</strong></code></a></td>
+    <td>character codes or <a href='undocumented#Glyph'>glyph</a> indices to be measured</td>
+  </tr>
+  <tr>    <td><a name='SkFont_breakText_length'><code><strong>length</strong></code></a></td>
+    <td>number of bytes of <a href='#SkFont_breakText_text'>text</a> to measure</td>
+  </tr>
+  <tr>    <td><a name='SkFont_breakText_encoding'><code><strong>encoding</strong></code></a></td>
+    <td><a href='undocumented#Text_Encoding'>text encoding</a></td>
+  </tr>
+  <tr>    <td><a name='SkFont_breakText_maxWidth'><code><strong>maxWidth</strong></code></a></td>
+    <td>advance limit; <a href='#SkFont_breakText_text'>text</a> is measured while advance is less than <a href='#SkFont_breakText_maxWidth'>maxWidth</a></td>
+  </tr>
+  <tr>    <td><a name='SkFont_breakText_measuredWidth'><code><strong>measuredWidth</strong></code></a></td>
+    <td>returns the width of the <a href='#SkFont_breakText_text'>text</a> less than or equal to <a href='#SkFont_breakText_maxWidth'>maxWidth</a></td>
+  </tr>
+</table>
+
+### Return Value
+
+bytes of <a href='#SkFont_breakText_text'>text</a> that fit, always less than or equal to <a href='#SkFont_breakText_length'>length</a>
+
+### Example
+
+<div><fiddle-embed name="3cad18678254526be66ef162eecd1d23"><div><a href='undocumented#Line'>Line</a> under "Breakfast" shows desired width, shorter than available characters.
+<a href='undocumented#Line'>Line</a> under "Bre" shows measured width after breaking <a href='#SkFont_breakText_text'>text</a>.
+</div></fiddle-embed></div>
 
 ### See Also
 
@@ -1084,7 +1166,7 @@ Returns the bounding box of <a href='#SkFont_measureText_text'>text</a> if <a hr
 ### Parameters
 
 <table>  <tr>    <td><a name='SkFont_measureText_text'><code><strong>text</strong></code></a></td>
-    <td>character storage encoded with <a href='SkPaint_Reference#SkPaint'>SkPaint</a>::<a href='#SkPaint_TextEncoding'>TextEncoding</a></td>
+    <td>character storage encoded with <a href='undocumented#SkTextEncoding'>SkTextEncoding</a></td>
   </tr>
   <tr>    <td><a name='SkFont_measureText_byteLength'><code><strong>byteLength</strong></code></a></td>
     <td>length of character storage in bytes</td>

@@ -503,11 +503,13 @@ protected:
         paint.setStyle(SkPaint::kStroke_Style);
         paint.setColor(button.fEnabled ? 0xFF3F0000 : 0x6F3F0000);
         canvas->drawRect(button.fBounds, paint);
-        paint.setTextSize(25.0f);
         paint.setColor(button.fEnabled ? 0xFF3F0000 : 0x6F3F0000);
         paint.setStyle(SkPaint::kFill_Style);
-        SkTextUtils::DrawText(canvas, &button.fLabel, 1, button.fBounds.centerX(), button.fBounds.fBottom - 5,
-                paint, SkTextUtils::kCenter_Align);
+        SkFont font;
+        font.setSize(25.0f);
+        SkTextUtils::Draw(canvas, &button.fLabel, 1, kUTF8_SkTextEncoding,
+                button.fBounds.centerX(), button.fBounds.fBottom - 5,
+                font, paint, SkTextUtils::kCenter_Align);
     }
 
     void draw_control(SkCanvas* canvas, const SkRect& bounds, SkScalar value,
@@ -676,10 +678,10 @@ protected:
 
         if (fTextButton.fEnabled) {
             path.reset();
-            SkPaint paint;
-            paint.setAntiAlias(true);
-            paint.setTextSize(fTextSize);
-            paint.getTextPath(fText.c_str(), fText.size(), 0, fTextSize, &path);
+            SkFont font;
+            font.setSize(fTextSize);
+            SkTextUtils::GetPath(fText.c_str(), fText.size(), kUTF8_SkTextEncoding,
+                                 0, fTextSize, font, &path);
             setForText();
             draw_stroke(canvas, path, width * fWidthScale / fTextSize, fTextSize, true);
         }

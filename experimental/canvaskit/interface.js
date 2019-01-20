@@ -12,6 +12,10 @@
     // Add some helpers for matrices. This is ported from SkMatrix.cpp
     // to save complexity and overhead of going back and forth between
     // C++ and JS layers.
+    // I would have liked to use something like DOMMatrix, except it
+    // isn't widely supported (would need polyfills) and it doesn't
+    // have a mapPoints() function (which could maybe be tacked on here).
+    // If DOMMatrix catches on, it would be worth re-considering this usage.
     CanvasKit.SkMatrix = {};
     function sdot(a, b, c, d, e, f) {
       e = e || 0;
@@ -24,6 +28,22 @@
         1, 0, 0,
         0, 1, 0,
         0, 0, 1,
+      ];
+    };
+
+    // Return the inverse (if it exists) of this matrix.
+    // Otherwise, return the identity.
+    CanvasKit.SkMatrix.invert = function(m) {
+      var det = m[0]*m[4]*m[8] + m[1]*m[5]*m[6] + m[2]*m[3]*m[7]
+              - m[2]*m[4]*m[6] - m[1]*m[3]*m[8] - m[0]*m[5]*m[7];
+      if (!det) {
+        SkDebug('Warning, uninvertible matrix');
+        return CanvasKit.SkMatrix.identity();
+      }
+      return [
+        (m[4]*m[8] - m[5]*m[7])/det, (m[2]*m[7] - m[1]*m[8])/det, (m[1]*m[5] - m[2]*m[4])/det,
+        (m[5]*m[6] - m[3]*m[8])/det, (m[0]*m[8] - m[2]*m[6])/det, (m[2]*m[3] - m[0]*m[5])/det,
+        (m[3]*m[7] - m[4]*m[6])/det, (m[1]*m[6] - m[0]*m[7])/det, (m[0]*m[4] - m[1]*m[3])/det,
       ];
     };
 
@@ -185,8 +205,23 @@
       return this;
     };
 
-    CanvasKit.SkPath.prototype.arcTo = function(x1, y1, x2, y2, radius) {
-      this._arcTo(x1, y1, x2, y2, radius);
+    CanvasKit.SkPath.prototype.arcTo = function() {
+      // takes 4, 5 or 7 args
+      // - 5 x1, y1, x2, y2, radius
+      // - 4 oval (as Rect), startAngle, sweepAngle, forceMoveTo
+      // - 7 x1, y1, x2, y2, startAngle, sweepAngle, forceMoveTo
+      var args = arguments;
+      if (args.length === 5) {
+        this._arcTo(args[0], args[1], args[2], args[3], args[4]);
+      } else if (args.length === 4) {
+        this._arcTo(args[0], args[1], args[2], args[3]);
+      } else if (args.length === 7) {
+        this._arcTo(CanvasKit.LTRBRect(args[0], args[1], args[2], args[3]),
+                    args[4], args[5], args[6]);
+      } else {
+        throw 'Invalid args for arcTo. Expected 4, 5, or 7, got '+ args.length;
+      }
+
       return this;
     };
 
@@ -252,6 +287,7 @@
       opts.miter_limit = opts.miter_limit || 4;
       opts.cap = opts.cap || CanvasKit.StrokeCap.Butt;
       opts.join = opts.join || CanvasKit.StrokeJoin.Miter;
+      opts.precision = opts.precision || 1;
       if (this._stroke(opts)) {
         return this;
       }
@@ -299,7 +335,7 @@
     }
 
     CanvasKit.SkImage.prototype.encodeToData = function() {
-      if (arguments.length === 0) {
+      if (!arguments.length) {
         return this._encodeToData();
       }
 
@@ -309,6 +345,77 @@
       }
 
       throw 'encodeToData expected to take 0 or 2 arguments. Got ' + arguments.length;
+    }
+
+    // returns Uint8Array
+    CanvasKit.SkCanvas.prototype.readPixels = function(x, y, w, h, alphaType,
+                                                       colorType, dstRowBytes) {
+      // supply defaults (which are compatible with HTMLCanvas's getImageData)
+      alphaType = alphaType || CanvasKit.AlphaType.Unpremul;
+      colorType = colorType || CanvasKit.ColorType.RGBA_8888;
+      dstRowBytes = dstRowBytes || (4 * w);
+
+      var len = h * dstRowBytes
+      var pptr = CanvasKit._malloc(len);
+      var ok = this._readPixels({
+        'width': w,
+        'height': h,
+        'colorType': colorType,
+        'alphaType': alphaType,
+      }, pptr, dstRowBytes, x, y);
+      if (!ok) {
+        CanvasKit._free(pptr);
+        return null;
+      }
+
+      // The first typed array is just a view into memory. Because we will
+      // be free-ing that, we call slice to make a persistent copy.
+      var pixels = new Uint8Array(CanvasKit.HEAPU8.buffer, pptr, len).slice();
+      CanvasKit._free(pptr);
+      return pixels;
+    }
+
+    // pixels is a TypedArray. No matter the input size, it will be treated as
+    // a Uint8Array (essentially, a byte array).
+    CanvasKit.SkCanvas.prototype.writePixels = function(pixels, srcWidth, srcHeight,
+                                                        destX, destY, alphaType, colorType) {
+      if (pixels.byteLength % (srcWidth * srcHeight)) {
+        throw 'pixels length must be a multiple of the srcWidth * srcHeight';
+      }
+      var bytesPerPixel = pixels.byteLength / (srcWidth * srcHeight);
+      // supply defaults (which are compatible with HTMLCanvas's putImageData)
+      alphaType = alphaType || CanvasKit.AlphaType.Unpremul;
+      colorType = colorType || CanvasKit.ColorType.RGBA_8888;
+      var srcRowBytes = bytesPerPixel * srcWidth;
+
+      var pptr = CanvasKit._malloc(pixels.byteLength);
+      CanvasKit.HEAPU8.set(pixels, pptr);
+
+      var ok = this._writePixels({
+        'width': srcWidth,
+        'height': srcHeight,
+        'colorType': colorType,
+        'alphaType': alphaType,
+      }, pptr, srcRowBytes, destX, destY);
+
+      CanvasKit._free(pptr);
+      return ok;
+    }
+
+    // fontData should be an arrayBuffer
+    CanvasKit.SkFontMgr.prototype.MakeTypefaceFromData = function(fontData) {
+      var data = new Uint8Array(fontData);
+
+      var fptr = CanvasKit._malloc(data.byteLength);
+      CanvasKit.HEAPU8.set(data, fptr);
+      var font = this._makeTypefaceFromData(fptr, data.byteLength);
+      if (!font) {
+        SkDebug('Could not decode font data');
+        // We do not need to free the data since the C++ will do that for us
+        // when the font is deleted (or fails to decode);
+        return null;
+      }
+      return font;
     }
 
     // Run through the JS files that are added at compile time.
@@ -325,6 +432,15 @@
       fTop: t,
       fRight: r,
       fBottom: b,
+    };
+  }
+
+  CanvasKit.XYWHRect = function(x, y, w, h) {
+    return {
+      fLeft: x,
+      fTop: y,
+      fRight: x+w,
+      fBottom: y+h,
     };
   }
 
@@ -403,12 +519,57 @@
     return dpe;
   }
 
-  CanvasKit.MakeImageShader = function(imgData, xTileMode, yTileMode) {
-    var iptr = CanvasKit._malloc(imgData.byteLength);
-    CanvasKit.HEAPU8.set(new Uint8Array(imgData), iptr);
-    // No need to _free iptr, ImageShader takes it with SkData::MakeFromMalloc
+  // data is a TypedArray or ArrayBuffer e.g. from fetch().then(resp.arrayBuffer())
+  CanvasKit.MakeImageFromEncoded = function(data) {
+    data = new Uint8Array(data);
 
-    return CanvasKit._MakeImageShader(iptr, imgData.byteLength, xTileMode, yTileMode);
+    var iptr = CanvasKit._malloc(data.byteLength);
+    CanvasKit.HEAPU8.set(data, iptr);
+    var img = CanvasKit._decodeImage(iptr, data.byteLength);
+    if (!img) {
+      SkDebug('Could not decode image');
+      CanvasKit._free(iptr);
+      return null;
+    }
+    var realDelete = img.delete.bind(img);
+    img.delete = function() {
+      CanvasKit._free(iptr);
+      realDelete();
+    }
+    return img;
+  }
+
+  // imgData is an Encoded SkImage, e.g. from MakeImageFromEncoded
+  CanvasKit.MakeImageShader = function(img, xTileMode, yTileMode, clampUnpremul, localMatrix) {
+    if (!img) {
+      return null;
+    }
+    clampUnpremul = clampUnpremul || false;
+    if (localMatrix) {
+      // Add perspective args if not provided.
+      if (localMatrix.length === 6) {
+        localMatrix.push(0, 0, 1);
+      }
+      return CanvasKit._MakeImageShader(img, xTileMode, yTileMode, clampUnpremul, localMatrix);
+    } else {
+      return CanvasKit._MakeImageShader(img, xTileMode, yTileMode, clampUnpremul);
+    }
+  }
+
+  // pixels is a Uint8Array
+  CanvasKit.MakeImage = function(pixels, width, height, alphaType, colorType) {
+    var bytesPerPixel = pixels.byteLength / (width * height);
+    var info = {
+      'width': width,
+      'height': height,
+      'alphaType': alphaType,
+      'colorType': colorType,
+    };
+    var pptr = CanvasKit._malloc(pixels.byteLength);
+    CanvasKit.HEAPU8.set(pixels, pptr);
+    // No need to _free iptr, Image takes it with SkData::MakeFromMalloc
+
+    return CanvasKit._MakeImage(info, pptr, pixels.byteLength, width * bytesPerPixel);
   }
 
   CanvasKit.MakeLinearGradientShader = function(start, end, colors, pos, mode, localMatrix, flags) {
@@ -506,16 +667,6 @@
     boneIdxPtr && CanvasKit._free(boneIdxPtr);
     boneWtPtr && CanvasKit._free(boneWtPtr);
     return vertices;
-  }
-
-  CanvasKit.MakeNimaActor = function(nimaFile, nimaTexture) {
-    var nptr = CanvasKit._malloc(nimaFile.byteLength);
-    CanvasKit.HEAPU8.set(new Uint8Array(nimaFile), nptr);
-    var tptr = CanvasKit._malloc(nimaTexture.byteLength);
-    CanvasKit.HEAPU8.set(new Uint8Array(nimaTexture), tptr);
-    // No need to _free these ptrs, NimaActor takes them with SkData::MakeFromMalloc
-
-    return CanvasKit._MakeNimaActor(nptr, nimaFile.byteLength, tptr, nimaTexture.byteLength);
   }
 
 }(Module)); // When this file is loaded in, the high level object is "Module";

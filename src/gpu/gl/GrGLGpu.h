@@ -163,7 +163,7 @@ public:
     sk_sp<GrSemaphore> wrapBackendSemaphore(const GrBackendSemaphore& semaphore,
                                             GrResourceProvider::SemaphoreWrapType wrapType,
                                             GrWrapOwnership ownership) override;
-    void insertSemaphore(sk_sp<GrSemaphore> semaphore, bool flush) override;
+    void insertSemaphore(sk_sp<GrSemaphore> semaphore) override;
     void waitSemaphore(sk_sp<GrSemaphore> semaphore) override;
 
     sk_sp<GrSemaphore> prepareTextureForCrossContextUsage(GrTexture*) override;
@@ -189,7 +189,7 @@ private:
     GrBuffer* onCreateBuffer(size_t size, GrBufferType intendedType, GrAccessPattern,
                              const void* data) override;
 
-    sk_sp<GrTexture> onWrapBackendTexture(const GrBackendTexture&, GrWrapOwnership,
+    sk_sp<GrTexture> onWrapBackendTexture(const GrBackendTexture&, GrWrapOwnership, GrIOType,
                                           bool purgeImmediately) override;
     sk_sp<GrTexture> onWrapRenderableBackendTexture(const GrBackendTexture&,
                                                     int sampleCnt,
@@ -309,8 +309,9 @@ private:
         ~ProgramCache();
 
         void abandon();
-        GrGLProgram* refProgram(const GrGLGpu*, const GrPrimitiveProcessor&, const GrPipeline&,
-                                bool hasPointSize);
+        GrGLProgram* refProgram(GrGLGpu*, const GrPrimitiveProcessor&,
+                                const GrTextureProxy* const primProcProxies[],
+                                const GrPipeline&, bool hasPointSize);
 
     private:
         // We may actually have kMaxEntries+1 shaders in the GL context because we create a new
@@ -373,8 +374,6 @@ private:
 
     // rt is used only if useHWAA is true.
     void flushHWAAState(GrRenderTarget* rt, bool useHWAA, bool stencilEnabled);
-
-    void flushMinSampleShading(float minSampleShading);
 
     void flushFramebufferSRGB(bool enable);
 
@@ -628,7 +627,6 @@ private:
         return (wide ? 0x2 : 0x0) | (tall ? 0x1 : 0x0);
     }
 
-    float fHWMinSampleShading;
     GrPrimitiveType fLastPrimitiveType;
 
     class SamplerObjectCache;

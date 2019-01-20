@@ -27,6 +27,10 @@
 #include "SkSurfaceProps.h"
 #include "SkVertices.h"
 
+#ifndef SK_SUPPORT_LEGACY_DRAWSTRING
+#define SK_SUPPORT_LEGACY_DRAWSTRING
+#endif
+
 class GrContext;
 class GrRenderTargetContext;
 class SkAndroidFrameworkUtils;
@@ -722,7 +726,7 @@ public:
         Call restoreToCount() with returned value to restore this and subsequent saves.
 
         @param layerRec  layer state
-        @return          depth of save state stack
+        @return          depth of save state stack before this call was made.
     */
     int saveLayer(const SaveLayerRec& layerRec);
 
@@ -1846,7 +1850,7 @@ public:
 
     /** Draws text, with origin at (x, y), using clip, SkMatrix, and SkPaint paint.
 
-        text meaning depends on SkPaint::TextEncoding; by default, text is encoded as
+        text meaning depends on SkTextEncoding; by default, text is encoded as
         UTF-8.
 
         x and y meaning depends on SkPaint::Align and SkPaint vertical text; by default
@@ -1870,11 +1874,12 @@ public:
     void drawSimpleText(const void* text, size_t byteLength, SkTextEncoding encoding,
                         SkScalar x, SkScalar y, const SkFont& font, const SkPaint& paint);
 
+#ifdef SK_SUPPORT_LEGACY_DRAWSTRING
     /** Draws null terminated string, with origin at (x, y), using clip, SkMatrix, and
         SkPaint paint.
 
-        string meaning depends on SkPaint::TextEncoding; by default, strings are encoded
-        as UTF-8. Other values of SkPaint::TextEncoding are unlikely to produce the desired
+        string meaning depends on SkTextEncoding; by default, strings are encoded
+        as UTF-8. Other values of SkTextEncoding are unlikely to produce the desired
         results, since zero bytes may be embedded in the string.
 
         x and y meaning depends on SkPaint::Align and SkPaint vertical text; by default
@@ -1901,8 +1906,8 @@ public:
     /** Draws null terminated string, with origin at (x, y), using clip, SkMatrix, and
         SkPaint paint.
 
-        string meaning depends on SkPaint::TextEncoding; by default, strings are encoded
-        as UTF-8. Other values of SkPaint::TextEncoding are unlikely to produce the desired
+        string meaning depends on SkTextEncoding; by default, strings are encoded
+        as UTF-8. Other values of SkTextEncoding are unlikely to produce the desired
         results, since zero bytes may be embedded in the string.
 
         x and y meaning depends on SkPaint::Align and SkPaint vertical text; by default
@@ -1920,79 +1925,18 @@ public:
         @param paint   text size, blend, color, and so on, used to draw
     */
     void drawString(const SkString& string, SkScalar x, SkScalar y, const SkPaint& paint);
+#endif
 
-    /** Draws each glyph in text with the origin in pos array, using clip, SkMatrix, and
-        SkPaint paint. The number of entries in pos array must match the number of glyphs
-        described by byteLength of text.
-
-        text meaning depends on SkPaint::TextEncoding; by default, text is encoded as
-        UTF-8. pos elements meaning depends on SkPaint vertical text; by default
-        glyph left side bearing and baseline are relative to SkPoint in pos array.
-        Text size is affected by SkMatrix and SkPaint text size.
-
-        All elements of paint: SkPathEffect, SkMaskFilter, SkShader,
-        SkColorFilter, SkImageFilter, and SkDrawLooper; apply to text. By default, draws
-        filled 12 point black glyphs.
-
-        Layout engines such as Harfbuzz typically position each glyph
-        rather than using the font advance widths.
-
-        @param text        character code points or glyphs drawn
-        @param byteLength  byte length of text array
-        @param pos         array of glyph origins
-        @param paint       text size, blend, color, and so on, used to draw
-    */
-    void drawPosText(const void* text, size_t byteLength, const SkPoint pos[],
-                     const SkPaint& paint);
-
-    /** Draws each glyph in text with its origin composed from xpos array and
-        constY, using clip, SkMatrix, and SkPaint paint. The number of entries in xpos array
-        must match the number of glyphs described by byteLength of text.
-
-        text meaning depends on SkPaint::TextEncoding; by default, text is encoded as
-        UTF-8. xpos elements meaning depends on SkPaint vertical text;
-        by default each glyph left side bearing is positioned at an xpos element and
-        its baseline is positioned at constY. Text size is affected by SkMatrix and
-        SkPaint text size.
-
-        All elements of paint: SkPathEffect, SkMaskFilter, SkShader,
-        SkColorFilter, SkImageFilter, and SkDrawLooper; apply to text. By default, draws
-        filled 12 point black glyphs.
-
-        Layout engines such as Harfbuzz typically position each glyph
-        rather than using the font advance widths if all glyphs share the same
-        baseline.
-
-        @param text        character code points or glyphs drawn
-        @param byteLength  byte length of text array
-        @param xpos        array of x-axis positions, used to position each glyph
-        @param constY      shared y-axis value for all of x-axis positions
-        @param paint       text size, blend, color, and so on, used to draw
-    */
-    void drawPosTextH(const void* text, size_t byteLength, const SkScalar xpos[], SkScalar constY,
-                      const SkPaint& paint);
-
-    /** Draws text, transforming each glyph by the corresponding SkRSXform,
-        using clip, SkMatrix, and SkPaint paint.
-
-        SkRSXform xform array specifies a separate square scale, rotation, and translation
-        for each glyph. xform does not affect paint SkShader.
-
-        Optional SkRect cullRect is a conservative bounds of text, taking into account
-        SkRSXform and paint. If cullRect is outside of clip, canvas can skip drawing.
-
-        All elements of paint: SkPathEffect, SkMaskFilter, SkShader,
-        SkColorFilter, SkImageFilter, and SkDrawLooper; apply to text. By default, draws
-        filled 12 point black glyphs.
-
-        @param text        character code points or glyphs drawn
-        @param byteLength  byte length of text array
-        @param xform       SkRSXform rotates, scales, and translates each glyph individually
-        @param cullRect    SkRect bounds of text for efficient clipping; or nullptr
-        @param paint       text size, blend, color, and so on, used to draw
-    */
-    void drawTextRSXform(const void* text, size_t byteLength, const SkRSXform xform[],
-                         const SkRect* cullRect, const SkPaint& paint);
+    // Experimental
+    void drawString(const char str[], SkScalar x, SkScalar y, const SkFont& font,
+                    const SkPaint& paint) {
+        this->drawSimpleText(str, strlen(str), kUTF8_SkTextEncoding, x, y, font, paint);
+    }
+    // Experimental
+    void drawString(const SkString& str, SkScalar x, SkScalar y, const SkFont& font,
+                    const SkPaint& paint) {
+        this->drawSimpleText(str.c_str(), str.size(), kUTF8_SkTextEncoding, x, y, font, paint);
+    }
 
     /** Draws SkTextBlob blob at (x, y), using clip, SkMatrix, and SkPaint paint.
 
@@ -2002,7 +1946,7 @@ public:
         SkPaint font embedded bitmaps, SkPaint full hinting spacing, LCD text, SkPaint linear text,
         and SkPaint subpixel text.
 
-        SkPaint::TextEncoding must be set to SkPaint::kGlyphID_TextEncoding.
+        SkTextEncoding must be set to kGlyphID_SkTextEncoding.
 
         Elements of paint: anti-alias, SkBlendMode, color including alpha,
         SkColorFilter, SkPaint dither, SkDrawLooper, SkMaskFilter, SkPathEffect, SkShader, and
@@ -2025,7 +1969,7 @@ public:
         SkPaint font embedded bitmaps, SkPaint full hinting spacing, LCD text, SkPaint linear text,
         and SkPaint subpixel text.
 
-        SkPaint::TextEncoding must be set to SkPaint::kGlyphID_TextEncoding.
+        SkTextEncoding must be set to kGlyphID_SkTextEncoding.
 
         Elements of paint: SkPathEffect, SkMaskFilter, SkShader, SkColorFilter,
         SkImageFilter, and SkDrawLooper; apply to blob.
@@ -2420,6 +2364,8 @@ protected:
     virtual SaveLayerStrategy getSaveLayerStrategy(const SaveLayerRec& ) {
         return kFullLayer_SaveLayerStrategy;
     }
+    // returns true if we should actually perform the saveBehind, or false if we should just save.
+    virtual bool onDoSaveBehind(const SkRect*) { return true; }
     virtual void willRestore() {}
     virtual void didRestore() {}
     virtual void didConcat(const SkMatrix& ) {}
@@ -2441,15 +2387,6 @@ protected:
     virtual void onDrawPath(const SkPath& path, const SkPaint& paint);
     virtual void onDrawRegion(const SkRegion& region, const SkPaint& paint);
 
-    virtual void onDrawText(const void* text, size_t byteLength, SkScalar x,
-                            SkScalar y, const SkPaint& paint);
-    virtual void onDrawPosText(const void* text, size_t byteLength,
-                               const SkPoint pos[], const SkPaint& paint);
-    virtual void onDrawPosTextH(const void* text, size_t byteLength,
-                                const SkScalar xpos[], SkScalar constY,
-                                const SkPaint& paint);
-    virtual void onDrawTextRSXform(const void* text, size_t byteLength, const SkRSXform xform[],
-                                   const SkRect* cullRect, const SkPaint& paint);
     virtual void onDrawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
                                 const SkPaint& paint);
 
@@ -2638,6 +2575,16 @@ private:
     SkCanvas& operator=(SkCanvas&&) = delete;
     SkCanvas& operator=(const SkCanvas&) = delete;
 
+    /** Experimental
+     *  Saves the specified subset of the current pixels in the current layer,
+     *  and then clears those pixels to transparent black.
+     *  Restores the pixels on restore() by drawing them in SkBlendMode::kDstOver.
+     *
+     *  @param subset   conservative bounds of the area to be saved / restored.
+     *  @return depth of save state stack before this call was made.
+     */
+    int only_axis_aligned_saveBehind(const SkRect* subset);
+
     void resetForNextPicture(const SkIRect& bounds);
 
     // needs gettotalclip()
@@ -2661,6 +2608,7 @@ private:
                                 SrcRectConstraint);
     void internalDrawPaint(const SkPaint& paint);
     void internalSaveLayer(const SaveLayerRec&, SaveLayerStrategy);
+    void internalSaveBehind(const SkRect*);
     void internalDrawDevice(SkBaseDevice*, int x, int y, const SkPaint*, SkImage* clipImage,
                             const SkMatrix& clipMatrix);
 

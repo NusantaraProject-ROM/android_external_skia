@@ -166,8 +166,8 @@ bool GrMtlCaps::canCopyAsDrawThenBlit(GrPixelConfig dstConfig, GrPixelConfig src
     return true;
 }
 
-bool GrMtlCaps::canCopySurface(const GrSurfaceProxy* dst, const GrSurfaceProxy* src,
-                               const SkIRect& srcRect, const SkIPoint& dstPoint) const {
+bool GrMtlCaps::onCanCopySurface(const GrSurfaceProxy* dst, const GrSurfaceProxy* src,
+                                 const SkIRect& srcRect, const SkIPoint& dstPoint) const {
     GrSurfaceOrigin dstOrigin = dst->origin();
     GrSurfaceOrigin srcOrigin = src->origin();
 
@@ -221,6 +221,16 @@ void GrMtlCaps::initGrCaps(const id<MTLDevice> device) {
         }
     }
 
+    // Clamp to border is supported on Mac 10.12 and higher (gpu family.version >= 1.2). It is not
+    // supported on iOS.
+    if (this->isMac()) {
+        if (fFamilyGroup == 1 && fVersion < 2) {
+            fClampToBorderSupport = false;
+        }
+    } else {
+        fClampToBorderSupport = false;
+    }
+
     // Starting with the assumption that there isn't a reason to not map small buffers.
     fBufferMapThreshold = 0;
 
@@ -228,10 +238,6 @@ void GrMtlCaps::initGrCaps(const id<MTLDevice> device) {
     fMapBufferFlags = kCanMap_MapFlag;
 
     fOversizedStencilSupport = true;
-
-    // Looks like there is a field called rasterSampleCount labeled as beta in the Metal docs. This
-    // may be what we eventually need here, but it has no description.
-    fSampleShadingSupport = false;
 
     fSRGBSupport = true;   // always available in Metal
     fSRGBWriteControl = false;
@@ -412,15 +418,6 @@ void GrMtlCaps::initConfigTable() {
 
 void GrMtlCaps::initStencilFormat(id<MTLDevice> physDev) {
     fPreferredStencilFormat = StencilFormat{ MTLPixelFormatStencil8, 8, 8, true };
-}
-
-GrBackendFormat GrMtlCaps::onCreateFormatFromBackendTexture(
-        const GrBackendTexture& backendTex) const {
-    GrMtlTextureInfo mtlInfo;
-    SkAssertResult(backendTex.getMtlTextureInfo(&mtlInfo));
-    id<MTLTexture> mtlTexture = GrGetMTLTexture(mtlInfo.fTexture,
-                                                GrWrapOwnership::kBorrow_GrWrapOwnership);
-    return GrBackendFormat::MakeMtl(mtlTexture.pixelFormat);
 }
 
 GrBackendFormat GrMtlCaps::getBackendFormatFromGrColorType(GrColorType ct,

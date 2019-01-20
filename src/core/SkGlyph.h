@@ -8,16 +8,14 @@
 #ifndef SkGlyph_DEFINED
 #define SkGlyph_DEFINED
 
-#include <memory>
-
 #include "SkChecksum.h"
 #include "SkFixed.h"
 #include "SkMask.h"
+#include "SkPath.h"
 #include "SkTo.h"
 #include "SkTypes.h"
 
 class SkArenaAlloc;
-class SkPath;
 class SkGlyphCache;
 class SkScalerContext;
 
@@ -166,6 +164,10 @@ public:
 
     SkPath* addPath(SkScalerContext*, SkArenaAlloc*);
 
+    SkPath* path() const {
+        return fPathData != nullptr && fPathData->fHasPath ? &fPathData->fPath : nullptr;
+    }
+
     // Returns the size allocated on the arena.
     size_t copyImageData(const SkGlyph& from, SkArenaAlloc* alloc);
 
@@ -219,8 +221,9 @@ private:
     };
 
     struct PathData {
-        Intercept*              fIntercept;
-        std::unique_ptr<SkPath> fPath;
+        Intercept* fIntercept{nullptr};
+        SkPath     fPath;
+        bool       fHasPath{false};
     };
 
     // TODO(herb) remove friend statement after SkGlyphCache cleanup.

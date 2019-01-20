@@ -553,6 +553,7 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_DrawTextAsDFT, reporter, c
     SkStrikeServer server(discardableManager.get());
     SkStrikeClient client(discardableManager, false);
     SkPaint paint;
+    SkFont font;
 
     // A perspective transform forces fallback to dft.
     SkMatrix matrix = SkMatrix::I();
@@ -562,7 +563,7 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_DrawTextAsDFT, reporter, c
     GrTextContext::Options options;
     GrTextContext::SanitizeOptions(&options);
     REPORTER_ASSERT(reporter, GrTextContext::CanDrawAsDistanceFields(
-                                      paint, matrix, surfaceProps, true, options));
+                                      paint, font, matrix, surfaceProps, true, options));
 
     // Server.
     auto serverTf = SkTypeface::MakeFromName("monospace", SkFontStyle());
@@ -749,8 +750,8 @@ DEF_TEST(SkRemoteGlyphCache_ReWriteGlyph, reporter) {
     REPORTER_ASSERT(reporter, clientTf);
 
     SkFont font;
+    font.setEdging(SkFont::Edging::kAntiAlias);
     SkPaint paint;
-    paint.setAntiAlias(true);
     paint.setColor(SK_ColorRED);
 
     auto lostGlyphID = SkPackedGlyphID(1, SK_FixedHalf, SK_FixedHalf);
@@ -765,7 +766,7 @@ DEF_TEST(SkRemoteGlyphCache_ReWriteGlyph, reporter) {
         SkScalerContextRec rec;
         SkScalerContextEffects effects;
         SkScalerContextFlags flags = SkScalerContextFlags::kFakeGammaAndBoostContrast;
-        paint.setTypeface(serverTf);
+        font.setTypeface(serverTf);
         SkScalerContext::MakeRecAndEffects(
                 font, paint, SkSurfacePropsCopyOrDefault(nullptr), flags,
                 SkMatrix::I(), &rec, &effects, false);
@@ -785,7 +786,7 @@ DEF_TEST(SkRemoteGlyphCache_ReWriteGlyph, reporter) {
         SkScalerContextRec rec;
         SkScalerContextEffects effects;
         SkScalerContextFlags flags = SkScalerContextFlags::kFakeGammaAndBoostContrast;
-        paint.setTypeface(clientTf);
+        font.setTypeface(clientTf);
         SkScalerContext::MakeRecAndEffects(
                 font, paint, SkSurfacePropsCopyOrDefault(nullptr), flags,
                 SkMatrix::I(), &rec, &effects, false);
@@ -805,9 +806,9 @@ DEF_TEST(SkRemoteGlyphCache_ReWriteGlyph, reporter) {
         SkAutoDescriptor ad;
         SkScalerContextEffects effects;
         SkScalerContextFlags flags = SkScalerContextFlags::kFakeGammaAndBoostContrast;
-        paint.setTypeface(serverTf);
+        font.setTypeface(serverTf);
         auto* cacheState = server.getOrCreateCache(
-                paint, SkSurfacePropsCopyOrDefault(nullptr),
+                paint, font, SkSurfacePropsCopyOrDefault(nullptr),
                 SkMatrix::I(), flags, &effects);
         cacheState->addGlyph(lostGlyphID, false);
 
@@ -824,7 +825,7 @@ DEF_TEST(SkRemoteGlyphCache_ReWriteGlyph, reporter) {
         SkScalerContextRec rec;
         SkScalerContextEffects effects;
         SkScalerContextFlags flags = SkScalerContextFlags::kFakeGammaAndBoostContrast;
-        paint.setTypeface(clientTf);
+        font.setTypeface(clientTf);
         SkScalerContext::MakeRecAndEffects(
                 font, paint, SkSurfaceProps(0, kUnknown_SkPixelGeometry), flags,
                 SkMatrix::I(), &rec, &effects, false);

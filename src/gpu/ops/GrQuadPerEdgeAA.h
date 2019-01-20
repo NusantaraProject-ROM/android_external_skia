@@ -10,6 +10,7 @@
 
 #include "GrColor.h"
 #include "GrGeometryProcessor.h"
+#include "GrMeshDrawOp.h"
 #include "GrQuad.h"
 #include "GrSamplerState.h"
 #include "GrTypesPriv.h"
@@ -32,13 +33,14 @@ namespace GrQuadPerEdgeAA {
     struct VertexSpec {
     public:
         VertexSpec(GrQuadType deviceQuadType, ColorType colorType, GrQuadType localQuadType,
-                   bool hasLocalCoords, Domain domain, GrAAType aa)
+                   bool hasLocalCoords, Domain domain, GrAAType aa, bool alphaAsCoverage)
                 : fDeviceQuadType(static_cast<unsigned>(deviceQuadType))
                 , fLocalQuadType(static_cast<unsigned>(localQuadType))
                 , fHasLocalCoords(hasLocalCoords)
                 , fColorType(static_cast<unsigned>(colorType))
                 , fHasDomain(static_cast<unsigned>(domain))
-                , fUsesCoverageAA(aa == GrAAType::kCoverage) { }
+                , fUsesCoverageAA(aa == GrAAType::kCoverage)
+                , fCompatibleWithAlphaAsCoverage(alphaAsCoverage) { }
 
         GrQuadType deviceQuadType() const { return static_cast<GrQuadType>(fDeviceQuadType); }
         GrQuadType localQuadType() const { return static_cast<GrQuadType>(fLocalQuadType); }
@@ -47,12 +49,14 @@ namespace GrQuadPerEdgeAA {
         bool hasVertexColors() const { return ColorType::kNone != this->colorType(); }
         bool hasDomain() const { return fHasDomain; }
         bool usesCoverageAA() const { return fUsesCoverageAA; }
+        bool compatibleWithAlphaAsCoverage() const { return fCompatibleWithAlphaAsCoverage; }
 
         // Will always be 2 or 3
         int deviceDimensionality() const;
         // Will always be 0 if hasLocalCoords is false, otherwise will be 2 or 3
         int localDimensionality() const;
 
+        int verticesPerQuad() const { return fUsesCoverageAA ? 8 : 4; }
     private:
         static_assert(kGrQuadTypeCount <= 4, "GrQuadType doesn't fit in 2 bits");
         static_assert(kColorTypeCount <= 4, "Color doesn't fit in 2 bits");
@@ -63,13 +67,15 @@ namespace GrQuadPerEdgeAA {
         unsigned fColorType : 2;
         unsigned fHasDomain: 1;
         unsigned fUsesCoverageAA: 1;
+        unsigned fCompatibleWithAlphaAsCoverage: 1;
     };
 
     sk_sp<GrGeometryProcessor> MakeProcessor(const VertexSpec& spec);
 
     sk_sp<GrGeometryProcessor> MakeTexturedProcessor(const VertexSpec& spec,
             const GrShaderCaps& caps, GrTextureType textureType, GrPixelConfig textureConfig,
-            const GrSamplerState::Filter filter, sk_sp<GrColorSpaceXform> textureColorSpaceXform);
+            const GrSamplerState& samplerState, uint32_t extraSamplerKey,
+            sk_sp<GrColorSpaceXform> textureColorSpaceXform);
 
     // Fill vertices with the vertex data needed to represent the given quad. The device position,
     // local coords, vertex color, domain, and edge coefficients will be written and/or computed
@@ -80,6 +86,16 @@ namespace GrQuadPerEdgeAA {
     void* Tessellate(void* vertices, const VertexSpec& spec, const GrPerspQuad& deviceQuad,
                      const SkPMColor4f& color, const GrPerspQuad& localQuad, const SkRect& domain,
                      GrQuadAAFlags aa);
+
+    // The mesh will have its index data configured to meet the expectations of the Tessellate()
+    // function, but it the calling code must handle filling a vertex buffer via Tessellate() and
+    // then assigning it to the returned mesh.
+    //
+    // Returns false if the index data could not be allocated.
+    bool ConfigureMeshIndices(GrMeshDrawOp::Target* target, GrMesh* mesh, const VertexSpec& spec,
+                              int quadCount);
+
+    static constexpr int kNumAAQuadsInIndexBuffer = 512;
 
 } // namespace GrQuadPerEdgeAA
 

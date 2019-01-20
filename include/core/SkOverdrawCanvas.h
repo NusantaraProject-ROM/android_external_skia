@@ -21,11 +21,6 @@ public:
     /* Does not take ownership of canvas */
     SkOverdrawCanvas(SkCanvas*);
 
-    void onDrawText(const void*, size_t, SkScalar, SkScalar, const SkPaint&) override;
-    void onDrawPosText(const void*, size_t, const SkPoint[], const SkPaint&) override;
-    void onDrawPosTextH(const void*, size_t, const SkScalar[], SkScalar, const SkPaint&) override;
-    void onDrawTextRSXform(const void*, size_t, const SkRSXform[], const SkRect*,
-                           const SkPaint&) override;
     void onDrawTextBlob(const SkTextBlob*, SkScalar, SkScalar, const SkPaint&) override;
     void onDrawPatch(const SkPoint[12], const SkColor[4], const SkPoint[4], SkBlendMode,
                      const SkPaint&) override;
@@ -61,8 +56,8 @@ public:
     void onDrawShadowRec(const SkPath&, const SkDrawShadowRec&) override;
 
 private:
-    void drawPosTextCommon(const void*, size_t, const SkScalar[], int, const SkPoint&,
-                           const SkPaint&);
+    void drawPosTextCommon(const SkGlyphID[], int, const SkScalar[], int, const SkPoint&,
+                           const SkFont&, const SkPaint&);
 
     inline SkPaint overdrawPaint(const SkPaint& paint);
 

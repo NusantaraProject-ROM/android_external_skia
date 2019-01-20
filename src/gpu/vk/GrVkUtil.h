@@ -8,13 +8,12 @@
 #ifndef GrVkUtil_DEFINED
 #define GrVkUtil_DEFINED
 
-#include "GrVkVulkan.h"
-
 #include "GrColor.h"
 #include "GrTypes.h"
 #include "GrVkInterface.h"
 #include "SkMacros.h"
 #include "ir/SkSLProgram.h"
+#include "vk/GrVkTypes.h"
 
 class GrVkGpu;
 
@@ -36,10 +35,12 @@ bool GrPixelConfigToVkFormat(GrPixelConfig config, VkFormat* format);
 
 bool GrVkFormatIsSupported(VkFormat);
 
+#ifdef SK_DEBUG
 /**
  * Returns true if the passed in VkFormat and GrPixelConfig are compatible with each other.
  */
 bool GrVkFormatPixelConfigPairIsValid(VkFormat, GrPixelConfig);
+#endif
 
 bool GrSampleCountToVkSampleCount(uint32_t samples, VkSampleCountFlagBits* vkSamples);
 
@@ -49,6 +50,13 @@ bool GrCompileVkShaderModule(const GrVkGpu* gpu,
                              VkShaderModule* shaderModule,
                              VkPipelineShaderStageCreateInfo* stageInfo,
                              const SkSL::Program::Settings& settings,
+                             SkSL::String* outSPIRV,
                              SkSL::Program::Inputs* outInputs);
+
+bool GrInstallVkShaderModule(const GrVkGpu* gpu,
+                             const SkSL::String& spirv,
+                             VkShaderStageFlagBits stage,
+                             VkShaderModule* shaderModule,
+                             VkPipelineShaderStageCreateInfo* stageInfo);
 
 #endif
