@@ -20,14 +20,12 @@
 #include "SkImageFilterPriv.h"
 #include "SkMakeUnique.h"
 #include "SkMatrix.h"
-#include "SkPDFCanon.h"
 #include "SkPDFDevice.h"
-#include "SkPDFDocument.h"
 #include "SkPDFDocumentPriv.h"
 #include "SkPDFFont.h"
 #include "SkPDFTypes.h"
-#include "SkPDFUtils.h"
 #include "SkPDFUnion.h"
+#include "SkPDFUtils.h"
 #include "SkReadBuffer.h"
 #include "SkScalar.h"
 #include "SkSpecialImage.h"
@@ -85,13 +83,11 @@ static void assert_emit_eq(skiatest::Reporter* reporter,
 // and there is no assert on input data in Debug mode.
 static void test_issue1083() {
     SkDynamicMemoryWStream outStream;
-    sk_sp<SkDocument> doc(SkPDF::MakeDocument(&outStream));
+    auto doc = SkPDF::MakeDocument(&outStream);
     SkCanvas* canvas = doc->beginPage(100.0f, 100.0f);
-    SkPaint paint;
-    paint.setTextEncoding(kGlyphID_SkTextEncoding);
 
     uint16_t glyphID = 65000;
-    canvas->drawText(&glyphID, 2, 0, 0, paint);
+    canvas->drawSimpleText(&glyphID, 2, kGlyphID_SkTextEncoding, 0, 0, SkFont(), SkPaint());
 
     doc->close();
 }
@@ -290,7 +286,7 @@ sk_sp<SkFlattenable> DummyImageFilter::CreateProc(SkReadBuffer& buffer) {
 DEF_TEST(SkPDF_ImageFilter, reporter) {
     REQUIRE_PDF_DOCUMENT(SkPDF_ImageFilter, reporter);
     SkDynamicMemoryWStream stream;
-    sk_sp<SkDocument> doc(SkPDF::MakeDocument(&stream));
+    auto doc = SkPDF::MakeDocument(&stream);
     SkCanvas* canvas = doc->beginPage(100.0f, 100.0f);
 
     sk_sp<DummyImageFilter> filter(DummyImageFilter::Make());
@@ -309,18 +305,19 @@ DEF_TEST(SkPDF_ImageFilter, reporter) {
 // Check that PDF rendering of image filters successfully falls back to
 // CPU rasterization.
 DEF_TEST(SkPDF_FontCanEmbedTypeface, reporter) {
-    SkPDFCanon canon;
+    SkNullWStream nullWStream;
+    SkPDFDocument doc(&nullWStream, SkPDF::Metadata());
 
     const char resource[] = "fonts/Roboto2-Regular_NoEmbed.ttf";
     sk_sp<SkTypeface> noEmbedTypeface(MakeResourceAsTypeface(resource));
     if (noEmbedTypeface) {
         REPORTER_ASSERT(reporter,
-                        !SkPDFFont::CanEmbedTypeface(noEmbedTypeface.get(), &canon));
+                        !SkPDFFont::CanEmbedTypeface(noEmbedTypeface.get(), &doc));
     }
     sk_sp<SkTypeface> portableTypeface(
             sk_tool_utils::create_portable_typeface(nullptr, SkFontStyle()));
     REPORTER_ASSERT(reporter,
-                    SkPDFFont::CanEmbedTypeface(portableTypeface.get(), &canon));
+                    SkPDFFont::CanEmbedTypeface(portableTypeface.get(), &doc));
 }
 
 
@@ -386,9 +383,9 @@ DEF_TEST(SkPDF_Primitives_Color, reporter) {
 }
 
 static SkGlyphRun make_run(size_t len, const SkGlyphID* glyphs, SkPoint* pos,
-                           SkPaint paint, const uint32_t* clusters,
+                           const SkFont& font, const uint32_t* clusters,
                            size_t utf8TextByteLength, const char* utf8Text) {
-    return SkGlyphRun(SkFont::LEGACY_ExtractFromPaint(paint),
+    return SkGlyphRun(font,
                       SkSpan<const SkPoint>{pos, len},
                       SkSpan<const SkGlyphID>{glyphs, len},
                       SkSpan<const char>{utf8Text, utf8TextByteLength},
@@ -396,8 +393,7 @@ static SkGlyphRun make_run(size_t len, const SkGlyphID* glyphs, SkPoint* pos,
 }
 
 DEF_TEST(SkPDF_Clusterator, reporter) {
-    SkPaint paint;
-    paint.setTextEncoding(kGlyphID_SkTextEncoding);
+    SkFont font;
     {
         constexpr unsigned len = 11;
         const uint32_t clusters[len] = { 3, 2, 2, 1, 0, 4, 4, 7, 6, 6, 5 };
@@ -405,7 +401,7 @@ DEF_TEST(SkPDF_Clusterator, reporter) {
         SkPoint pos[len] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0},
                                   {0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}};
         const char text[] = "abcdefgh";
-        SkGlyphRun run = make_run(len, glyphs, pos, paint, clusters, strlen(text), text);
+        SkGlyphRun run = make_run(len, glyphs, pos, font, clusters, strlen(text), text);
         SkClusterator clusterator(run);
         SkClusterator::Cluster expectations[] = {
             {&text[3], 1, 0, 1},
@@ -428,7 +424,7 @@ DEF_TEST(SkPDF_Clusterator, reporter) {
         const SkGlyphID glyphs[len] = { 43, 167, 79, 79, 82, };
         SkPoint pos[len] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}, {0, 0}};
         const char text[] = "Ha\xCC\x8A" "llo";
-        SkGlyphRun run = make_run(len, glyphs, pos, paint, clusters, strlen(text), text);
+        SkGlyphRun run = make_run(len, glyphs, pos, font, clusters, strlen(text), text);
         SkClusterator clusterator(run);
         SkClusterator::Cluster expectations[] = {
             {&text[0], 1, 0, 1},

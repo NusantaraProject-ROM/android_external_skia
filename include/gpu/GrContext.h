@@ -29,7 +29,7 @@ class GrContextThreadSafeProxyPriv;
 class GrDrawingManager;
 class GrFragmentProcessor;
 struct GrGLInterface;
-class GrGlyphCache;
+class GrStrikeCache;
 class GrGpu;
 struct GrMockOptions;
 class GrOpMemoryPool;
@@ -283,6 +283,8 @@ public:
 
     bool supportsDistanceFieldText() const;
 
+    void storeVkPipelineCacheData();
+
 protected:
     GrContext(GrBackendApi, int32_t id = SK_InvalidGenID);
 
@@ -310,7 +312,7 @@ private:
     // All the GrOp-derived classes use this pool.
     sk_sp<GrOpMemoryPool>                   fOpMemoryPool;
 
-    GrGlyphCache*                           fGlyphCache;
+    GrStrikeCache*                           fGlyphCache;
     std::unique_ptr<GrTextBlobCache>        fTextBlobCache;
 
     bool                                    fDisableGpuYUVConversion;

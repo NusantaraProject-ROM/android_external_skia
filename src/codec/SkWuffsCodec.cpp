@@ -12,7 +12,16 @@
 #include "SkSampler.h"
 #include "SkSwizzler.h"
 #include "SkUtils.h"
-#include "wuffs-v0.2.h"
+
+// Wuffs ships as a "single file C library" or "header file library" as per
+// https://github.com/nothings/stb/blob/master/docs/stb_howto.txt
+//
+// As we have not #define'd WUFFS_IMPLEMENTATION, the #include here is
+// including a header file, even though that file name ends in ".c".
+#include "wuffs-v0.2.c"
+#if WUFFS_VERSION_BUILD_METADATA_COMMIT_COUNT < 1535
+#error "Wuffs version is too old. Upgrade to the latest version."
+#endif
 
 #define SK_WUFFS_CODEC_BUFFER_SIZE 4096
 
@@ -888,7 +897,7 @@ std::unique_ptr<SkCodec> SkWuffsCodec_MakeFromStream(std::unique_ptr<SkStream> s
         return nullptr;
     }
 
-    uint64_t workbuf_len = imgcfg.workbuf_len().max_incl;
+    uint64_t workbuf_len = wuffs_gif__decoder__workbuf_len(decoder.get()).max_incl;
     void*    workbuf_ptr_raw = workbuf_len <= SIZE_MAX ? sk_malloc_canfail(workbuf_len) : nullptr;
     if (!workbuf_ptr_raw) {
         *result = SkCodec::kInternalError;

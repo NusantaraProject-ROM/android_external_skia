@@ -276,7 +276,7 @@ def codec_srcs(limited):
             "src/codec/*Webp*.cpp",
             "src/codec/*Png*",
         ]
-    return native.glob(["src/codec/*.cpp", "third_party/gif/*.cpp"], exclude = exclude)
+    return native.glob(["src/codec/*.cpp", "third_party/etc1/*.cpp", "third_party/gif/*.cpp"], exclude = exclude)
 
 # Platform-dependent SRCS for google3-default platform.
 BASE_SRCS_UNIX = struct(
@@ -414,6 +414,7 @@ INCLUDES = [
     "src/shaders/gradients",
     "src/sksl",
     "src/utils",
+    "third_party/etc1",
     "third_party/gif",
 ]
 
@@ -676,4 +677,24 @@ SKOTTIE_TOOL_SRCS = [
     # TODO(benjaminwagner): Add "flags" target.
     "tools/flags/SkCommandLineFlags.cpp",
     "tools/flags/SkCommandLineFlags.h",
+]
+
+################################################################################
+## SkShaper
+################################################################################
+
+SKSHAPER_INCLUDES = [
+    "modules/skshaper/include",
+]
+
+SKSHAPER_HARFBUZZ_SRCS = [
+    "modules/skshaper/include/SkShaper.h",
+    "modules/skshaper/src/SkShaper.cpp",
+    "modules/skshaper/src/SkShaper_harfbuzz.cpp",
+]
+
+SKSHAPER_PRIMITIVE_SRCS = [
+    "modules/skshaper/include/SkShaper.h",
+    "modules/skshaper/src/SkShaper.cpp",
+    "modules/skshaper/src/SkShaper_primitive.cpp",
 ]

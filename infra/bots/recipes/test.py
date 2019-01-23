@@ -260,7 +260,9 @@ def dm_flags(api, bot):
     if 'DDL3' in bot:
       # This bot generates the ddl-gl and ddl-vk images for the
       # large skps and the gms
-      configs = ['ddl-' + c for c in configs if c == 'gl' or c == 'vk']
+      ddl_configs = ['ddl-' + c for c in configs if c == 'gl' or c == 'vk']
+      ddl2_configs = ['ddl2-' + c for c in configs if c == 'gl' or c == 'vk']
+      configs = ddl_configs + ddl2_configs
       args.extend(['--skpViewportSize', "2048"])
       args.extend(['--gpuThreads', "0"])
 
@@ -704,6 +706,7 @@ def dm_flags(api, bot):
     blacklist(['vk', 'gm', '_', 'textblobrandomfont'])
     blacklist(['vk', 'gm', '_', 'textfilter_color'])
     blacklist(['vk', 'gm', '_', 'textfilter_image'])
+    blacklist(['vk', 'gm', '_', 'tilemodes'])
     blacklist(['vk', 'gm', '_', 'varied_text_clipped_lcd'])
     blacklist(['vk', 'gm', '_', 'varied_text_ignorable_clip_lcd'])
     if 'Debug' in bot:
@@ -763,6 +766,8 @@ def dm_flags(api, bot):
     match.append('~^GrPipelineDynamicStateTest$')
     match.append('~^InitialTextureClear$')
     match.append('~^PromiseImageTest$')
+    match.append('~^PromiseImageTextureReuse$')
+    match.append('~^PromiseImageTextureReuseDifferentConfig$')
     match.append('~^ResourceAllocatorTest$')
     match.append('~^RGB565TextureTest$')
     match.append('~^RGBA4444TextureTest$')

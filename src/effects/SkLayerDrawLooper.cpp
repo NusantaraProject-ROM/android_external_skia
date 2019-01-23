@@ -85,10 +85,12 @@ void SkLayerDrawLooper::LayerDrawLooperContext::ApplyInfo(
     }
     if (kEntirePaint_Bits == bits) {
         // we've already computed these, so save it from the assignment
-        uint32_t f = dst->getFlags();
+        bool aa = dst->isAntiAlias();
+        bool di = dst->isDither();
         SkColor4f c = dst->getColor4f();
         *dst = src;
-        dst->setFlags(f);
+        dst->setAntiAlias(aa);
+        dst->setDither(di);
         dst->setColor4f(c, sk_srgb_singleton());
         return;
     }
@@ -268,7 +270,7 @@ sk_sp<SkFlattenable> SkLayerDrawLooper::CreateProc(SkReadBuffer& buffer) {
         info.fColorMode = (SkBlendMode)buffer.readInt();
         buffer.readPoint(&info.fOffset);
         info.fPostTranslate = buffer.readBool();
-        buffer.readPaint(builder.addLayerOnTop(info));
+        buffer.readPaint(builder.addLayerOnTop(info), nullptr);
         if (!buffer.isValid()) {
             return nullptr;
         }
@@ -343,6 +345,12 @@ sk_sp<SkDrawLooper> SkLayerDrawLooper::Builder::detach() {
 
 sk_sp<SkDrawLooper> SkBlurDrawLooper::Make(SkColor color, SkScalar sigma, SkScalar dx, SkScalar dy)
 {
+    return Make(SkColor4f::FromColor(color), sk_srgb_singleton(), sigma, dx, dy);
+}
+
+sk_sp<SkDrawLooper> SkBlurDrawLooper::Make(SkColor4f color, SkColorSpace* cs,
+        SkScalar sigma, SkScalar dx, SkScalar dy)
+{
     sk_sp<SkMaskFilter> blur = nullptr;
     if (sigma > 0.0f) {
         blur = SkMaskFilter::MakeBlur(kNormal_SkBlurStyle, sigma, true);
@@ -361,7 +369,7 @@ sk_sp<SkDrawLooper> SkBlurDrawLooper::Make(SkColor color, SkScalar sigma, SkScal
     blurInfo.fOffset = SkVector::Make(dx, dy);
     SkPaint* paint = builder.addLayer(blurInfo);
     paint->setMaskFilter(std::move(blur));
-    paint->setColor(color);
+    paint->setColor4f(color, cs);
 
     return builder.detach();
 }

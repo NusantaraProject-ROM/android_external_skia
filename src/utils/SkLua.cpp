@@ -556,13 +556,17 @@ static int lcanvas_drawText(lua_State* L) {
         return 0;
     }
 
+#ifdef SK_SUPPORT_LEGACY_PAINT_FONT_FIELDS
     if (lua_isstring(L, 2) && lua_isnumber(L, 3) && lua_isnumber(L, 4)) {
         size_t len;
         const char* text = lua_tolstring(L, 2, &len);
-        get_ref<SkCanvas>(L, 1)->drawText(text, len,
-                                          lua2scalar(L, 3), lua2scalar(L, 4),
-                                          *get_obj<SkPaint>(L, 5));
+        get_ref<SkCanvas>(L, 1)->drawSimpleText(
+                text, len, kUTF8_SkTextEncoding,
+                lua2scalar(L, 3), lua2scalar(L, 4),
+                SkFont::LEGACY_ExtractFromPaint(*get_obj<SkPaint>(L, 5)),
+                *get_obj<SkPaint>(L, 5));
     }
+#endif
     return 0;
 }
 
@@ -1796,7 +1800,7 @@ static int lsk_newDocumentPDF(lua_State* L) {
     if (!file->isValid()) {
         return 0;
     }
-    sk_sp<SkDocument> doc = SkPDF::MakeDocument(file.get());
+    auto doc = SkPDF::MakeDocument(file.get());
     if (!doc) {
         return 0;
     }
@@ -1866,12 +1870,16 @@ static int lsk_newTextBlob(lua_State* L) {
     const char* text = lua_tolstring(L, 1, nullptr);
     SkRect bounds;
     lua2rect(L, 2, &bounds);
-    const SkPaint& paint = *get_obj<SkPaint>(L, 3);
 
     SkShaper shaper(nullptr);
 
+#ifdef SK_SUPPORT_LEGACY_PAINT_FONT_FIELDS
+    const SkPaint& paint = *get_obj<SkPaint>(L, 3);
     SkFont font = SkFont::LEGACY_ExtractFromPaint(paint);
-    SkTextBlobBuilderLineHandler builder;
+#else
+    SkFont font;
+#endif
+    SkTextBlobBuilderRunHandler builder;
     SkPoint end = shaper.shape(&builder, font, text, strlen(text), true,
                                { bounds.left(), bounds.top() }, bounds.width());
 

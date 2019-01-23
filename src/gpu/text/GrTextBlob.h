@@ -10,7 +10,7 @@
 
 #include "GrColor.h"
 #include "GrDrawOpAtlas.h"
-#include "GrGlyphCache.h"
+#include "GrStrikeCache.h"
 #include "GrTextTarget.h"
 #include "text/GrTextContext.h"
 #include "SkDescriptor.h"
@@ -55,7 +55,7 @@ public:
 
     class VertexRegenerator;
 
-    void generateFromGlyphRunList(GrGlyphCache* glyphCache,
+    void generateFromGlyphRunList(GrStrikeCache* glyphCache,
                                   const GrShaderCaps& shaderCaps,
                                   const GrTextContext::Options& options,
                                   const SkPaint& paint,
@@ -248,10 +248,6 @@ public:
                                           const SkPaint& paint, const SkPMColor4f& filteredColor,
                                           const SkSurfaceProps&, const GrDistanceFieldAdjustTable*,
                                           GrTextTarget*);
-    struct BothCaches {
-        SkExclusiveStrikePtr skCache;
-        sk_sp<GrTextStrike> grCache;
-    };
 
 private:
     GrTextBlob()
@@ -449,13 +445,6 @@ private:
                                     SkPoint origin,
                                     SkScalar textScale);
 
-        BothCaches lookupCache(const SkPaint& skPaint,
-                               const SkFont& skFont,
-                               const SkSurfaceProps& props,
-                               SkScalerContextFlags scalerContextFlags,
-                               const SkMatrix& viewMatrix,
-                               GrGlyphCache* grGlyphCache);
-
         void setupFont(const SkPaint& skPaint,
                        const SkFont& skFont,
                        const SkDescriptor& skCache);
@@ -582,7 +571,7 @@ public:
      */
     VertexRegenerator(GrResourceProvider*, GrTextBlob*, int runIdx, int subRunIdx,
                       const SkMatrix& viewMatrix, SkScalar x, SkScalar y, GrColor color,
-                      GrDeferredUploadTarget*, GrGlyphCache*, GrAtlasManager*,
+                      GrDeferredUploadTarget*, GrStrikeCache*, GrAtlasManager*,
                       SkExclusiveStrikePtr*);
 
     struct Result {
@@ -607,14 +596,13 @@ public:
     bool regenerate(Result*);
 
 private:
-    template <bool regenPos, bool regenCol, bool regenTexCoords, bool regenGlyphs>
-    bool doRegen(Result*);
+    bool doRegen(Result*, bool regenPos, bool regenCol, bool regenTexCoords, bool regenGlyphs);
 
     GrResourceProvider* fResourceProvider;
     const SkMatrix& fViewMatrix;
     GrTextBlob* fBlob;
     GrDeferredUploadTarget* fUploadTarget;
-    GrGlyphCache* fGlyphCache;
+    GrStrikeCache* fGlyphCache;
     GrAtlasManager* fFullAtlasManager;
     SkExclusiveStrikePtr* fLazyCache;
     Run* fRun;

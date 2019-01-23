@@ -139,7 +139,7 @@ bool GrContext::initCommon(const GrContextOptions& options) {
                                                options.fSortRenderTargets,
                                                options.fReduceOpListSplitting));
 
-    fGlyphCache = new GrGlyphCache(fCaps.get(), options.fGlyphCacheTextureMaximumBytes);
+    fGlyphCache = new GrStrikeCache(fCaps.get(), options.fGlyphCacheTextureMaximumBytes);
 
     fTextBlobCache.reset(new GrTextBlobCache(TextBlobCacheOverBudgetCB,
                                              this, this->uniqueID()));
@@ -317,7 +317,7 @@ void GrContext::performDeferredCleanup(std::chrono::milliseconds msNotUsed) {
     fResourceCache->purgeResourcesNotUsedSince(purgeTime);
 
     if (auto ccpr = fDrawingManager->getCoverageCountingPathRenderer()) {
-        ccpr->purgeCacheEntriesOlderThan(purgeTime);
+        ccpr->purgeCacheEntriesOlderThan(fProxyProvider, purgeTime);
     }
 
     fTextBlobCache->purgeStaleBlobs();
@@ -397,6 +397,16 @@ void GrContextPriv::flush(GrSurfaceProxy* proxy) {
     fContext->fDrawingManager->flush(proxy);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
+void GrContext::storeVkPipelineCacheData() {
+    if (fGpu) {
+        fGpu->storeVkPipelineCacheData();
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 // TODO: This will be removed when GrSurfaceContexts are aware of their color types.
 // (skbug.com/6718)
 static bool valid_premul_config(GrPixelConfig config) {
@@ -417,6 +427,7 @@ static bool valid_premul_config(GrPixelConfig config) {
         case kRG_float_GrPixelConfig:           return false;
         case kAlpha_half_GrPixelConfig:         return false;
         case kRGBA_half_GrPixelConfig:          return true;
+        case kRGB_ETC1_GrPixelConfig:           return false;
         case kAlpha_8_as_Alpha_GrPixelConfig:   return false;
         case kAlpha_8_as_Red_GrPixelConfig:     return false;
         case kAlpha_half_as_Red_GrPixelConfig:  return false;
@@ -443,6 +454,7 @@ static bool valid_premul_color_type(GrColorType ct) {
         case GrColorType::kRGBA_F16:     return true;
         case GrColorType::kRG_F32:       return false;
         case GrColorType::kRGBA_F32:     return true;
+        case GrColorType::kRGB_ETC1:     return false;
     }
     SK_ABORT("Invalid GrColorType");
     return false;

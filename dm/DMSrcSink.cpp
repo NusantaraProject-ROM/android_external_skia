@@ -1088,26 +1088,16 @@ Name ColorCodecSrc::name() const {
 
 SKPSrc::SKPSrc(Path path) : fPath(path) { }
 
-static sk_sp<SkPicture> read_skp(const char* path, const SkDeserialProcs* procs = nullptr) {
-    std::unique_ptr<SkStream> stream = SkStream::MakeFromFile(path);
-    if (!stream) {
-        return nullptr;
-    }
-    sk_sp<SkPicture> pic(SkPicture::MakeFromStream(stream.get(), procs));
-    if (!pic) {
-        return nullptr;
-    }
-    stream = nullptr;  // Might as well drop this when we're done with it.
-
-    return pic;
-}
-
 Error SKPSrc::draw(SkCanvas* canvas) const {
-    sk_sp<SkPicture> pic = read_skp(fPath.c_str());
-    if (!pic) {
+    std::unique_ptr<SkStream> stream = SkStream::MakeFromFile(fPath.c_str());
+    if (!stream) {
         return SkStringPrintf("Couldn't read %s.", fPath.c_str());
     }
-
+    sk_sp<SkPicture> pic(SkPicture::MakeFromStream(stream.get()));
+    if (!pic) {
+        return SkStringPrintf("Couldn't parse file %s.", fPath.c_str());
+    }
+    stream = nullptr;  // Might as well drop this when we're done with it.
     canvas->clipRect(SkRect::MakeWH(FLAGS_skpViewportSize, FLAGS_skpViewportSize));
     canvas->drawPicture(pic);
     return "";
@@ -1517,6 +1507,9 @@ Error GPUSink::onDraw(const Src& src, SkBitmap* dst, SkWStream*, SkString* log,
             context->contextPriv().getGpu()->deleteTestingOnlyBackendRenderTarget(backendRT);
         }
     }
+    if (grOptions.fPersistentCache) {
+        context->storeVkPipelineCacheData();
+    }
     return "";
 }
 
@@ -1642,7 +1635,7 @@ Error PDFSink::draw(const Src& src, SkBitmap*, SkWStream* dst, SkString*) const 
     std::unique_ptr<SkExecutor> executor = SkExecutor::MakeFIFOThreadPool();
     metadata.fExecutor = executor.get();
 #endif
-    sk_sp<SkDocument> doc = SkPDF::MakeDocument(dst, metadata);
+    auto doc = SkPDF::MakeDocument(dst, metadata);
     if (!doc) {
         return "SkPDF::MakeDocument() returned nullptr";
     }
@@ -1672,9 +1665,9 @@ Error XPSSink::draw(const Src& src, SkBitmap*, SkWStream* dst, SkString*) const 
     if (!factory) {
         return "Failed to create XPS Factory.";
     }
-    sk_sp<SkDocument> doc(SkXPS::MakeDocument(dst, factory.get()));
+    auto doc = SkXPS::MakeDocument(dst, factory.get());
     if (!doc) {
-        return "SkXPS::MAkeDocument() returned nullptr";
+        return "SkXPS::MakeDocument() returned nullptr";
     }
     return draw_skdocument(src, doc.get(), dst);
 }
@@ -1972,7 +1965,10 @@ Error ViaDDL::draw(const Src& src, SkBitmap* bitmap, SkWStream* stream, SkString
 
         // This is here bc this is the first point where we have access to the context
         promiseImageHelper.uploadAllToGPU(context);
-        // We draw N times, with a clear between.
+        // We draw N times, with a clear between. Between each run we invalidate and delete half of
+        // the textures backing promise images. So half the images exercise reusing a cached
+        // GrTexture and the other half exercise the case whem the client provides a different
+        // backing texture in fulfill.
         for (int replay = 0; replay < fNumReplays; ++replay) {
             if (replay > 0) {
                 // Clear the drawing of the previous replay
@@ -1982,6 +1978,9 @@ Error ViaDDL::draw(const Src& src, SkBitmap* bitmap, SkWStream* stream, SkString
             DDLTileHelper tiles(canvas, viewport, fNumDivisions);
 
             // Second, reinflate the compressed picture individually for each thread
+            // This recreates the promise SkImages on each replay iteration. We are currently
+            // relying on this to test using a SkPromiseImageTexture to fulfill different
+            // SkImages. On each replay the promise SkImages are recreated in createSKPPerTile.
             tiles.createSKPPerTile(compressedPictureData.get(), promiseImageHelper);
 
             // Third, create the DDLs in parallel
@@ -1991,6 +1990,11 @@ Error ViaDDL::draw(const Src& src, SkBitmap* bitmap, SkWStream* stream, SkString
                 // This drops the promiseImageHelper's refs on all the promise images if we're in
                 // the last run.
                 promiseImageHelper.reset();
+            } else {
+                // This ought to ensure that all promise image textures from the last pass are
+                // released.
+                context->contextPriv().getGpu()->testingOnly_flushGpuAndSync();
+                promiseImageHelper.replaceEveryOtherPromiseTexture(context);
             }
 
             // Fourth, synchronously render the display lists into the dest tiles

@@ -52,6 +52,7 @@ public:
     bool srgbWriteControl() const { return fSRGBWriteControl; }
     bool discardRenderTargetSupport() const { return fDiscardRenderTargetSupport; }
     bool gpuTracingSupport() const { return fGpuTracingSupport; }
+    bool compressedTexSubImageSupport() const { return fCompressedTexSubImageSupport; }
     bool oversizedStencilSupport() const { return fOversizedStencilSupport; }
     bool textureBarrierSupport() const { return fTextureBarrierSupport; }
     bool sampleLocationsSupport() const { return fSampleLocationsSupport; }
@@ -251,8 +252,22 @@ public:
         return fDynamicStateArrayGeometryProcessorTextureSupport;
     }
 
-    virtual bool performPartialClearsAsDraws() const {
-        return false;
+    // Not all backends support clearing with a scissor test (e.g. Metal), this will always
+    // return true if performColorClearsAsDraws() returns true.
+    bool performPartialClearsAsDraws() const {
+        return fPerformColorClearsAsDraws || fPerformPartialClearsAsDraws;
+    }
+
+    // Many drivers have issues with color clears.
+    bool performColorClearsAsDraws() const {
+        return fPerformColorClearsAsDraws;
+    }
+
+    /// Adreno 4xx devices experience an issue when there are a large number of stencil clip bit
+    /// clears. The minimal repro steps are not precisely known but drawing a rect with a stencil
+    /// op instead of using glClear seems to resolve the issue.
+    bool performStencilClearsAsDraws() const {
+        return fPerformStencilClearsAsDraws;
     }
 
     /**
@@ -318,6 +333,7 @@ protected:
     bool fReuseScratchTextures                       : 1;
     bool fReuseScratchBuffers                        : 1;
     bool fGpuTracingSupport                          : 1;
+    bool fCompressedTexSubImageSupport               : 1;
     bool fOversizedStencilSupport                    : 1;
     bool fTextureBarrierSupport                      : 1;
     bool fSampleLocationsSupport                     : 1;
@@ -331,6 +347,9 @@ protected:
     bool fSupportsAHardwareBufferImages              : 1;
     bool fHalfFloatVertexAttributeSupport            : 1;
     bool fClampToBorderSupport                       : 1;
+    bool fPerformPartialClearsAsDraws                : 1;
+    bool fPerformColorClearsAsDraws                  : 1;
+    bool fPerformStencilClearsAsDraws                : 1;
 
     // Driver workaround
     bool fBlacklistCoverageCounting                  : 1;
