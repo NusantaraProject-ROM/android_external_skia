@@ -21,9 +21,14 @@ timeout 60 adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) 
 # Some extra sleep to make sure the emulator is awake and ready for installation
 sleep 10
 
-adb install -r /OUT/*.apk
-echo exit status: $?
+adb install -r /OUT/skqp-x86-debug.apk
 adb logcat -c
-adb shell am instrument -w org.skia.skqp
-echo exit status: $?
+
+tmp_file="$(mktemp "${TMPDIR:-/tmp}/skqp.XXXXXXXXXX")"
+
+adb shell am instrument -w org.skia.skqp | tee "$tmp_file" | fold -s
+
 adb logcat -d TestRunner org.skia.skqp skia DEBUG "*:S"
+
+grep -q '^OK ' "$tmp_file"
+

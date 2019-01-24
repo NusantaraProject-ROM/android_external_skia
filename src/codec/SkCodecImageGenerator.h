@@ -19,6 +19,8 @@ public:
      */
     static std::unique_ptr<SkImageGenerator> MakeFromEncodedCodec(sk_sp<SkData>);
 
+    static std::unique_ptr<SkImageGenerator> MakeFromCodec(std::unique_ptr<SkCodec>);
+
 protected:
     sk_sp<SkData> onRefEncodedData() override;
 
@@ -26,9 +28,9 @@ protected:
         const SkImageInfo& info, void* pixels, size_t rowBytes, const Options& opts) override;
 
     bool onQueryYUVA8(
-        SkYUVSizeInfo*, SkYUVAIndex[SkYUVAIndex::kIndexCount], SkYUVColorSpace*) const override;
+        SkYUVASizeInfo*, SkYUVAIndex[SkYUVAIndex::kIndexCount], SkYUVColorSpace*) const override;
 
-    bool onGetYUVA8Planes(const SkYUVSizeInfo&, const SkYUVAIndex[SkYUVAIndex::kIndexCount],
+    bool onGetYUVA8Planes(const SkYUVASizeInfo&, const SkYUVAIndex[SkYUVAIndex::kIndexCount],
                           void* planes[]) override;
 
 private:

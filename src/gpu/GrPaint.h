@@ -50,11 +50,6 @@ public:
     void setColor4f(const SkPMColor4f& color) { fColor = color; }
     const SkPMColor4f& getColor4f() const { return fColor; }
 
-    /**
-     * Legacy getter, until all code handles 4f directly.
-     */
-    GrColor getColor() const { return fColor.toBytes_RGBA(); }
-
     void setXPFactory(const GrXPFactory* xpFactory) {
         fXPFactory = xpFactory;
         fTrivial &= !SkToBool(xpFactory);
@@ -112,7 +107,7 @@ public:
      * coverage and color, so the actual values written to pixels with partial coverage may still
      * not seem constant, even if this function returns true.
      */
-    bool isConstantBlendedColor(GrColor* constantColor) const;
+    bool isConstantBlendedColor(SkPMColor4f* constantColor) const;
 
     /**
      * A trivial paint is one that uses src-over and has no fragment processors.

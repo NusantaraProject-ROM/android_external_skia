@@ -34,8 +34,7 @@ public:
         kYes = true
     };
 
-    static sk_sp<GrCoverageCountingPathRenderer> CreateIfSupported(const GrCaps&, AllowCaching,
-                                                                   uint32_t contextUniqueID);
+    static sk_sp<GrCoverageCountingPathRenderer> CreateIfSupported(const GrCaps&, AllowCaching);
 
     using PendingPathsMap = std::map<uint32_t, sk_sp<GrCCPerOpListPaths>>;
 
@@ -66,6 +65,8 @@ public:
                   SkTArray<sk_sp<GrRenderTargetContext>>* out) override;
     void postFlush(GrDeferredUploadToken, const uint32_t* opListIDs, int numOpListIDs) override;
 
+    void purgeCacheEntriesOlderThan(const GrStdSteadyClock::time_point& purgeTime);
+
     void testingOnly_drawPathDirectly(const DrawPathArgs&);
     const GrUniqueKey& testingOnly_getStashedAtlasKey() const;
 
@@ -83,7 +84,7 @@ public:
                                    float* inflationRadius = nullptr);
 
 private:
-    GrCoverageCountingPathRenderer(AllowCaching, uint32_t contextUniqueID);
+    GrCoverageCountingPathRenderer(AllowCaching);
 
     // GrPathRenderer overrides.
     StencilSupport onGetStencilSupport(const GrShape&) const override {

@@ -23,7 +23,7 @@ class GrTexture;
 
 class GrSamplerState;
 class SkCachedData;
-struct SkYUVSizeInfo;
+struct SkYUVASizeInfo;
 
 enum {
     kNeedNewImageUniqueID = 0
@@ -58,7 +58,9 @@ public:
     virtual sk_sp<GrTextureProxy> refPinnedTextureProxy(uint32_t* uniqueID) const {
         return nullptr;
     }
-
+    virtual bool isYUVA() const { return false; }
+    virtual bool asYUVATextureProxiesRef(sk_sp<GrTextureProxy>[4], SkYUVAIndex[4],
+                                         SkYUVColorSpace*) const { return false; }
     virtual GrTexture* onGetTexture() const { return nullptr; }
 #endif
     virtual GrBackendTexture onGetBackendTexture(bool flushPendingGrContextIO,
@@ -70,7 +72,7 @@ public:
 
     virtual sk_sp<SkImage> onMakeSubset(const SkIRect&) const = 0;
 
-    virtual sk_sp<SkCachedData> getPlanes(SkYUVSizeInfo*, SkYUVAIndex[4],
+    virtual sk_sp<SkCachedData> getPlanes(SkYUVASizeInfo*, SkYUVAIndex[4],
                                           SkYUVColorSpace*, const void* planes[4]);
     virtual sk_sp<SkData> onRefEncoded() const { return nullptr; }
 
