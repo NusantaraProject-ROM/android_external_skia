@@ -8,7 +8,7 @@
 #include "SkPDFGradientShader.h"
 
 #include "SkOpts.h"
-#include "SkPDFCanon.h"
+#include "SkPDFDocument.h"
 #include "SkPDFDocumentPriv.h"
 #include "SkPDFFormXObject.h"
 #include "SkPDFGraphicState.h"
@@ -682,7 +682,7 @@ static SkPDFIndirectReference make_function_shader(SkPDFDocument* doc,
 
         finalMatrix.preConcat(mapperMatrix);
 
-        // Preserves as much as posible in the final matrix, and only removes
+        // Preserves as much as possible in the final matrix, and only removes
         // the perspective. The inverse of the perspective is stored in
         // perspectiveInverseOnly matrix and has 3 useful numbers
         // (p0, p1, p2), while everything else is either 0 or 1.
@@ -896,7 +896,7 @@ static SkPDFIndirectReference find_pdf_shader(SkPDFDocument* doc,
                                               SkPDFGradientShader::Key key,
                                               bool keyHasAlpha) {
     SkASSERT(gradient_has_alpha(key) == keyHasAlpha);
-    auto& gradientPatternMap = doc->canon()->fGradientPatternMap;
+    auto& gradientPatternMap = doc->fGradientPatternMap;
     if (SkPDFIndirectReference* ptr = gradientPatternMap.find(key)) {
         return *ptr;
     }

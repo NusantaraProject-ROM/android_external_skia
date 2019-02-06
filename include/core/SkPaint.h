@@ -27,10 +27,6 @@
 #include "SkMatrix.h"
 #include "SkRefCnt.h"
 
-#ifndef SK_SUPPORT_LEGACY_PAINT_FONT_FIELDS
-#define SK_SUPPORT_LEGACY_PAINT_FONT_FIELDS
-#endif
-
 class GrTextBlob;
 class SkAutoDescriptor;
 class SkColorFilter;
@@ -43,7 +39,7 @@ class SkGlyphRunBuilder;
 class SkGlyphRun;
 class SkGlyphRunListPainter;
 struct SkRect;
-class SkGlyphCache;
+class SkStrike;
 class SkImageFilter;
 class SkMaskFilter;
 class SkPath;
@@ -231,6 +227,7 @@ public:
     };
     #endif
 
+#ifdef SK_SUPPORT_LEGACY_PAINT_FLAGS
     /** Returns paint settings described by SkPaint::Flags. Each setting uses one
         bit, and can be tested with SkPaint::Flags members.
 
@@ -244,6 +241,7 @@ public:
         @param flags  union of SkPaint::Flags for SkPaint
     */
     void setFlags(uint32_t flags);
+#endif
 
     /** Returns true if pixels on the active edges of SkPath may be drawn with partial transparency.
 
@@ -252,7 +250,7 @@ public:
         @return  kAntiAlias_Flag state
     */
     bool isAntiAlias() const {
-        return SkToBool(this->getFlags() & kAntiAlias_Flag);
+        return SkToBool(this->internal_getFlags() & kAntiAlias_Flag);
     }
 
     /** Requests, but does not require, that edge pixels draw opaque or with
@@ -272,7 +270,7 @@ public:
         @return  kDither_Flag state
     */
     bool isDither() const {
-        return SkToBool(this->getFlags() & kDither_Flag);
+        return SkToBool(this->internal_getFlags() & kDither_Flag);
     }
 
     /** Requests, but does not require, to distribute color error.
@@ -284,6 +282,7 @@ public:
     */
     void setDither(bool dither);
 
+#ifdef SK_SUPPORT_LEGACY_PAINT_FONT_FIELDS
     /** Returns true if text is converted to SkPath before drawing and measuring.
 
         Equivalent to getFlags() masked with kLinearText_Flag.
@@ -291,7 +290,7 @@ public:
         @return  kLinearText_Flag state
     */
     bool isLinearText() const {
-        return SkToBool(this->getFlags() & kLinearText_Flag);
+        return SkToBool(this->internal_getFlags() & kLinearText_Flag);
     }
 
     /** Requests, but does not require, that glyphs are converted to SkPath
@@ -312,7 +311,7 @@ public:
         @return  kSubpixelText_Flag state
     */
     bool isSubpixelText() const {
-        return SkToBool(this->getFlags() & kSubpixelText_Flag);
+        return SkToBool(this->internal_getFlags() & kSubpixelText_Flag);
     }
 
     /** Requests, but does not require, that glyphs respect sub-pixel positioning.
@@ -331,7 +330,7 @@ public:
         @return  kLCDRenderText_Flag state
     */
     bool isLCDRenderText() const {
-        return SkToBool(this->getFlags() & kLCDRenderText_Flag);
+        return SkToBool(this->internal_getFlags() & kLCDRenderText_Flag);
     }
 
     /** Requests, but does not require, that glyphs use LCD striping for glyph edges.
@@ -350,7 +349,7 @@ public:
         @return  kEmbeddedBitmapText_Flag state
     */
     bool isEmbeddedBitmapText() const {
-        return SkToBool(this->getFlags() & kEmbeddedBitmapText_Flag);
+        return SkToBool(this->internal_getFlags() & kEmbeddedBitmapText_Flag);
     }
 
     /** Requests, but does not require, to use bitmaps in fonts instead of outlines.
@@ -371,7 +370,7 @@ public:
         @return  kAutoHinting_Flag state
     */
     bool isAutohinted() const {
-        return SkToBool(this->getFlags() & kAutoHinting_Flag);
+        return SkToBool(this->internal_getFlags() & kAutoHinting_Flag);
     }
 
     /** Sets whether to always hint glyphs.
@@ -397,7 +396,7 @@ public:
         @return  kFakeBoldText_Flag state
     */
     bool isFakeBoldText() const {
-        return SkToBool(this->getFlags() & kFakeBoldText_Flag);
+        return SkToBool(this->internal_getFlags() & kFakeBoldText_Flag);
     }
 
     /** Increases stroke width when creating glyph bitmaps to approximate a bold typeface.
@@ -408,6 +407,7 @@ public:
         @param fakeBoldText  setting for kFakeBoldText_Flag
     */
     void setFakeBoldText(bool fakeBoldText);
+#endif
 
     /** Returns SkFilterQuality, the image filtering level. A lower setting
         draws faster; a higher setting looks better when the image is scaled.
@@ -882,9 +882,10 @@ private:
     */
     void setTextSkewX(SkScalar skewX);
 
+#ifdef SK_SUPPORT_LEGACY_PAINTTEXTENCODING
     /**
      *  Returns the text encoding. Text encoding describes how to interpret the text bytes pass
-     *  to methods like measureText() and SkCanvas::drawText().
+     *  to methods like SkFont::measureText() and SkCanvas::drawText().
      *  @return the text encoding
      */
     SkTextEncoding getTextEncoding() const {
@@ -893,175 +894,61 @@ private:
 
     /**
      *  Sets the text encoding. Text encoding describes how to interpret the text bytes pass
-     *  to methods like measureText() and SkCanvas::drawText().
+     *  to methods like SkFont::measureText() and SkCanvas::drawText().
      *  @param encoding  the new text encoding
      */
     void setTextEncoding(SkTextEncoding encoding);
+#endif
 #ifndef SK_SUPPORT_LEGACY_PAINT_FONT_FIELDS
 public:
 #endif
 
 #ifdef SK_SUPPORT_LEGACY_PAINT_TEXTMEASURE
 
-    /** Returns SkFontMetrics associated with SkTypeface.
-        The return value is the recommended spacing between lines: the sum of metrics
-        descent, ascent, and leading.
-        If metrics is not nullptr, SkFontMetrics is copied to metrics.
-        Results are scaled by text size but does not take into account
-        dimensions required by text scale x, text skew x, fake bold,
-        style stroke, and SkPathEffect.
-
-        @param metrics  storage for SkFontMetrics; may be nullptr
-        @return         recommended spacing between lines
+    /** Deprecated; use SkFont::getMetrics instead
     */
     SkScalar getFontMetrics(SkFontMetrics* metrics) const;
 
-    /** Returns the recommended spacing between lines: the sum of metrics
-        descent, ascent, and leading.
-        Result is scaled by text size but does not take into account
-        dimensions required by stroking and SkPathEffect.
-        Returns the same result as getFontMetrics().
-
-        @return  recommended spacing between lines
+    /** Deprecated; use SkFont::getSpacing instead
     */
     SkScalar getFontSpacing() const { return this->getFontMetrics(nullptr); }
 
-    /** Converts text into glyph indices.
-        Returns the number of glyph indices represented by text.
-        SkTextEncoding specifies how text represents characters or glyphs.
-        glyphs may be nullptr, to compute the glyph count.
-
-        Does not check text for valid character codes or valid glyph indices.
-
-        If byteLength equals zero, returns zero.
-        If byteLength includes a partial character, the partial character is ignored.
-
-        If SkTextEncoding is kUTF8_SkTextEncoding and
-        text contains an invalid UTF-8 sequence, zero is returned.
-
-        @param text        character storage encoded with SkTextEncoding
-        @param byteLength  length of character storage in bytes
-        @param glyphs      storage for glyph indices; may be nullptr
-        @return            number of glyphs represented by text of length byteLength
+    /** Deprecated; use SkFont::textToGlyphs instead
     */
     int textToGlyphs(const void* text, size_t byteLength,
                      SkGlyphID glyphs[]) const;
 
-    /** Returns true if all text corresponds to a non-zero glyph index.
-        Returns false if any characters in text are not supported in
-        SkTypeface.
-
-        If SkTextEncoding is kGlyphID_SkTextEncoding,
-        returns true if all glyph indices in text are non-zero;
-        does not check to see if text contains valid glyph indices for SkTypeface.
-
-        Returns true if byteLength is zero.
-
-        @param text        array of characters or glyphs
-        @param byteLength  number of bytes in text array
-        @return            true if all text corresponds to a non-zero glyph index
+    /** Deprecated; use SkFont::containsText instead
     */
     bool containsText(const void* text, size_t byteLength) const;
 #endif
 
-    /** Converts glyphs into text if possible.
-        Glyph values without direct Unicode equivalents are mapped to zero.
-        Uses the SkTypeface, but is unaffected
-        by SkTextEncoding; the text values returned are equivalent to kUTF32_SkTextEncoding.
-
-        Only supported on platforms that use FreeType as the font engine.
-
-        @param glyphs  array of indices into font
-        @param count   length of glyph array
-        @param text    storage for character codes, one per glyph
-    */
-    void glyphsToUnichars(const SkGlyphID glyphs[], int count, SkUnichar text[]) const;
-
 #ifdef SK_SUPPORT_LEGACY_PAINT_TEXTMEASURE
-    /** Returns the number of glyphs in text.
-        Uses SkTextEncoding to count the glyphs.
-        Returns the same result as textToGlyphs().
-
-        @param text        character storage encoded with SkTextEncoding
-        @param byteLength  length of character storage in bytes
-        @return            number of glyphs represented by text of length byteLength
+    /** Deprecated; use SkFont::countText instead
     */
     int countText(const void* text, size_t byteLength) const;
 
-    /** Returns the advance width of text.
-        The advance is the normal distance to move before drawing additional text.
-        Uses SkTextEncoding to decode text, SkTypeface to get the font metrics,
-        and text size, text scale x, text skew x, stroke width, and
-        SkPathEffect to scale the metrics and bounds.
-        Returns the bounding box of text if bounds is not nullptr.
-        The bounding box is computed as if the text was drawn at the origin.
-
-        @param text    character codes or glyph indices to be measured
-        @param length  number of bytes of text to measure
-        @param bounds  returns bounding box relative to (0, 0) if not nullptr
-        @return        advance width or height
+    /** Deprecated; use SkFont::measureText instead
     */
     SkScalar measureText(const void* text, size_t length, SkRect* bounds) const;
 
-    /** Returns the advance width of text.
-        The advance is the normal distance to move before drawing additional text.
-        Uses SkTextEncoding to decode text, SkTypeface to get the font metrics,
-        and text size to scale the metrics.
-        Does not scale the advance or bounds by fake bold or SkPathEffect.
-
-        @param text    character codes or glyph indices to be measured
-        @param length  number of bytes of text to measure
-        @return        advance width or height
+    /** Deprecated; use SkFont::measureText instead
     */
     SkScalar measureText(const void* text, size_t length) const {
         return this->measureText(text, length, nullptr);
     }
 
-    /** Retrieves the advance and bounds for each glyph in text, and returns
-        the glyph count in text.
-        Both widths and bounds may be nullptr.
-        If widths is not nullptr, widths must be an array of glyph count entries.
-        if bounds is not nullptr, bounds must be an array of glyph count entries.
-        Uses SkTextEncoding to decode text, SkTypeface to get the font metrics,
-        and text size to scale the widths and bounds.
-        Does not scale the advance by fake bold or SkPathEffect.
-        Does include fake bold and SkPathEffect in the bounds.
-
-        @param text        character codes or glyph indices to be measured
-        @param byteLength  number of bytes of text to measure
-        @param widths      returns text advances for each glyph; may be nullptr
-        @param bounds      returns bounds for each glyph relative to (0, 0); may be nullptr
-        @return            glyph count in text
+    /** Deprecated; use SkFont::getWidthsBounds instead
     */
     int getTextWidths(const void* text, size_t byteLength, SkScalar widths[],
                       SkRect bounds[] = nullptr) const;
 
-    /** Returns the geometry as SkPath equivalent to the drawn text.
-        Uses SkTextEncoding to decode text, SkTypeface to get the glyph paths,
-        and text size, fake bold, and SkPathEffect to scale and modify the glyph paths.
-        All of the glyph paths are stored in path.
-        Uses x, y, to position path.
-
-        @param text    character codes or glyph indices
-        @param length  number of bytes of text
-        @param x       x-axis value of the origin of the text
-        @param y       y-axis value of the origin of the text
-        @param path    geometry of the glyphs
+    /** Deprecated; use SkFont::getPath instead
     */
     void getTextPath(const void* text, size_t length, SkScalar x, SkScalar y,
                      SkPath* path) const;
 
-    /** Returns the geometry as SkPath equivalent to the drawn text.
-        Uses SkTextEncoding to decode text, SkTypeface to get the glyph paths,
-        and text size, fake bold, and SkPathEffect to scale and modify the glyph paths.
-        All of the glyph paths are stored in path.
-        Uses pos array to position path.
-        pos contains a position for each glyph.
-
-        @param text    character codes or glyph indices
-        @param length  number of bytes of text
-        @param pos     positions of each glyph
-        @param path    geometry of the glyphs
+    /** Deprecated; use SkFont::getPath instead
     */
     void getPosTextPath(const void* text, size_t length,
                         const SkPoint pos[], SkPath* path) const;
@@ -1206,7 +1093,20 @@ private:
         uint32_t fBitfieldsUInt;
     };
 
-    SkScalar measure_text(SkGlyphCache*, const char* text, size_t length,
+    uint32_t internal_getFlags() const { return fBitfields.fFlags; }
+
+    void internal_setFlags(uint32_t flags) {
+        fBitfields.fFlags = flags;
+    }
+
+    SkTextEncoding private_internal_getTextEncoding() const {
+        return (SkTextEncoding)fBitfields.fTextEncoding;
+    }
+    void private_internal_setTextEncoding(SkTextEncoding e) {
+        fBitfields.fTextEncoding = (unsigned)e;
+    }
+
+    SkScalar measure_text(SkStrike*, const char* text, size_t length,
                           int* count, SkRect* bounds) const;
 
     /*
@@ -1252,8 +1152,9 @@ private:
     friend class SkFont;
     friend class SkGlyphRunListPainter;
     friend class SkPaintPriv;
+    friend class SkPicturePlayback;
     friend class SkPDFDevice;
-    friend class SkScalerContext;  // for computeLuminanceColor()
+    friend class SkScalerContext;
     friend class SkTextBaseIter;
     friend class SkTextBlobCacheDiffCanvas;
 };

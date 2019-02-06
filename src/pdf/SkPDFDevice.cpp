@@ -18,14 +18,13 @@
 #include "SkColorFilter.h"
 #include "SkDraw.h"
 #include "SkFontPriv.h"
-#include "SkGlyphCache.h"
 #include "SkGlyphRun.h"
 #include "SkImageFilterCache.h"
 #include "SkJpegEncoder.h"
 #include "SkMakeUnique.h"
 #include "SkMaskFilterBase.h"
 #include "SkPDFBitmap.h"
-#include "SkPDFCanon.h"
+#include "SkPDFDocument.h"
 #include "SkPDFDocumentPriv.h"
 #include "SkPDFFont.h"
 #include "SkPDFFormXObject.h"
@@ -40,6 +39,7 @@
 #include "SkRRect.h"
 #include "SkRasterClip.h"
 #include "SkScopeExit.h"
+#include "SkStrike.h"
 #include "SkString.h"
 #include "SkSurface.h"
 #include "SkTemplates.h"
@@ -376,26 +376,19 @@ void SkPDFDevice::GraphicStackState::updateDrawingState(const SkPDFDevice::Graph
     }
 }
 
-static bool not_supported_for_layers(const SkPaint& layerPaint) {
+SkBaseDevice* SkPDFDevice::onCreateDevice(const CreateInfo& cinfo, const SkPaint* layerPaint) {
     // PDF does not support image filters, so render them on CPU.
     // Note that this rendering is done at "screen" resolution (100dpi), not
     // printer resolution.
+
     // TODO: It may be possible to express some filters natively using PDF
     // to improve quality and file size (https://bug.skia.org/3043)
-
-    // TODO: should we return true if there is a colorfilter?
-    return layerPaint.getImageFilter() != nullptr;
-}
-
-SkBaseDevice* SkPDFDevice::onCreateDevice(const CreateInfo& cinfo, const SkPaint* layerPaint) {
-    if (layerPaint && not_supported_for_layers(*layerPaint)) {
+    if (layerPaint && (layerPaint->getImageFilter() || layerPaint->getColorFilter())) {
         // need to return a raster device, which we will detect in drawDevice()
         return SkBitmapDevice::Create(cinfo.fInfo, SkSurfaceProps(0, kUnknown_SkPixelGeometry));
     }
     return new SkPDFDevice(cinfo.fInfo.dimensions(), fDocument);
 }
-
-SkPDFCanon* SkPDFDevice::getCanon() const { return fDocument->canon(); }
 
 // A helper class to automatically finish a ContentEntry at the end of a
 // drawing method and maintain the state needed between set up and finish.
@@ -792,7 +785,7 @@ void SkPDFDevice::addSMaskGraphicState(sk_sp<SkPDFDevice> maskDevice,
 
 void SkPDFDevice::clearMaskOnGraphicState(SkDynamicMemoryWStream* contentStream) {
     // The no-softmask graphic state is used to "turn off" the mask for later draw calls.
-    SkPDFIndirectReference& noSMaskGS = this->getCanon()->fNoSmaskGraphicState;
+    SkPDFIndirectReference& noSMaskGS = fDocument->fNoSmaskGraphicState;
     if (!noSMaskGS) {
         SkPDFDict tmp("ExtGState");
         tmp.insertName("SMask", "None");
@@ -996,7 +989,7 @@ struct PositionedGlyph {
 };
 }
 
-static SkRect get_glyph_bounds_device_space(SkGlyphID gid, SkGlyphCache* cache,
+static SkRect get_glyph_bounds_device_space(SkGlyphID gid, SkStrike* cache,
                                             SkScalar xScale, SkScalar yScale,
                                             SkPoint xy, const SkMatrix& ctm) {
     const SkGlyph& glyph = cache->getGlyphIDMetrics(gid);
@@ -1055,7 +1048,7 @@ void SkPDFDevice::drawGlyphRunAsPath(
     }
 }
 
-static bool needs_new_font(SkPDFFont* font, SkGlyphID gid, SkGlyphCache* cache,
+static bool needs_new_font(SkPDFFont* font, SkGlyphID gid, SkStrike* cache,
                            SkAdvancedTypefaceMetrics::FontType fontType) {
     if (!font || !font->hasGlyph(gid)) {
         return true;
@@ -1098,14 +1091,13 @@ void SkPDFDevice::internalDrawGlyphRun(
         return;
     }
 
-    const SkAdvancedTypefaceMetrics* metrics = SkPDFFont::GetMetrics(typeface, fDocument->canon());
+    const SkAdvancedTypefaceMetrics* metrics = SkPDFFont::GetMetrics(typeface, fDocument);
     if (!metrics) {
         return;
     }
     SkAdvancedTypefaceMetrics::FontType fontType = SkPDFFont::FontType(*metrics);
 
-    const std::vector<SkUnichar>& glyphToUnicode = SkPDFFont::GetUnicodeMap(
-        typeface, fDocument->canon());
+    const std::vector<SkUnichar>& glyphToUnicode = SkPDFFont::GetUnicodeMap(typeface, fDocument);
 
     SkClusterator clusterator(glyphRun);
 
@@ -1918,9 +1910,6 @@ void SkPDFDevice::internalDrawImageRect(SkKeyedImage imageSubset,
     }
     SK_AT_SCOPE_EXIT(if (needToRestore) { this->cs().restore(); });
 
-    #ifdef SK_PDF_IMAGE_STATS
-    gDrawImageCalls.fetch_add(1);
-    #endif
     SkMatrix matrix = transform;
 
     // Rasterize the bitmap using perspective in a new bitmap.
@@ -2022,14 +2011,14 @@ void SkPDFDevice::internalDrawImageRect(SkKeyedImage imageSubset,
     }
 
     SkBitmapKey key = imageSubset.key();
-    SkPDFIndirectReference* pdfimagePtr = fDocument->canon()->fPDFBitmapMap.find(key);
+    SkPDFIndirectReference* pdfimagePtr = fDocument->fPDFBitmapMap.find(key);
     SkPDFIndirectReference pdfimage = pdfimagePtr ? *pdfimagePtr : SkPDFIndirectReference();
     if (!pdfimagePtr) {
         SkASSERT(imageSubset);
         pdfimage = SkPDFSerializeImage(imageSubset.image().get(), fDocument,
                                        fDocument->metadata().fEncodingQuality);
         SkASSERT((key != SkBitmapKey{{0, 0, 0, 0}, 0}));
-        fDocument->canon()->fPDFBitmapMap.set(key, pdfimage);
+        fDocument->fPDFBitmapMap.set(key, pdfimage);
     }
     SkASSERT(pdfimage != SkPDFIndirectReference());
     this->drawFormXObject(pdfimage, content.stream());
@@ -2084,7 +2073,7 @@ sk_sp<SkSpecialImage> SkPDFDevice::makeSpecial(const SkBitmap& bitmap) {
 }
 
 sk_sp<SkSpecialImage> SkPDFDevice::makeSpecial(const SkImage* image) {
-    return SkSpecialImage::MakeFromImage(image->bounds(), image->makeNonTextureImage());
+    return SkSpecialImage::MakeFromImage(nullptr, image->bounds(), image->makeNonTextureImage());
 }
 
 sk_sp<SkSpecialImage> SkPDFDevice::snapSpecial() {

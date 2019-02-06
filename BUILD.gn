@@ -79,11 +79,8 @@ declare_args() {
     skia_use_vulkan = defined(ndk_api) && ndk_api >= 24
   } else if (is_fuchsia) {
     skia_use_vulkan = fuchsia_use_vulkan
-  } else if (is_win && target_cpu == "arm64") {
-    skia_use_vulkan = false
   } else {
-    skia_use_vulkan = (defined(skia_vulkan_sdk) && skia_vulkan_sdk != "") ||
-                      (defined(skia_moltenvk_path) && skia_moltenvk_path != "")
+    skia_use_vulkan = defined(skia_moltenvk_path) && skia_moltenvk_path != ""
   }
 
   if (is_ios) {
@@ -170,6 +167,7 @@ config("skia_private") {
     "src/utils",
     "src/utils/win",
     "src/xml",
+    "third_party/etc1",
     "third_party/gif",
   ]
 
@@ -953,6 +951,7 @@ component("skia") {
     "src/sfnt/SkOTTable_name.cpp",
     "src/sfnt/SkOTUtils.cpp",
     "src/utils/mac/SkStream_mac.cpp",
+    "third_party/etc1/etc1.cpp",
     "third_party/gif/SkGifImageReader.cpp",
   ]
 
@@ -2267,6 +2266,7 @@ if (skia_enable_tools) {
         "src/sfnt/SkOTTable_name.cpp",
         "src/sfnt/SkOTUtils.cpp",
         "src/utils/mac/SkStream_mac.cpp",
+        "third_party/etc1/etc1.cpp",
         "third_party/gif/SkGifImageReader.cpp",
       ]
       deps = [

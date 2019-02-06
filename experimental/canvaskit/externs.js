@@ -39,6 +39,7 @@ var CanvasKit = {
 	MakeImageFromEncoded: function() {},
 	/** @return {LinearCanvasGradient} */
 	MakeLinearGradientShader: function() {},
+	MakePathFromCmds: function() {},
 	MakePathFromOp: function() {},
 	MakePathFromSVGString: function() {},
 	MakeRadialGradientShader: function() {},
@@ -60,6 +61,7 @@ var CanvasKit = {
 	_MakeImage: function() {},
 	_MakeImageShader: function() {},
 	_MakeLinearGradientShader: function() {},
+	_MakePathFromCmds: function() {},
 	_MakeRadialGradientShader: function() {},
 	_MakeSkDashPathEffect: function() {},
 	_MakeSkVertices: function() {},
@@ -81,13 +83,18 @@ var CanvasKit = {
 		clipPath: function() {},
 		clipRect: function() {},
 		concat: function() {},
+		drawArc: function() {},
 		drawImage: function() {},
 		drawImageRect: function() {},
+		drawLine: function() {},
+		drawOval: function() {},
 		drawPaint: function() {},
 		drawPath: function() {},
 		drawRect: function() {},
+		drawRoundRect: function() {},
 		drawShadow: function() {},
 		drawText: function() {},
+		drawTextBlob: function() {},
 		drawVertices: function() {},
 		flush: function() {},
 		getTotalMatrix: function() {},
@@ -99,6 +106,7 @@ var CanvasKit = {
 		translate: function() {},
 
 		// private API
+		_drawSimpleText: function() {},
 		_readPixels: function() {},
 		_writePixels: function() {},
 		delete: function() {},
@@ -156,7 +164,6 @@ var CanvasKit = {
 		getStrokeJoin: function() {},
 		getStrokeMiter: function() {},
 		getStrokeWidth: function() {},
-		getTextSize: function() {},
 		setAntiAlias: function() {},
 		setBlendMode: function() {},
 		setColor: function() {},
@@ -169,8 +176,6 @@ var CanvasKit = {
 		setStrokeMiter: function() {},
 		setStrokeWidth: function() {},
 		setStyle: function() {},
-		setTextSize: function() {},
-		setTypeface: function() {},
 
 		//private API
 		delete: function() {},
@@ -189,6 +194,8 @@ var CanvasKit = {
 		getPoint: function() {},
 		isEmpty: function() {},
 		isVolatile: function() {},
+		reset: function() {},
+		rewind: function() {},
 		setFillType: function() {},
 		setIsVolatile: function() {},
 		toSVGString: function() {},
@@ -197,6 +204,7 @@ var CanvasKit = {
 		_addArc: function() {},
 		_addPath: function() {},
 		_addRect: function() {},
+		_addRoundRect: function() {},
 		_arc: function() {},
 		_arcTo: function() {},
 		_close: function() {},
@@ -237,6 +245,11 @@ var CanvasKit = {
 		delete: function() {},
 	},
 
+	SkTextBlob: {
+		MakeFromText: function() {},
+		_MakeFromText: function() {},
+	},
+
 	SkVertices: {
 		// public API (from C++ bindings)
 		bounds: function() {},
@@ -260,6 +273,13 @@ var CanvasKit = {
 	CYAN: {},
 	BLACK: {},
 	WHITE: {},
+
+	MOVE_VERB: {},
+	LINE_VERB: {},
+	QUAD_VERB: {},
+	CONIC_VERB: {},
+	CUBIC_VERB: {},
+	CLOSE_VERB: {},
 
 	AlphaType: {
 		Opaque: {},
@@ -370,6 +390,13 @@ var CanvasKit = {
 		Bevel: {},
 	},
 
+	TextEncoding: {
+		UTF8: {},
+		UTF16: {},
+		UTF32: {},
+		GlyphID: {},
+	},
+
 	TileMode: {
 		Clamp: {},
 		Repeat: {},
@@ -417,6 +444,7 @@ var CanvasKit = {
 CanvasKit.SkPath.prototype.addArc = function() {};
 CanvasKit.SkPath.prototype.addPath = function() {};
 CanvasKit.SkPath.prototype.addRect = function() {};
+CanvasKit.SkPath.prototype.addRoundRect = function() {};
 CanvasKit.SkPath.prototype.arc = function() {};
 CanvasKit.SkPath.prototype.arcTo = function() {};
 CanvasKit.SkPath.prototype.close = function() {};
@@ -441,6 +469,7 @@ CanvasKit.SkVertices.prototype.applyBones = function() {};
 
 CanvasKit.SkImage.prototype.encodeToData = function() {};
 
+CanvasKit.SkCanvas.prototype.drawText = function() {};
 /** @return {Uint8Array} */
 CanvasKit.SkCanvas.prototype.readPixels = function() {};
 CanvasKit.SkCanvas.prototype.writePixels = function() {};

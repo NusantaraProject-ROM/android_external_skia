@@ -1499,8 +1499,11 @@ std::vector<SpvId> SPIRVCodeGenerator::getAccessChain(const Expression& expr, Ou
             chain.push_back(this->writeIntLiteral(index));
             break;
         }
-        default:
-            chain.push_back(this->getLValue(expr, out)->getPointer());
+        default: {
+            SpvId id = this->getLValue(expr, out)->getPointer();
+            SkASSERT(id != 0);
+            chain.push_back(id);
+        }
     }
     return chain;
 }
@@ -1792,6 +1795,14 @@ SpvId SPIRVCodeGenerator::writeVariableReference(const VariableReference& ref, O
 }
 
 SpvId SPIRVCodeGenerator::writeIndexExpression(const IndexExpression& expr, OutputStream& out) {
+    if (expr.fBase->fType.kind() == Type::Kind::kVector_Kind) {
+        SpvId base = this->writeExpression(*expr.fBase, out);
+        SpvId index = this->writeExpression(*expr.fIndex, out);
+        SpvId result = this->nextId();
+        this->writeInstruction(SpvOpVectorExtractDynamic, this->getType(expr.fType), result, base,
+                               index, out);
+        return result;
+    }
     return getLValue(expr, out)->load(out);
 }
 
@@ -2641,7 +2652,7 @@ SpvId SPIRVCodeGenerator::writeInterfaceBlock(const InterfaceBlock& intf) {
     }
     if (intf.fVariable.fModifiers.fFlags & Modifiers::kBuffer_Flag) {
         this->writeInstruction(SpvOpDecorate, typeId, SpvDecorationBufferBlock, fDecorationBuffer);
-    } else {
+    } else if (intf.fVariable.fModifiers.fLayout.fBuiltin == -1) {
         this->writeInstruction(SpvOpDecorate, typeId, SpvDecorationBlock, fDecorationBuffer);
     }
     SpvStorageClass_ storageClass = get_storage_class(intf.fVariable.fModifiers);

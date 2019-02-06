@@ -13,7 +13,6 @@
 #include "GrStyle.h"
 #include "GrTextTarget.h"
 #include "SkColorFilter.h"
-#include "SkGlyphCache.h"
 #include "SkMaskFilterBase.h"
 #include "SkPaintPriv.h"
 #include "SkTextToPathIter.h"
@@ -56,18 +55,6 @@ sk_sp<GrTextBlob> GrTextBlob::Make(int glyphCount, int runCount, GrColor color) 
     }
     blob->fRunCountLimit = runCount;
     return blob;
-}
-
-GrTextBlob::BothCaches GrTextBlob::Run::lookupCache(const SkPaint& skPaint,
-                                                    const SkFont& skFont,
-                                                    const SkSurfaceProps& props,
-                                                    SkScalerContextFlags scalerContextFlags,
-                                                    const SkMatrix& viewMatrix,
-                                                    GrGlyphCache* grGlyphCache) {
-    auto skCache = SkStrikeCache::FindOrCreateStrikeExclusive(
-            skFont, skPaint, props, scalerContextFlags, viewMatrix);
-    sk_sp<GrTextStrike> grCache = grGlyphCache->getStrike(skCache.get());
-    return {std::move(skCache), std::move(grCache)};
 }
 
 void GrTextBlob::Run::setupFont(const SkPaint& skPaint,

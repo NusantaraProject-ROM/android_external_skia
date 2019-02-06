@@ -41,8 +41,6 @@ struct SK_API SkColorSpacePrimaries {
      *  Convert primaries and a white point to a toXYZD50 matrix, the preferred color gamut
      *  representation of SkColorSpace.
      */
-    bool toXYZD50(SkMatrix44* toXYZD50) const;
-
     bool toXYZD50(skcms_Matrix3x3* toXYZD50) const;
 };
 
@@ -108,9 +106,15 @@ static constexpr skcms_Matrix3x3 kDCIP3 = {{
 }};
 
 static constexpr skcms_Matrix3x3 kRec2020 = {{
-    {  0.673459f,   0.165661f,  0.125100f, },
+    {  0.673459f,   0.165661f,  0.125100f  },
     {  0.279033f,   0.675338f,  0.0456288f },
     { -0.00193139f, 0.0299794f, 0.797162f  },
+}};
+
+static constexpr skcms_Matrix3x3 kXYZ = {{
+    { 1.0f, 0.0f, 0.0f },
+    { 0.0f, 1.0f, 0.0f },
+    { 0.0f, 0.0f, 1.0f },
 }};
 
 }
@@ -123,41 +127,16 @@ public:
     static sk_sp<SkColorSpace> MakeSRGB();
 
     /**
-     *  Colorspace with the sRGB primaries, but a linear (1.0) gamma. Commonly used for
-     *  half-float surfaces, and high precision individual colors (gradient stops, etc...)
+     *  Colorspace with the sRGB primaries, but a linear (1.0) gamma.
      */
     static sk_sp<SkColorSpace> MakeSRGBLinear();
 
-    enum RenderTargetGamma : uint8_t {
-        kLinear_RenderTargetGamma,
-
-        /**
-         *  Transfer function is the canonical sRGB curve, which has a short linear segment
-         *  followed by a 2.4f exponential.
-         */
-        kSRGB_RenderTargetGamma,
-    };
-
+    // DEPRECATED
+    // Keeping this around until Android stops using it.
     enum Gamut {
         kSRGB_Gamut,
-        kAdobeRGB_Gamut,
         kDCIP3_D65_Gamut,
-        kRec2020_Gamut,
     };
-
-    /**
-     *  Create an SkColorSpace from a transfer function and a color gamut.
-     *
-     *  Transfer function can be specified as an enum or as the coefficients to an equation.
-     *  Gamut can be specified as an enum or as the matrix transformation to XYZ D50.
-     */
-    static sk_sp<SkColorSpace> MakeRGB(RenderTargetGamma gamma, Gamut gamut);
-    static sk_sp<SkColorSpace> MakeRGB(RenderTargetGamma gamma, const SkMatrix44& toXYZD50);
-    static sk_sp<SkColorSpace> MakeRGB(const SkColorSpaceTransferFn& coeffs, Gamut gamut);
-    static sk_sp<SkColorSpace> MakeRGB(const SkColorSpaceTransferFn& coeffs,
-                                       const SkMatrix44& toXYZD50);
-
-    static sk_sp<SkColorSpace> MakeRGB(SkGammaNamed gammaNamed, const SkMatrix44& toXYZD50);
 
     /**
      *  Create an SkColorSpace from a transfer function and a row-major 3x3 transformation to XYZ.
@@ -281,7 +260,7 @@ private:
 
     SkColorSpace(SkGammaNamed gammaNamed,
                  const float transferFn[7],
-                 const SkMatrix44& toXYZ);
+                 const skcms_Matrix3x3& toXYZ);
 
     void computeLazyDstFields() const;
 
