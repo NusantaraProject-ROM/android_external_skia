@@ -13,6 +13,7 @@
 #include "SkColorData.h"
 #include "SkDescriptor.h"
 #include "SkDraw.h"
+#include "SkFontMetrics.h"
 #include "SkFontPriv.h"
 #include "SkGlyph.h"
 #include "SkMakeUnique.h"
@@ -635,7 +636,7 @@ void SkScalerContextRec::getMatrixFrom2x2(SkMatrix* dst) const {
 }
 
 void SkScalerContextRec::getLocalMatrix(SkMatrix* m) const {
-    SkPaintPriv::MakeTextMatrix(m, fTextSize, fPreScaleX, fPreSkewX);
+    *m = SkFontPriv::MakeTextMatrix(fTextSize, fPreScaleX, fPreSkewX);
 }
 
 void SkScalerContextRec::getSingleMatrix(SkMatrix* m) const {
@@ -903,7 +904,7 @@ void SkScalerContext::MakeRecAndEffects(const SkFont& font, const SkPaint& paint
 
     sk_bzero(rec, sizeof(SkScalerContextRec));
 
-    SkTypeface* typeface = SkFontPriv::GetTypefaceOrDefault(font);
+    SkTypeface* typeface = font.getTypefaceOrDefault();
 
     rec->fFontID = typeface->uniqueID();
     rec->fTextSize = font.getSize();
@@ -1014,7 +1015,7 @@ void SkScalerContext::MakeRecAndEffects(const SkFont& font, const SkPaint& paint
     // these modify fFlags, so do them after assigning fFlags
     rec->setHinting(computeHinting(font));
 
-    rec->setLuminanceColor(paint.computeLuminanceColor());
+    rec->setLuminanceColor(SkPaintPriv::ComputeLuminanceColor(paint));
 
     // For now always set the paint gamma equal to the device gamma.
     // The math in SkMaskGamma can handle them being different,
@@ -1092,7 +1093,7 @@ SkDescriptor* SkScalerContext::MakeDescriptorForPaths(SkFontID typefaceID,
     SkScalerContextRec rec;
     memset(&rec, 0, sizeof(rec));
     rec.fFontID = typefaceID;
-    rec.fTextSize = SkPaint::kCanonicalTextSizeForPaths;
+    rec.fTextSize = SkFontPriv::kCanonicalTextSizeForPaths;
     rec.fPreScaleX = rec.fPost2x2[0][0] = rec.fPost2x2[1][1] = SK_Scalar1;
     return AutoDescriptorGivenRecAndEffects(rec, SkScalerContextEffects(), ad);
 }

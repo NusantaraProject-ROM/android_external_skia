@@ -68,6 +68,7 @@ GrGLCaps::GrGLCaps(const GrContextOptions& contextOptions,
     fDontSetBaseOrMaxLevelForExternalTextures = false;
     fProgramBinarySupport = false;
     fSamplerObjectSupport = false;
+    fFBFetchRequiresEnablePerSample = false;
 
     fBlitFramebufferFlags = kNoSupport_BlitFramebufferFlag;
     fMaxInstancesPerDrawWithoutCrashing = 0;
@@ -708,25 +709,28 @@ void GrGLCaps::initGLSL(const GrGLContextInfo& ctxInfo, const GrGLInterface* gli
     GrShaderCaps* shaderCaps = fShaderCaps.get();
     shaderCaps->fGLSLGeneration = ctxInfo.glslGeneration();
     if (kGLES_GrGLStandard == standard) {
+        // fFBFetchRequiresEnablePerSample is not a shader cap but is initialized below to keep it
+        // with related FB fetch logic.
         if (ctxInfo.hasExtension("GL_EXT_shader_framebuffer_fetch")) {
             shaderCaps->fFBFetchNeedsCustomOutput = (version >= GR_GL_VER(3, 0));
             shaderCaps->fFBFetchSupport = true;
             shaderCaps->fFBFetchColorName = "gl_LastFragData[0]";
             shaderCaps->fFBFetchExtensionString = "GL_EXT_shader_framebuffer_fetch";
-        }
-        else if (ctxInfo.hasExtension("GL_NV_shader_framebuffer_fetch")) {
-            // Actually, we haven't seen an ES3.0 device with this extension yet, so we don't know
+            fFBFetchRequiresEnablePerSample = false;
+        } else if (ctxInfo.hasExtension("GL_NV_shader_framebuffer_fetch")) {
+            // Actually, we haven't seen an ES3.0 device with this extension yet, so we don't know.
             shaderCaps->fFBFetchNeedsCustomOutput = false;
             shaderCaps->fFBFetchSupport = true;
             shaderCaps->fFBFetchColorName = "gl_LastFragData[0]";
             shaderCaps->fFBFetchExtensionString = "GL_NV_shader_framebuffer_fetch";
-        }
-        else if (ctxInfo.hasExtension("GL_ARM_shader_framebuffer_fetch")) {
-            // The arm extension also requires an additional flag which we will set onResetContext
+            fFBFetchRequiresEnablePerSample = false;
+        } else if (ctxInfo.hasExtension("GL_ARM_shader_framebuffer_fetch")) {
+            // The arm extension also requires an additional flag which we will set onResetContext.
             shaderCaps->fFBFetchNeedsCustomOutput = false;
             shaderCaps->fFBFetchSupport = true;
             shaderCaps->fFBFetchColorName = "gl_LastFragColorARM";
             shaderCaps->fFBFetchExtensionString = "GL_ARM_shader_framebuffer_fetch";
+            fFBFetchRequiresEnablePerSample = true;
         }
         shaderCaps->fUsesPrecisionModifiers = true;
     }
@@ -2410,8 +2414,8 @@ void GrGLCaps::applyDriverCorrectnessWorkarounds(const GrGLContextInfo& ctxInfo,
         fClearTextureSupport = false;
     }
 
-    // Calling glClearTexImage crashes on the NexusPlayer. TODO: Use isX86PowerVRRogue?
-    if (kPowerVRRogue_GrGLRenderer == ctxInfo.renderer()) {
+    // Calling glClearTexImage crashes on the NexusPlayer.
+    if (isX86PowerVRRogue) {
         fClearTextureSupport = false;
     }
 
@@ -2460,8 +2464,7 @@ void GrGLCaps::applyDriverCorrectnessWorkarounds(const GrGLContextInfo& ctxInfo,
         fMipMapSupport = false;
     }
 
-    // TODO: Use isX86PowerVRRogue?
-    if (kPowerVRRogue_GrGLRenderer == ctxInfo.renderer()) {
+    if (isX86PowerVRRogue) {
         // Temporarily disabling clip analytic fragments processors on Nexus player while we work
         // around a driver bug related to gl_FragCoord.
         // https://bugs.chromium.org/p/skia/issues/detail?id=7286

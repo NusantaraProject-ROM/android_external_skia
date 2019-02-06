@@ -41,6 +41,7 @@ protected:
         sk_sp<SkTypeface> distortable(MakeResourceAsTypeface("fonts/Distortable.ttf"));
 
         if (!distortableStream) {
+            DrawFailureMessage(canvas, "No distortableStream");
             return;
         }
         const char* text = "abc";
@@ -96,7 +97,6 @@ private:
 
 //////////////////////////////////////////////////////////////////////////////
 
-static GM* MyFactory(void*) { return new FontScalerDistortableGM; }
-static GMRegistry reg(MyFactory);
+DEF_GM( return new FontScalerDistortableGM; )
 
 }

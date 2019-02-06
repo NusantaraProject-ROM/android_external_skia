@@ -114,7 +114,7 @@ bool SkGlyphRunListPainter::ShouldDrawAsPath(
         return true;
     }
 
-    return SkPaint::TooBigToUseCache(matrix, SkFontPriv::MakeTextMatrix(font), 1024);
+    return SkFontPriv::TooBigToUseCache(matrix, SkFontPriv::MakeTextMatrix(font), 1024);
 }
 
 static bool check_glyph_position(SkPoint position) {
@@ -731,7 +731,8 @@ void GrTextBlob::generateFromGlyphRunList(GrStrikeCache* glyphCache,
 
     SkPoint origin = glyphRunList.origin();
     const SkPaint& runPaint = glyphRunList.paint();
-    this->initReusableBlob(runPaint.computeLuminanceColor(), viewMatrix, origin.x(), origin.y());
+    this->initReusableBlob(SkPaintPriv::ComputeLuminanceColor(runPaint), viewMatrix,
+                           origin.x(), origin.y());
 
     for (const auto& glyphRun : glyphRunList) {
         const SkFont& runFont = glyphRun.font();

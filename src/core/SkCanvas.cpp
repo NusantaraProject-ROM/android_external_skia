@@ -24,7 +24,6 @@
 #include "SkMSAN.h"
 #include "SkMakeUnique.h"
 #include "SkMatrixUtils.h"
-#include "SkMetaData.h"
 #include "SkNoDrawCanvas.h"
 #include "SkNx.h"
 #include "SkPaintPriv.h"
@@ -551,7 +550,6 @@ void SkCanvas::resetForNextPicture(const SkIRect& bounds) {
 void SkCanvas::init(sk_sp<SkBaseDevice> device) {
     fAllowSimplifyClip = false;
     fSaveCount = 1;
-    fMetaData = nullptr;
 
     fMCRec = (MCRec*)fMCStack.push_back();
     new (fMCRec) MCRec;
@@ -660,18 +658,7 @@ SkCanvas::~SkCanvas() {
 
     this->internalRestore();    // restore the last, since we're going away
 
-    delete fMetaData;
-
     dec_canvas();
-}
-
-SkMetaData& SkCanvas::getMetaData() {
-    // metadata users are rare, so we lazily allocate it. If that changes we
-    // can decide to just make it a field in the device (rather than a ptr)
-    if (nullptr == fMetaData) {
-        fMetaData = new SkMetaData;
-    }
-    return *fMetaData;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1876,6 +1863,14 @@ void SkCanvas::experimental_DrawImageSetV1(const ImageSetEntry imageSet[], int c
     this->onDrawImageSet(imageSet, cnt, filterQuality, mode);
 }
 
+void SkCanvas::experimental_DrawEdgeAARectV1(const SkRect& r, QuadAAFlags edgeAA, SkColor color,
+                                             SkBlendMode mode) {
+    TRACE_EVENT0("skia", TRACE_FUNC);
+    // To avoid redundant logic in our culling code and various backends, we always sort rects
+    // before passing them along.
+    this->onDrawEdgeAARect(r.makeSorted(), edgeAA, color, mode);
+}
+
 void SkCanvas::drawBitmap(const SkBitmap& bitmap, SkScalar dx, SkScalar dy, const SkPaint* paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);
     if (bitmap.drawsNothing()) {
@@ -2084,6 +2079,20 @@ void SkCanvas::onDrawRect(const SkRect& r, const SkPaint& paint) {
             iter.fDevice->drawRect(r, paint);
         }
     }
+}
+
+void SkCanvas::onDrawEdgeAARect(const SkRect& r, QuadAAFlags edgeAA, SkColor color,
+                                SkBlendMode mode) {
+    SkASSERT(r.isSorted());
+
+    SkPaint paint;
+    LOOPER_BEGIN(paint, nullptr)
+
+    while (iter.next()) {
+        iter.fDevice->drawEdgeAARect(r, edgeAA, color, mode);
+    }
+
+    LOOPER_END
 }
 
 void SkCanvas::onDrawRegion(const SkRegion& region, const SkPaint& paint) {
@@ -2542,20 +2551,7 @@ void SkCanvas::drawSimpleText(const void* text, size_t byteLength, SkTextEncodin
         this->drawTextBlob(SkTextBlob::MakeFromText(text, byteLength, font, encoding), x, y, paint);
     }
 }
-#ifdef SK_SUPPORT_LEGACY_CANVAS_DRAW_TEXT
-void SkCanvas::drawText(const void* text, size_t byteLength, SkScalar x, SkScalar y,
-                        const SkPaint& paint) {
-#ifdef SK_SUPPORT_LEGACY_PAINT_FONT_FIELDS
-    TRACE_EVENT0("skia", TRACE_FUNC);
-    if (byteLength) {
-        sk_msan_assert_initialized(text, SkTAddOffset<const void>(text, byteLength));
-        const SkFont font = SkFont::LEGACY_ExtractFromPaint(paint);
-        const SkTextEncoding encoding = paint.private_internal_getTextEncoding();
-        this->drawTextBlob(SkTextBlob::MakeFromText(text, byteLength, font, encoding), x, y, paint);
-    }
-#endif
-}
-#endif
+
 void SkCanvas::drawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
                             const SkPaint& paint) {
     TRACE_EVENT0("skia", TRACE_FUNC);

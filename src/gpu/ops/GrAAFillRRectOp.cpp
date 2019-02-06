@@ -460,7 +460,6 @@ void GrAAFillRRectOp::onExecute(GrOpFlushState* flushState, const SkRect& chainB
     SkASSERT(proc.instanceStride() == (size_t)fInstanceStride);
 
     GrPipeline::InitArgs initArgs;
-    initArgs.fProxy = flushState->drawOpArgs().fProxy;
     initArgs.fCaps = &flushState->caps();
     initArgs.fResourceProvider = flushState->resourceProvider();
     initArgs.fDstProxy = flushState->drawOpArgs().fDstProxy;
@@ -469,9 +468,9 @@ void GrAAFillRRectOp::onExecute(GrOpFlushState* flushState, const SkRect& chainB
     GrPipeline pipeline(initArgs, std::move(fProcessors), std::move(clip));
 
     GrMesh mesh(GrPrimitiveType::kTriangles);
-    mesh.setIndexedInstanced(indexBuffer.get(), SK_ARRAY_COUNT(kIndexData), fInstanceBuffer,
+    mesh.setIndexedInstanced(std::move(indexBuffer), SK_ARRAY_COUNT(kIndexData), fInstanceBuffer,
                              fInstanceCount, fBaseInstance, GrPrimitiveRestart::kNo);
-    mesh.setVertexData(vertexBuffer.get());
+    mesh.setVertexData(std::move(vertexBuffer));
     flushState->rtCommandBuffer()->draw(proc, pipeline, &fixedDynamicState, nullptr, &mesh, 1,
                                         this->bounds());
 }

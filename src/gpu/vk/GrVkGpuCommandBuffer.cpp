@@ -653,7 +653,8 @@ GrVkPipelineState* GrVkGpuRTCommandBuffer::prepareDrawState(
     SkASSERT(SkToBool(primProcProxies) == SkToBool(primProc.numTextureSamplers()));
 
     GrVkPipelineState* pipelineState =
-        fGpu->resourceProvider().findOrCreateCompatiblePipelineState(pipeline,
+        fGpu->resourceProvider().findOrCreateCompatiblePipelineState(fRenderTarget, fOrigin,
+                                                                     pipeline,
                                                                      primProc,
                                                                      primProcProxies,
                                                                      primitiveType,
@@ -671,7 +672,8 @@ GrVkPipelineState* GrVkGpuRTCommandBuffer::prepareDrawState(
 
     pipelineState->bindPipeline(fGpu, cbInfo.currentCmdBuf());
 
-    pipelineState->setAndBindUniforms(fGpu, primProc, pipeline, cbInfo.currentCmdBuf());
+    pipelineState->setAndBindUniforms(fGpu, fRenderTarget, fOrigin,
+                                      primProc, pipeline, cbInfo.currentCmdBuf());
 
     // Check whether we need to bind textures between each GrMesh. If not we can bind them all now.
     bool setTextures = !(dynamicStateArrays && dynamicStateArrays->fPrimitiveProcessorTextures);
@@ -680,20 +682,20 @@ GrVkPipelineState* GrVkGpuRTCommandBuffer::prepareDrawState(
                                           cbInfo.currentCmdBuf());
     }
 
-    GrRenderTarget* rt = pipeline.renderTarget();
-
     if (!pipeline.isScissorEnabled()) {
         GrVkPipeline::SetDynamicScissorRectState(fGpu, cbInfo.currentCmdBuf(),
-                                                 rt, pipeline.proxy()->origin(),
-                                                 SkIRect::MakeWH(rt->width(), rt->height()));
+                                                 fRenderTarget, fOrigin,
+                                                 SkIRect::MakeWH(fRenderTarget->width(),
+                                                                 fRenderTarget->height()));
     } else if (!dynamicStateArrays || !dynamicStateArrays->fScissorRects) {
         SkASSERT(fixedDynamicState);
-        GrVkPipeline::SetDynamicScissorRectState(fGpu, cbInfo.currentCmdBuf(), rt,
-                                                 pipeline.proxy()->origin(),
+        GrVkPipeline::SetDynamicScissorRectState(fGpu, cbInfo.currentCmdBuf(), fRenderTarget,
+                                                 fOrigin,
                                                  fixedDynamicState->fScissorRect);
     }
-    GrVkPipeline::SetDynamicViewportState(fGpu, cbInfo.currentCmdBuf(), rt);
-    GrVkPipeline::SetDynamicBlendConstantState(fGpu, cbInfo.currentCmdBuf(), rt->config(),
+    GrVkPipeline::SetDynamicViewportState(fGpu, cbInfo.currentCmdBuf(), fRenderTarget);
+    GrVkPipeline::SetDynamicBlendConstantState(fGpu, cbInfo.currentCmdBuf(),
+                                               fRenderTarget->config(),
                                                pipeline.getXferProcessor());
 
     return pipelineState;
@@ -706,8 +708,6 @@ void GrVkGpuRTCommandBuffer::onDraw(const GrPrimitiveProcessor& primProc,
                                     const GrMesh meshes[],
                                     int meshCount,
                                     const SkRect& bounds) {
-    SkASSERT(pipeline.renderTarget() == fRenderTarget);
-
     if (!meshCount) {
         return;
     }
@@ -782,7 +782,7 @@ void GrVkGpuRTCommandBuffer::onDraw(const GrPrimitiveProcessor& primProc,
 
         if (dynamicScissor) {
             GrVkPipeline::SetDynamicScissorRectState(fGpu, cbInfo.currentCmdBuf(), fRenderTarget,
-                                                     pipeline.proxy()->origin(),
+                                                     fOrigin,
                                                      dynamicStateArrays->fScissorRects[i]);
         }
         if (dynamicTextures) {
@@ -850,6 +850,9 @@ void GrVkGpuRTCommandBuffer::executeDrawable(std::unique_ptr<SkDrawable::GpuDraw
     vkInfo.fDrawBounds = &bounds;
 
     GrBackendDrawableInfo info(vkInfo);
+
+    // After we draw into the command buffer via the drawable, cached state we have may be invalid.
+    cbInfo.currentCmdBuf()->invalidateState();
 
     drawable->draw(info);
     fGpu->addDrawable(std::move(drawable));

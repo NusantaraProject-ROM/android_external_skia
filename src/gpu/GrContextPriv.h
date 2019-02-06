@@ -28,6 +28,16 @@ class SkDeferredDisplayList;
     data members or virtual methods. */
 class GrContextPriv {
 public:
+
+    // from GrContext_Base
+    uint32_t contextID() const { return fContext->contextID(); }
+
+    const GrContextOptions& options() const { return fContext->options(); }
+
+    // from GrImageContext
+
+    // from GrRecordingContext
+
     /**
      * Create a GrContext without a resource cache
      */
@@ -79,9 +89,6 @@ public:
 
     sk_sp<GrRenderTargetContext> makeVulkanSecondaryCBRenderTargetContext(
             const SkImageInfo&, const GrVkDrawableInfo&, const SkSurfaceProps* = nullptr);
-
-    bool disableGpuYUVConversion() const { return fContext->fDisableGpuYUVConversion; }
-    bool sharpenMipmappedTextures() const { return fContext->fSharpenMipmappedTextures; }
 
     /**
      * Call to ensure all drawing to the context has been issued to the
@@ -182,8 +189,6 @@ public:
                             GrColorType srcColorType, SkColorSpace* srcColorSpace,
                             const void* buffer, size_t rowBytes, uint32_t pixelOpsFlags = 0);
 
-    GrBackendApi getBackend() const { return fContext->fBackend; }
-
     SkTaskGroup* getTaskGroup() { return fContext->fTaskGroup.get(); }
 
     GrProxyProvider* proxyProvider() { return fContext->fProxyProvider; }
@@ -279,9 +284,7 @@ public:
 
     GrContextOptions::PersistentCache* getPersistentCache() { return fContext->fPersistentCache; }
 
-    sk_sp<GrSkSLFPFactoryCache> getFPFactoryCache() {
-        return fContext->fFPFactoryCache;
-    }
+    sk_sp<GrSkSLFPFactoryCache> getFPFactoryCache();
 
     /** This is only useful for debug purposes */
     SkDEBUGCODE(GrSingleOwner* debugSingleOwner() const { return &fContext->fSingleOwner; } )

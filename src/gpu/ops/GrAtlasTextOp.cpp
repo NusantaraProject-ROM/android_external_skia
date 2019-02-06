@@ -165,9 +165,6 @@ GrProcessorSet::Analysis GrAtlasTextOp::finalize(const GrCaps& caps, const GrApp
     }
     auto analysis = fProcessors.finalize(color, coverage, clip, false, caps, &fGeoData[0].fColor);
     fUsesLocalCoords = analysis.usesLocalCoords();
-    fCanCombineOnTouchOrOverlap =
-            !analysis.requiresDstTexture() &&
-            !(fProcessors.xferProcessor() && fProcessors.xferProcessor()->xferBarrierType(caps));
     return analysis;
 }
 
@@ -328,11 +325,9 @@ void GrAtlasTextOp::onPrepareDraws(Target* target) {
     size_t vertexStride = flushInfo.fGeometryProcessor->vertexStride();
 
     int glyphCount = this->numGlyphs();
-    const GrBuffer* vertexBuffer;
 
-    void* vertices = target->makeVertexSpace(
-            vertexStride, glyphCount * kVerticesPerGlyph, &vertexBuffer, &flushInfo.fVertexOffset);
-    flushInfo.fVertexBuffer.reset(SkRef(vertexBuffer));
+    void* vertices = target->makeVertexSpace(vertexStride, glyphCount * kVerticesPerGlyph,
+                                             &flushInfo.fVertexBuffer, &flushInfo.fVertexOffset);
     flushInfo.fIndexBuffer = target->resourceProvider()->refQuadIndexBuffer();
     if (!vertices || !flushInfo.fVertexBuffer) {
         SkDebugf("Could not allocate vertices\n");
@@ -431,9 +426,9 @@ void GrAtlasTextOp::flush(GrMeshDrawOp::Target* target, FlushInfo* flushInfo) co
     int maxGlyphsPerDraw =
             static_cast<int>(flushInfo->fIndexBuffer->gpuMemorySize() / sizeof(uint16_t) / 6);
     GrMesh* mesh = target->allocMesh(GrPrimitiveType::kTriangles);
-    mesh->setIndexedPatterned(flushInfo->fIndexBuffer.get(), kIndicesPerGlyph, kVerticesPerGlyph,
+    mesh->setIndexedPatterned(flushInfo->fIndexBuffer, kIndicesPerGlyph, kVerticesPerGlyph,
                               flushInfo->fGlyphsToFlush, maxGlyphsPerDraw);
-    mesh->setVertexData(flushInfo->fVertexBuffer.get(), flushInfo->fVertexOffset);
+    mesh->setVertexData(flushInfo->fVertexBuffer, flushInfo->fVertexOffset);
     target->draw(flushInfo->fGeometryProcessor, flushInfo->fPipeline, flushInfo->fFixedDynamicState,
                  mesh);
     flushInfo->fVertexOffset += kVerticesPerGlyph * flushInfo->fGlyphsToFlush;
@@ -443,10 +438,6 @@ void GrAtlasTextOp::flush(GrMeshDrawOp::Target* target, FlushInfo* flushInfo) co
 GrOp::CombineResult GrAtlasTextOp::onCombineIfPossible(GrOp* t, const GrCaps& caps) {
     GrAtlasTextOp* that = t->cast<GrAtlasTextOp>();
     if (fProcessors != that->fProcessors) {
-        return CombineResult::kCannotCombine;
-    }
-
-    if (!fCanCombineOnTouchOrOverlap && GrRectsTouchOrOverlap(this->bounds(), that->bounds())) {
         return CombineResult::kCannotCombine;
     }
 

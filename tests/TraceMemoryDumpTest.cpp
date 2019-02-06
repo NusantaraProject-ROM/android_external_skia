@@ -75,8 +75,8 @@ DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(SkTraceMemoryDump_ownedGLBuffer, reporter,
     GrContext* context = ctxInfo.grContext();
     GrGLGpu* gpu = static_cast<GrGLGpu*>(context->contextPriv().getGpu());
     const size_t kMemorySize = 1024;
-    sk_sp<GrGLBuffer> buffer(
-            GrGLBuffer::Create(gpu, kMemorySize, kVertex_GrBufferType, kDynamic_GrAccessPattern));
+    sk_sp<GrGLBuffer> buffer =
+            GrGLBuffer::Make(gpu, kMemorySize, kVertex_GrBufferType, kDynamic_GrAccessPattern);
 
     ValidateMemoryDumps(reporter, context, kMemorySize, true /* isOwned */);
 }
@@ -128,7 +128,7 @@ DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(SkTraceMemoryDump_unownedGLTexture, report
     idDesc.fOwnership = GrBackendObjectOwnership::kBorrowed;
 
     auto texture = GrGLTexture::MakeWrapped(gpu, desc, GrMipMapsStatus::kNotAllocated, idDesc,
-                                            kRead_GrIOType, false);
+                                            GrWrapCacheable::kNo, kRead_GrIOType);
 
     ValidateMemoryDumps(reporter, context, texture->gpuMemorySize(), false /* isOwned */);
 }

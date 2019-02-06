@@ -7,6 +7,7 @@
 _tests = get_path_info("../tests", "abspath")
 
 tests_sources = [
+  "$_tests/AdvancedBlendTest.cpp",
   "$_tests/AndroidCodecTest.cpp",
   "$_tests/AnimatedImageTest.cpp",
   "$_tests/AAClipTest.cpp",
@@ -79,7 +80,6 @@ tests_sources = [
   "$_tests/FontMgrFontConfigTest.cpp",
   "$_tests/FontMgrTest.cpp",
   "$_tests/FontNamesTest.cpp",
-  "$_tests/FontObjTest.cpp",
   "$_tests/FrontBufferedStreamTest.cpp",
   "$_tests/GeometryTest.cpp",
   "$_tests/GifTest.cpp",
@@ -153,7 +153,6 @@ tests_sources = [
   "$_tests/OverAlignedTest.cpp",
   "$_tests/PackBitsTest.cpp",
   "$_tests/PackedConfigsTextureTest.cpp",
-  "$_tests/PaintBreakTextTest.cpp",
   "$_tests/PaintImageFilterTest.cpp",
   "$_tests/PaintTest.cpp",
   "$_tests/ParametricStageTest.cpp",
@@ -217,7 +216,6 @@ tests_sources = [
   "$_tests/ShaderTest.cpp",
   "$_tests/ShadowTest.cpp",
   "$_tests/SizeTest.cpp",
-  "$_tests/Sk4x4fTest.cpp",
   "$_tests/SkBase64Test.cpp",
   "$_tests/skbug5221.cpp",
   "$_tests/skbug6389.cpp",
@@ -240,6 +238,7 @@ tests_sources = [
   "$_tests/SkSLGLSLTest.cpp",
   "$_tests/SkSLJITTest.cpp",
   "$_tests/SkSLMemoryLayoutTest.cpp",
+  "$_tests/SkSLMetalTest.cpp",
   "$_tests/SkSLSPIRVTest.cpp",
   "$_tests/SkUTFTest.cpp",
   "$_tests/SortTest.cpp",
@@ -284,6 +283,7 @@ tests_sources = [
   "$_tests/VerticesTest.cpp",
   "$_tests/VkBackendSurfaceTest.cpp",
   "$_tests/VkDrawableTest.cpp",
+  "$_tests/VkHardwareBufferTest.cpp",
   "$_tests/VkMakeCopyPipelineTest.cpp",
   "$_tests/VkWrapTests.cpp",
   "$_tests/VptrTest.cpp",

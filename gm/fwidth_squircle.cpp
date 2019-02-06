@@ -140,17 +140,16 @@ private:
             {-1, +1},
             {+1, +1},
         };
-        sk_sp<GrBuffer> vertexBuffer(flushState->resourceProvider()->createBuffer(
+        sk_sp<const GrBuffer> vertexBuffer(flushState->resourceProvider()->createBuffer(
                 sizeof(vertices), kVertex_GrBufferType, kStatic_GrAccessPattern,
                 GrResourceProvider::Flags::kNone, vertices));
         if (!vertexBuffer) {
             return;
         }
-        GrPipeline pipeline(flushState->drawOpArgs().fProxy, GrScissorTest::kDisabled,
-                            SkBlendMode::kSrcOver);
+        GrPipeline pipeline(GrScissorTest::kDisabled, SkBlendMode::kSrcOver);
         GrMesh mesh(GrPrimitiveType::kTriangleStrip);
         mesh.setNonIndexedNonInstanced(4);
-        mesh.setVertexData(vertexBuffer.get());
+        mesh.setVertexData(std::move(vertexBuffer));
         flushState->rtCommandBuffer()->draw(FwidthSquircleTestProcessor(fViewMatrix), pipeline,
                                             nullptr, nullptr, &mesh, 1, SkRect::MakeIWH(100, 100));
     }
@@ -176,8 +175,7 @@ void FwidthSquircleGM::onDraw(SkCanvas* canvas) {
 
     if (!ctx->contextPriv().caps()->shaderCaps()->shaderDerivativeSupport()) {
         SkFont font(sk_tool_utils::create_portable_typeface(), 15);
-        SkTextUtils::DrawString(canvas, "Shader derivatives not supported.", 150,
-                                150 - 8, font, SkPaint(), SkTextUtils::kCenter_Align);
+        DrawFailureMessage(canvas, "Shader derivatives not supported.");
         return;
     }
 

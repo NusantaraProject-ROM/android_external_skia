@@ -17,8 +17,9 @@ public:
     /**
      * Creates a client-side buffer.
      */
-    static SK_WARN_UNUSED_RESULT GrBuffer* CreateCPUBacked(GrGpu*, size_t sizeInBytes, GrBufferType,
-                                                           const void* data = nullptr);
+    static SK_WARN_UNUSED_RESULT sk_sp<GrBuffer> MakeCPUBacked(GrGpu*, size_t sizeInBytes,
+                                                               GrBufferType,
+                                                               const void* data = nullptr);
 
     /**
      * Computes a scratch key for a GPU-side buffer with a "dynamic" access pattern. (Buffers with
@@ -67,14 +68,6 @@ public:
          this->onUnmap();
          fMapPtr = nullptr;
      }
-
-    /**
-     * Returns the same ptr that map() returned at time of map or nullptr if the
-     * is not mapped.
-     *
-     * @return ptr to mapped buffer data or nullptr if buffer is not mapped.
-     */
-     void* mapPtr() const { return fMapPtr; }
 
     /**
      Queries whether the buffer has been mapped.

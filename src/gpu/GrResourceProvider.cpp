@@ -235,23 +235,24 @@ sk_sp<GrTexture> GrResourceProvider::refScratchTexture(const GrSurfaceDesc& desc
 
 sk_sp<GrTexture> GrResourceProvider::wrapBackendTexture(const GrBackendTexture& tex,
                                                         GrWrapOwnership ownership,
-                                                        GrIOType ioType,
-                                                        bool purgeImmediately) {
+                                                        GrWrapCacheable cacheable,
+                                                        GrIOType ioType) {
     ASSERT_SINGLE_OWNER
     if (this->isAbandoned()) {
         return nullptr;
     }
-    return fGpu->wrapBackendTexture(tex, ownership, ioType, purgeImmediately);
+    return fGpu->wrapBackendTexture(tex, ownership, cacheable, ioType);
 }
 
 sk_sp<GrTexture> GrResourceProvider::wrapRenderableBackendTexture(const GrBackendTexture& tex,
                                                                   int sampleCnt,
-                                                                  GrWrapOwnership ownership) {
+                                                                  GrWrapOwnership ownership,
+                                                                  GrWrapCacheable cacheable) {
     ASSERT_SINGLE_OWNER
     if (this->isAbandoned()) {
         return nullptr;
     }
-    return fGpu->wrapRenderableBackendTexture(tex, sampleCnt, ownership);
+    return fGpu->wrapRenderableBackendTexture(tex, sampleCnt, ownership, cacheable);
 }
 
 sk_sp<GrRenderTarget> GrResourceProvider::wrapBackendRenderTarget(
@@ -312,7 +313,7 @@ sk_sp<const GrBuffer> GrResourceProvider::createPatternedIndexBuffer(const uint1
 
     // This is typically used in GrMeshDrawOps, so we assume kNoPendingIO.
     sk_sp<GrBuffer> buffer(this->createBuffer(bufferSize, kIndex_GrBufferType,
-                                              kStatic_GrAccessPattern, Flags::kNoPendingIO));
+                                              kStatic_GrAccessPattern, Flags::kNone));
     if (!buffer) {
         return nullptr;
     }
@@ -359,9 +360,9 @@ sk_sp<GrPath> GrResourceProvider::createPath(const SkPath& path, const GrStyle& 
     return this->gpu()->pathRendering()->createPath(path, style);
 }
 
-GrBuffer* GrResourceProvider::createBuffer(size_t size, GrBufferType intendedType,
-                                           GrAccessPattern accessPattern, Flags flags,
-                                           const void* data) {
+sk_sp<GrBuffer> GrResourceProvider::createBuffer(size_t size, GrBufferType intendedType,
+                                                 GrAccessPattern accessPattern, Flags flags,
+                                                 const void* data) {
     if (this->isAbandoned()) {
         return nullptr;
     }
@@ -372,7 +373,7 @@ GrBuffer* GrResourceProvider::createBuffer(size_t size, GrBufferType intendedTyp
         this->gpu()->caps()->preferClientSideDynamicBuffers() &&
         GrBufferTypeIsVertexOrIndex(intendedType) &&
         kDynamic_GrAccessPattern == accessPattern) {
-        return GrBuffer::CreateCPUBacked(this->gpu(), size, intendedType, data);
+        return GrBuffer::MakeCPUBacked(this->gpu(), size, intendedType, data);
     }
 
     // bin by pow2 with a reasonable min
@@ -387,8 +388,8 @@ GrBuffer* GrResourceProvider::createBuffer(size_t size, GrBufferType intendedTyp
     } else {
         scratchFlags = GrResourceCache::ScratchFlags::kPreferNoPendingIO;
     }
-    GrBuffer* buffer = static_cast<GrBuffer*>(
-        this->cache()->findAndRefScratchResource(key, allocSize, scratchFlags));
+    auto buffer = sk_sp<GrBuffer>(static_cast<GrBuffer*>(
+            this->cache()->findAndRefScratchResource(key, allocSize, scratchFlags)));
     if (!buffer) {
         buffer = this->gpu()->createBuffer(allocSize, intendedType, kDynamic_GrAccessPattern);
         if (!buffer) {

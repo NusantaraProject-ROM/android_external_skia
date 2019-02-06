@@ -33,6 +33,7 @@
 #include "sk_tool_utils.h"
 
 #include "GrContextPriv.h"
+#include "GrContextThreadSafeProxy.h"
 #include "GrGpu.h"
 #include "GrResourceCache.h"
 #include "GrTexture.h"
@@ -479,15 +480,6 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(SkImage_makeNonTextureImage, reporter, contex
         REPORTER_ASSERT(reporter, !rasterImage->isTextureBacked());
         assert_equal(reporter, image.get(), nullptr, rasterImage.get());
     }
-}
-
-DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(SkImage_drawAbandonedGpuImage, reporter, contextInfo) {
-    auto context = contextInfo.grContext();
-    auto image = create_gpu_image(context);
-    auto info = SkImageInfo::MakeN32(20, 20, kOpaque_SkAlphaType);
-    auto surface(SkSurface::MakeRenderTarget(context, SkBudgeted::kNo, info));
-    image->getTexture()->abandon();
-    surface->getCanvas()->drawImage(image, 0, 0);
 }
 
 DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrContext_colorTypeSupportedAsImage, reporter, ctxInfo) {

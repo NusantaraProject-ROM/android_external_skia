@@ -59,57 +59,45 @@
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int32_t next_id() {
-    static std::atomic<int32_t> nextID{1};
-    int32_t id;
-    do {
-        id = nextID++;
-    } while (id == SK_InvalidGenID);
-    return id;
-}
-
-GrContext::GrContext(GrBackendApi backend, int32_t id)
-        : fBackend(backend)
-        , fUniqueID(SK_InvalidGenID == id ? next_id() : id) {
+GrContext::GrContext(GrBackendApi backend, const GrContextOptions& options, int32_t id)
+        : INHERITED(backend, options, id) {
     fResourceCache = nullptr;
     fResourceProvider = nullptr;
     fProxyProvider = nullptr;
     fGlyphCache = nullptr;
 }
 
-bool GrContext::initCommon(const GrContextOptions& options) {
+bool GrContext::initCommon() {
     ASSERT_SINGLE_OWNER
     SkASSERT(fCaps);  // needs to have been initialized by derived classes
     SkASSERT(fThreadSafeProxy); // needs to have been initialized by derived classes
 
     if (fGpu) {
         fCaps = fGpu->refCaps();
-        fResourceCache = new GrResourceCache(fCaps.get(), &fSingleOwner, fUniqueID);
+        fResourceCache = new GrResourceCache(fCaps.get(), &fSingleOwner, this->contextID());
         fResourceProvider = new GrResourceProvider(fGpu.get(), fResourceCache, &fSingleOwner,
-                                                   options.fExplicitlyAllocateGPUResources);
+                                                   this->options().fExplicitlyAllocateGPUResources);
         fProxyProvider =
                 new GrProxyProvider(fResourceProvider, fResourceCache, fCaps, &fSingleOwner);
     } else {
-        fProxyProvider = new GrProxyProvider(this->uniqueID(), fCaps, &fSingleOwner);
+        fProxyProvider = new GrProxyProvider(this->contextID(), fCaps, &fSingleOwner);
     }
 
     if (fResourceCache) {
         fResourceCache->setProxyProvider(fProxyProvider);
     }
 
-    fDisableGpuYUVConversion = options.fDisableGpuYUVConversion;
-    fSharpenMipmappedTextures = options.fSharpenMipmappedTextures;
     fDidTestPMConversions = false;
 
     GrPathRendererChain::Options prcOptions;
-    prcOptions.fAllowPathMaskCaching = options.fAllowPathMaskCaching;
+    prcOptions.fAllowPathMaskCaching = this->options().fAllowPathMaskCaching;
 #if GR_TEST_UTILS
-    prcOptions.fGpuPathRenderers = options.fGpuPathRenderers;
+    prcOptions.fGpuPathRenderers = this->options().fGpuPathRenderers;
 #endif
-    if (options.fDisableCoverageCountingPaths) {
+    if (this->options().fDisableCoverageCountingPaths) {
         prcOptions.fGpuPathRenderers &= ~GpuPathRenderers::kCoverageCounting;
     }
-    if (options.fDisableDistanceFieldPaths) {
+    if (this->options().fDisableDistanceFieldPaths) {
         prcOptions.fGpuPathRenderers &= ~GpuPathRenderers::kSmall;
     }
 
@@ -122,11 +110,11 @@ bool GrContext::initCommon(const GrContextOptions& options) {
     }
 
     GrTextContext::Options textContextOptions;
-    textContextOptions.fMaxDistanceFieldFontSize = options.fGlyphsAsPathsFontSize;
-    textContextOptions.fMinDistanceFieldFontSize = options.fMinDistanceFieldFontSize;
+    textContextOptions.fMaxDistanceFieldFontSize = this->options().fGlyphsAsPathsFontSize;
+    textContextOptions.fMinDistanceFieldFontSize = this->options().fMinDistanceFieldFontSize;
     textContextOptions.fDistanceFieldVerticesAlwaysHaveW = false;
 #if SK_SUPPORT_ATLAS_TEXT
-    if (GrContextOptions::Enable::kYes == options.fDistanceFieldGlyphVerticesAlwaysHaveW) {
+    if (GrContextOptions::Enable::kYes == this->options().fDistanceFieldGlyphVerticesAlwaysHaveW) {
         textContextOptions.fDistanceFieldVerticesAlwaysHaveW = true;
     }
 #endif
@@ -136,21 +124,20 @@ bool GrContext::initCommon(const GrContextOptions& options) {
                                             : false;
     fDrawingManager.reset(new GrDrawingManager(this, prcOptions, textContextOptions,
                                                &fSingleOwner, explicitlyAllocatingResources,
-                                               options.fSortRenderTargets,
-                                               options.fReduceOpListSplitting));
+                                               this->options().fSortRenderTargets,
+                                               this->options().fReduceOpListSplitting));
 
-    fGlyphCache = new GrStrikeCache(fCaps.get(), options.fGlyphCacheTextureMaximumBytes);
+    fGlyphCache = new GrStrikeCache(fCaps.get(), this->options().fGlyphCacheTextureMaximumBytes);
 
-    fTextBlobCache.reset(new GrTextBlobCache(TextBlobCacheOverBudgetCB,
-                                             this, this->uniqueID()));
+    fTextBlobCache.reset(new GrTextBlobCache(TextBlobCacheOverBudgetCB, this, this->contextID()));
 
     // DDL TODO: we need to think through how the task group & persistent cache
     // get passed on to/shared between all the DDLRecorders created with this context.
-    if (options.fExecutor) {
-        fTaskGroup = skstd::make_unique<SkTaskGroup>(*options.fExecutor);
+    if (this->options().fExecutor) {
+        fTaskGroup = skstd::make_unique<SkTaskGroup>(*this->options().fExecutor);
     }
 
-    fPersistentCache = options.fPersistentCache;
+    fPersistentCache = this->options().fPersistentCache;
 
     return true;
 }
@@ -167,77 +154,11 @@ GrContext::~GrContext() {
     delete fGlyphCache;
 }
 
-//////////////////////////////////////////////////////////////////////////////
-
-GrContextThreadSafeProxy::GrContextThreadSafeProxy(sk_sp<const GrCaps> caps, uint32_t uniqueID,
-                                                   GrBackendApi backend,
-                                                   const GrContextOptions& options,
-                                                   sk_sp<GrSkSLFPFactoryCache> cache)
-        : fCaps(std::move(caps))
-        , fContextUniqueID(uniqueID)
-        , fBackend(backend)
-        , fOptions(options)
-        , fFPFactoryCache(std::move(cache)) {}
-
-GrContextThreadSafeProxy::~GrContextThreadSafeProxy() = default;
-
 sk_sp<GrContextThreadSafeProxy> GrContext::threadSafeProxy() {
     return fThreadSafeProxy;
 }
 
-SkSurfaceCharacterization GrContextThreadSafeProxy::createCharacterization(
-                                     size_t cacheMaxResourceBytes,
-                                     const SkImageInfo& ii, const GrBackendFormat& backendFormat,
-                                     int sampleCnt, GrSurfaceOrigin origin,
-                                     const SkSurfaceProps& surfaceProps,
-                                     bool isMipMapped, bool willUseGLFBO0) {
-    if (!backendFormat.isValid()) {
-        return SkSurfaceCharacterization(); // return an invalid characterization
-    }
-
-    if (GrBackendApi::kOpenGL != backendFormat.backend() && willUseGLFBO0) {
-        // The willUseGLFBO0 flags can only be used for a GL backend.
-        return SkSurfaceCharacterization(); // return an invalid characterization
-    }
-
-    if (!fCaps->mipMapSupport()) {
-        isMipMapped = false;
-    }
-
-    GrPixelConfig config = fCaps->getConfigFromBackendFormat(backendFormat, ii.colorType());
-    if (config == kUnknown_GrPixelConfig) {
-        return SkSurfaceCharacterization(); // return an invalid characterization
-    }
-
-    if (!SkSurface_Gpu::Valid(fCaps.get(), config, ii.colorSpace())) {
-        return SkSurfaceCharacterization(); // return an invalid characterization
-    }
-
-    sampleCnt = fCaps->getRenderTargetSampleCount(sampleCnt, config);
-    if (!sampleCnt) {
-        return SkSurfaceCharacterization(); // return an invalid characterization
-    }
-
-    GrFSAAType FSAAType = GrFSAAType::kNone;
-    if (sampleCnt > 1) {
-        FSAAType = fCaps->usesMixedSamples() ? GrFSAAType::kMixedSamples : GrFSAAType::kUnifiedMSAA;
-    }
-
-    // This surface characterization factory assumes that the resulting characterization is
-    // textureable.
-    if (!fCaps->isConfigTexturable(config)) {
-        return SkSurfaceCharacterization(); // return an invalid characterization
-    }
-
-    return SkSurfaceCharacterization(sk_ref_sp<GrContextThreadSafeProxy>(this),
-                                     cacheMaxResourceBytes, ii,
-                                     origin, config, FSAAType, sampleCnt,
-                                     SkSurfaceCharacterization::Textureable(true),
-                                     SkSurfaceCharacterization::MipMapped(isMipMapped),
-                                     SkSurfaceCharacterization::UsesGLFBO0(willUseGLFBO0),
-                                     SkSurfaceCharacterization::VulkanSecondaryCBCompatible(false),
-                                     surfaceProps);
-}
+//////////////////////////////////////////////////////////////////////////////
 
 void GrContext::abandonContext() {
     ASSERT_SINGLE_OWNER
@@ -261,7 +182,8 @@ void GrContext::abandonContext() {
 
 bool GrContext::abandoned() const {
     ASSERT_SINGLE_OWNER
-    return fDrawingManager->wasAbandoned();
+    // If called from ~GrContext(), the drawing manager may already be gone.
+    return !fDrawingManager || fDrawingManager->wasAbandoned();
 }
 
 void GrContext::releaseResourcesAndAbandonContext() {
@@ -947,7 +869,7 @@ sk_sp<GrTextureContext> GrContextPriv::makeBackendTextureContext(const GrBackend
     ASSERT_SINGLE_OWNER_PRIV
 
     sk_sp<GrSurfaceProxy> proxy = this->proxyProvider()->wrapBackendTexture(
-            tex, origin, kBorrow_GrWrapOwnership, kRW_GrIOType);
+            tex, origin, kBorrow_GrWrapOwnership, GrWrapCacheable::kNo, kRW_GrIOType);
     if (!proxy) {
         return nullptr;
     }
@@ -964,8 +886,8 @@ sk_sp<GrRenderTargetContext> GrContextPriv::makeBackendTextureRenderTargetContex
     ASSERT_SINGLE_OWNER_PRIV
     SkASSERT(sampleCnt > 0);
 
-    sk_sp<GrTextureProxy> proxy(
-            this->proxyProvider()->wrapRenderableBackendTexture(tex, origin, sampleCnt));
+    sk_sp<GrTextureProxy> proxy(this->proxyProvider()->wrapRenderableBackendTexture(
+            tex, origin, sampleCnt, kBorrow_GrWrapOwnership, GrWrapCacheable::kNo));
     if (!proxy) {
         return nullptr;
     }
@@ -1139,6 +1061,8 @@ sk_sp<GrRenderTargetContext> GrContextPriv::makeDeferredRenderTargetContext(
     return renderTargetContext;
 }
 
+sk_sp<GrSkSLFPFactoryCache> GrContextPriv::getFPFactoryCache() { return fContext->fFPFactoryCache; }
+
 std::unique_ptr<GrFragmentProcessor> GrContext::createPMToUPMEffect(
         std::unique_ptr<GrFragmentProcessor> fp) {
     ASSERT_SINGLE_OWNER
@@ -1220,7 +1144,7 @@ SkString GrContextPriv::dump() const {
     GR_STATIC_ASSERT(1 == (unsigned)GrBackendApi::kOpenGL);
     GR_STATIC_ASSERT(2 == (unsigned)GrBackendApi::kVulkan);
     GR_STATIC_ASSERT(3 == (unsigned)GrBackendApi::kMock);
-    writer.appendString("backend", kBackendStr[(unsigned)fContext->fBackend]);
+    writer.appendString("backend", kBackendStr[(unsigned)fContext->backend()]);
 
     writer.appendName("caps");
     fContext->fCaps->dumpJSON(&writer);

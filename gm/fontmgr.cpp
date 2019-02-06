@@ -9,6 +9,7 @@
 #include "sk_tool_utils.h"
 #include "SkCanvas.h"
 #include "SkCommonFlags.h"
+#include "SkFontMetrics.h"
 #include "SkFontMgr.h"
 #include "SkFontPriv.h"
 #include "SkPath.h"
@@ -189,6 +190,7 @@ protected:
             }
         }
         if (nullptr == fset.get()) {
+            DrawFailureMessage(canvas, "No SkFontStyleSet");
             return;
         }
 
@@ -250,7 +252,7 @@ public:
 
         SkGlyphID left = 0, right = 0, top = 0, bottom = 0;
         {
-            int numGlyphs = font.getTypeface()->countGlyphs();
+            int numGlyphs = font.getTypefaceOrDefault()->countGlyphs();
             SkRect min = {0, 0, 0, 0};
             for (int i = 0; i < numGlyphs; ++i) {
                 SkGlyphID glyphId = i;
@@ -276,7 +278,7 @@ public:
 
         if (FLAGS_veryVerbose) {
             SkString name;
-            font.getTypeface()->getFamilyName(&name);
+            font.getTypefaceOrDefault()->getFamilyName(&name);
             canvas->drawString(name, fontBounds.fLeft, fontBounds.fBottom, labelFont, SkPaint());
         }
         for (size_t i = 0; i < SK_ARRAY_COUNT(str); ++i) {
@@ -331,7 +333,7 @@ protected:
                 font.setTypeface(sk_sp<SkTypeface>(set->createTypeface(j)));
                 // Fonts with lots of glyphs are interesting, but can take a long time to find
                 // the glyphs which make up the maximum extent.
-                if (font.getTypeface() && font.getTypeface()->countGlyphs() < 1000) {
+                if (font.getTypefaceOrDefault() && font.getTypefaceOrDefault()->countGlyphs() < 1000) {
                     SkRect fontBounds = SkFontPriv::GetFontBounds(font);
                     x -= fontBounds.fLeft;
                     show_bounds(canvas, font, x, y, boundsColors[index & 1]);

@@ -88,6 +88,11 @@ public:
                          !caps.shaderCaps()->dstReadInShaderSupport() &&
                          (SkBlendMode::kSrcOver != xfermode ||
                           !inputColor.isOpaque())));
+            // Porter Duff modes currently only use fixed-function or shader blending, and Ganesh
+            // doesn't yet make use of framebuffer fetches that require a barrier
+            // (e.g., QCOM_shader_framebuffer_fetch_noncoherent). So dst textures and xfer barriers
+            // should always go hand in hand for Porter Duff modes.
+            TEST_ASSERT(analysis.requiresDstTexture() == analysis.requiresNonOverlappingDraws());
             GetXPOutputTypes(xp.get(), &fPrimaryOutputType, &fSecondaryOutputType);
             xp->getBlendInfo(&fBlendInfo);
             TEST_ASSERT(!xp->willReadDstColor() ||
@@ -992,7 +997,8 @@ DEF_GPUTEST(PorterDuffNoDualSourceBlending, reporter, options) {
     GrXferProcessor::DstProxy fakeDstProxy;
     {
         sk_sp<GrTextureProxy> proxy = proxyProvider->wrapBackendTexture(
-                backendTex, kTopLeft_GrSurfaceOrigin, kBorrow_GrWrapOwnership, kRead_GrIOType);
+                backendTex, kTopLeft_GrSurfaceOrigin, kBorrow_GrWrapOwnership, GrWrapCacheable::kNo,
+                kRead_GrIOType);
         fakeDstProxy.setProxy(std::move(proxy));
     }
 
