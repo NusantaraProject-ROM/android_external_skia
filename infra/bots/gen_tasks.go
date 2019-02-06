@@ -153,7 +153,7 @@ var (
 		&specs.CipdPackage{
 			Name:    "infra/tools/luci/vpython/${platform}",
 			Path:    "cipd_bin_packages",
-			Version: "git_revision:b6cdec8586c9f8d3d728b1bc0bd4331330ba66fc",
+			Version: "git_revision:96f81e737868d43124b4661cf1c325296ca04944",
 		},
 	}
 
@@ -169,12 +169,12 @@ var (
 		&specs.CipdPackage{
 			Name:    "infra/tools/luci/kitchen/${platform}",
 			Path:    ".",
-			Version: "git_revision:546aae39f1fb9dce9add528e2011afa574535ecd",
+			Version: "git_revision:d8f38ca9494b5af249942631f9cee45927f6b4bc",
 		},
 		&specs.CipdPackage{
 			Name:    "infra/tools/luci-auth/${platform}",
 			Path:    "cipd_bin_packages",
-			Version: "git_revision:e1abc57be62d198b5c2f487bfb2fa2d2eb0e867c",
+			Version: "git_revision:2c805f1c716f6c5ad2126b27ec88b8585a09481e",
 		},
 	}, CIPD_PKGS_PYTHON...)
 
@@ -187,12 +187,12 @@ var (
 		&specs.CipdPackage{
 			Name:    "infra/tools/git/${platform}",
 			Path:    "cipd_bin_packages",
-			Version: "git_revision:0ae21738597e5601ba90372315145fec18582fc4",
+			Version: "git_revision:c9c8a52bfeaf8bc00ece22fdfd447822c8fcad77",
 		},
 		&specs.CipdPackage{
 			Name:    "infra/tools/luci/git-credential-luci/${platform}",
 			Path:    "cipd_bin_packages",
-			Version: "git_revision:e1abc57be62d198b5c2f487bfb2fa2d2eb0e867c",
+			Version: "git_revision:2c805f1c716f6c5ad2126b27ec88b8585a09481e",
 		},
 	}
 
@@ -469,7 +469,7 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 		}
 		if d["os"] == DEFAULT_OS_WIN {
 			// TODO(dogben): Temporarily add image dimension during upgrade.
-			d["image"] = "windows-server-2016-dc-v20180710"
+			d["image"] = "windows-server-2016-dc-v20190108"
 		}
 	} else {
 		d["os"] = DEFAULT_OS_DEBIAN
@@ -855,9 +855,6 @@ func compile(b *specs.TasksCfgBuilder, name string, parts map[string]string) str
 	} else if strings.Contains(name, "Debian") {
 		if strings.Contains(name, "Clang") {
 			task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("clang_linux"))
-		}
-		if strings.Contains(name, "Vulkan") {
-			task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("linux_vulkan_sdk"))
 		}
 		if parts["target_arch"] == "mips64el" || parts["target_arch"] == "loongson3a" {
 			if parts["compiler"] != "GCC" {

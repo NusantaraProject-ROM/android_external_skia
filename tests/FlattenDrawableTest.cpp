@@ -7,6 +7,7 @@
 
 #include "SkCanvas.h"
 #include "SkDrawable.h"
+#include "SkFont.h"
 #include "SkPictureRecorder.h"
 #include "SkReadBuffer.h"
 #include "SkRect.h"
@@ -70,7 +71,7 @@ public:
 
     static sk_sp<SkFlattenable> CreateProc(SkReadBuffer& buffer) {
         SkPaint paint;
-        buffer.readPaint(&paint);
+        buffer.readPaint(&paint, nullptr);
         return sk_sp<PaintDrawable>(new PaintDrawable(paint));
     }
 
@@ -258,7 +259,7 @@ DEF_TEST(FlattenRecordedDrawable, r) {
     canvas->drawPaint(paint);
     SkPaint textPaint;
     textPaint.setColor(SK_ColorBLUE);
-    canvas->drawString("TEXT", 467.0f, 100.0f, textPaint);
+    canvas->drawString("TEXT", 467.0f, 100.0f, SkFont(), textPaint);
 
     // Draw some drawables as well
     sk_sp<SkDrawable> drawable(new IntDrawable(1, 2, 3, 4));
