@@ -7,6 +7,10 @@
 
 #include "GrContext_Base.h"
 
+#include "GrBaseContextPriv.h"
+#include "GrCaps.h"
+#include "GrSkSLFPFactoryCache.h"
+
 static int32_t next_id() {
     static std::atomic<int32_t> nextID{1};
     int32_t id;
@@ -26,4 +30,24 @@ GrContext_Base::GrContext_Base(GrBackendApi backend,
 
 GrContext_Base::~GrContext_Base() { }
 
+const GrCaps* GrContext_Base::caps() const { return fCaps.get(); }
+sk_sp<const GrCaps> GrContext_Base::refCaps() const { return fCaps; }
 
+sk_sp<GrSkSLFPFactoryCache> GrContext_Base::fpFactoryCache() { return fFPFactoryCache; }
+
+bool GrContext_Base::init(sk_sp<const GrCaps> caps, sk_sp<GrSkSLFPFactoryCache> FPFactoryCache) {
+    SkASSERT(caps && FPFactoryCache);
+
+    fCaps = caps;
+    fFPFactoryCache = FPFactoryCache;
+    return true;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+sk_sp<const GrCaps> GrBaseContextPriv::refCaps() const {
+    return fContext->refCaps();
+}
+
+sk_sp<GrSkSLFPFactoryCache> GrBaseContextPriv::fpFactoryCache() {
+    return fContext->fpFactoryCache();
+}

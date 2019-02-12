@@ -16,6 +16,7 @@
 #include "GrDrawingManager.h"
 #include "GrFixedClip.h"
 #include "GrGpuResourcePriv.h"
+#include "GrMemoryPool.h"
 #include "GrOpList.h"
 #include "GrPathRenderer.h"
 #include "GrQuad.h"
@@ -106,11 +107,11 @@ private:
     SkDEBUGCODE(GrSingleOwner::AutoEnforce debug_SingleOwner(this->singleOwner());)
 #define ASSERT_SINGLE_OWNER_PRIV \
     SkDEBUGCODE(GrSingleOwner::AutoEnforce debug_SingleOwner(fRenderTargetContext->singleOwner());)
-#define RETURN_IF_ABANDONED        if (this->drawingManager()->wasAbandoned()) { return; }
-#define RETURN_IF_ABANDONED_PRIV   if (fRenderTargetContext->drawingManager()->wasAbandoned()) { return; }
-#define RETURN_FALSE_IF_ABANDONED  if (this->drawingManager()->wasAbandoned()) { return false; }
-#define RETURN_FALSE_IF_ABANDONED_PRIV  if (fRenderTargetContext->drawingManager()->wasAbandoned()) { return false; }
-#define RETURN_NULL_IF_ABANDONED   if (this->drawingManager()->wasAbandoned()) { return nullptr; }
+#define RETURN_IF_ABANDONED        if (fContext->abandoned()) { return; }
+#define RETURN_IF_ABANDONED_PRIV   if (fRenderTargetContext->fContext->abandoned()) { return; }
+#define RETURN_FALSE_IF_ABANDONED  if (fContext->abandoned()) { return false; }
+#define RETURN_FALSE_IF_ABANDONED_PRIV  if (fRenderTargetContext->fContext->abandoned()) { return false; }
+#define RETURN_NULL_IF_ABANDONED   if (fContext->abandoned()) { return nullptr; }
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -150,10 +151,6 @@ private:
     GrDrawingManager* fDrawingManager;
 };
 
-bool GrRenderTargetContext::wasAbandoned() const {
-    return this->drawingManager()->wasAbandoned();
-}
-
 // In MDB mode the reffing of the 'getLastOpList' call's result allows in-progress
 // GrOpLists to be picked up and added to by renderTargetContexts lower in the call
 // stack. When this occurs with a closed GrOpList, a new one will be allocated
@@ -172,7 +169,7 @@ GrRenderTargetContext::GrRenderTargetContext(GrContext* context,
         , fOpList(sk_ref_sp(fRenderTargetProxy->getLastRenderTargetOpList()))
         , fSurfaceProps(SkSurfacePropsCopyOrDefault(surfaceProps))
         , fManagedOpList(managedOpList) {
-    GrResourceProvider* resourceProvider = context->contextPriv().resourceProvider();
+    GrResourceProvider* resourceProvider = context->priv().resourceProvider();
     if (resourceProvider && !resourceProvider->explicitlyAllocateGPUResources()) {
         // MDB TODO: to ensure all resources still get allocated in the correct order in the hybrid
         // world we need to get the correct opList here so that it, in turn, can grab and hold
@@ -982,7 +979,7 @@ void GrRenderTargetContext::drawTextureSet(const GrClip& clip, const TextureSetE
 
     GrAAType aaType = this->chooseAAType(GrAA::kYes, GrAllowMixedSamples::kNo);
     if (mode != SkBlendMode::kSrcOver ||
-        !fContext->contextPriv().caps()->dynamicStateArrayGeometryProcessorTextureSupport()) {
+        !fContext->priv().caps()->dynamicStateArrayGeometryProcessorTextureSupport()) {
         // Draw one at a time with GrFillRectOp and a GrPaint that emulates what GrTextureOp does
         const GrXPFactory* xpFactory = SkBlendMode_AsXPFactory(mode);
         for (int i = 0; i < cnt; ++i) {
@@ -1153,7 +1150,7 @@ bool GrRenderTargetContext::drawFastShadow(const GrClip& clip,
                                            const SkPath& path,
                                            const SkDrawShadowRec& rec) {
     ASSERT_SINGLE_OWNER
-    if (this->drawingManager()->wasAbandoned()) {
+    if (fContext->abandoned()) {
         return true;
     }
     SkDEBUGCODE(this->validate();)
@@ -1623,7 +1620,9 @@ void GrRenderTargetContext::drawDrawable(std::unique_ptr<SkDrawable::GpuDrawHand
 GrSemaphoresSubmitted GrRenderTargetContext::prepareForExternalIO(
         int numSemaphores, GrBackendSemaphore backendSemaphores[]) {
     ASSERT_SINGLE_OWNER
-    if (this->drawingManager()->wasAbandoned()) { return GrSemaphoresSubmitted::kNo; }
+    if (fContext->abandoned()) {
+        return GrSemaphoresSubmitted::kNo;
+    }
     SkDEBUGCODE(this->validate();)
     GR_CREATE_TRACE_MARKER_CONTEXT("GrRenderTargetContext", "prepareForExternalIO", fContext);
 
@@ -1645,7 +1644,7 @@ bool GrRenderTargetContext::waitOnSemaphores(int numSemaphores,
         return false;
     }
 
-    auto resourceProvider = fContext->contextPriv().resourceProvider();
+    auto resourceProvider = fContext->priv().resourceProvider();
 
     SkTArray<sk_sp<GrSemaphore>> semaphores(numSemaphores);
     for (int i = 0; i < numSemaphores; ++i) {
@@ -1807,7 +1806,7 @@ bool GrRenderTargetContextPriv::drawAndStencilPath(const GrHardClip& clip,
 SkBudgeted GrRenderTargetContextPriv::isBudgeted() const {
     ASSERT_SINGLE_OWNER_PRIV
 
-    if (fRenderTargetContext->wasAbandoned()) {
+    if (fRenderTargetContext->fContext->abandoned()) {
         return SkBudgeted::kNo;
     }
 
@@ -1933,8 +1932,8 @@ static void op_bounds(SkRect* bounds, const GrOp* op) {
 void GrRenderTargetContext::addDrawOp(const GrClip& clip, std::unique_ptr<GrDrawOp> op,
                                       const std::function<WillAddOpFn>& willAddFn) {
     ASSERT_SINGLE_OWNER
-    if (this->drawingManager()->wasAbandoned()) {
-        fContext->contextPriv().opMemoryPool()->release(std::move(op));
+    if (fContext->abandoned()) {
+        fContext->priv().opMemoryPool()->release(std::move(op));
         return;
     }
     SkDEBUGCODE(this->validate();)
@@ -1949,7 +1948,7 @@ void GrRenderTargetContext::addDrawOp(const GrClip& clip, std::unique_ptr<GrDraw
     if (!clip.apply(fContext, this, fixedFunctionFlags & GrDrawOp::FixedFunctionFlags::kUsesHWAA,
                     fixedFunctionFlags & GrDrawOp::FixedFunctionFlags::kUsesStencil, &appliedClip,
                     &bounds)) {
-        fContext->contextPriv().opMemoryPool()->release(std::move(op));
+        fContext->priv().opMemoryPool()->release(std::move(op));
         return;
     }
 
@@ -1976,7 +1975,7 @@ void GrRenderTargetContext::addDrawOp(const GrClip& clip, std::unique_ptr<GrDraw
     GrProcessorSet::Analysis analysis = op->finalize(*this->caps(), &appliedClip);
     if (analysis.requiresDstTexture()) {
         if (!this->setupDstProxy(this->asRenderTargetProxy(), clip, *op, &dstProxy)) {
-            fContext->contextPriv().opMemoryPool()->release(std::move(op));
+            fContext->priv().opMemoryPool()->release(std::move(op));
             return;
         }
     }
@@ -2068,7 +2067,7 @@ bool GrRenderTargetContext::setupDstProxy(GrRenderTargetProxy* rtProxy, const Gr
 
     SkASSERT(rtProxy->backendFormat().textureType() == GrTextureType::k2D);
     const GrBackendFormat& format = rtProxy->backendFormat();
-    sk_sp<GrSurfaceContext> sContext = fContext->contextPriv().makeDeferredSurfaceContext(
+    sk_sp<GrSurfaceContext> sContext = fContext->priv().makeDeferredSurfaceContext(
             format, desc, origin, GrMipMapped::kNo, fit, SkBudgeted::kYes,
             sk_ref_sp(this->colorSpaceInfo().colorSpace()));
     if (!sContext) {

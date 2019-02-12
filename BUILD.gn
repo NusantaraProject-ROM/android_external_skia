@@ -6,6 +6,7 @@
 import("gn/flutter_defines.gni")
 import("gn/fuchsia_defines.gni")
 import("gn/shared_sources.gni")
+import("gn/skia.gni")
 
 if (is_fuchsia) {
   import("//build/vulkan/config.gni")
@@ -28,7 +29,6 @@ declare_args() {
   skia_use_fonthost_mac = is_mac
   skia_use_freetype = is_android || is_fuchsia || is_linux
   skia_use_fixed_gamma_text = is_android
-  skia_use_icu = !is_fuchsia && !is_ios && !is_win  # TODO: Windows
   skia_use_libjpeg_turbo = true
   skia_use_libpng = true
   skia_use_libwebp = !is_fuchsia
@@ -429,7 +429,7 @@ optional("fontmgr_fuchsia") {
   enabled = skia_enable_fontmgr_fuchsia
 
   deps = [
-    "//garnet/public/fidl/fuchsia.fonts",
+    "//sdk/fidl/fuchsia.fonts",
   ]
   sources = [
     "src/ports/SkFontMgr_fuchsia.cpp",
@@ -734,7 +734,7 @@ optional("pdf") {
 
   if (skia_use_sfntly) {
     deps += [ "//third_party/sfntly" ]
-    public_defines += [ "SK_PDF_USE_SFNTLY" ]
+    defines = [ "SK_PDF_USE_SFNTLY" ]
   }
 }
 
@@ -1093,6 +1093,7 @@ static_library("pathkit") {
   sources += [
     "src/core/SkAnalyticEdge.cpp",
     "src/core/SkArenaAlloc.cpp",
+    "src/core/SkContourMeasure.cpp",
     "src/core/SkCubicMap.cpp",
     "src/core/SkEdge.cpp",
     "src/core/SkEdgeBuilder.cpp",
@@ -1698,7 +1699,6 @@ if (skia_enable_tools) {
       ":flags",
       ":skia",
       ":tool_utils",
-      "//third_party/jsoncpp",
     ]
   }
 
@@ -2162,6 +2162,14 @@ if (skia_enable_tools) {
       }
     }
 
+    if (skia_use_metal) {
+      sources += [ "tools/sk_app/MetalWindowContext.mm" ]
+      if (is_mac) {
+        sources += [ "tools/sk_app/mac/MetalWindowContext_mac.mm" ]
+      }
+      libs += [ "MetalKit.framework" ]
+    }
+
     deps = [
       ":gpu_tool_utils",
       ":skia",
@@ -2396,16 +2404,11 @@ if (skia_enable_tools) {
   if (skia_use_opencl) {
     test_app("hello-opencl") {
       sources = [
-        "src/compute/common/cl/assert_cl.c",
-        "src/compute/common/cl/find_cl.c",
         "tools/hello-opencl.cpp",
       ]
-      include_dirs = [ "src/compute/common" ]
-      if (is_linux) {
-        libs = [ "OpenCL" ]
-      } else if (is_win) {
-        libs = [ "OpenCL.lib" ]
-      }
+      deps = [
+        "//third_party/opencl",
+      ]
     }
   }
 }

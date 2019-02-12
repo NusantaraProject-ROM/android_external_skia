@@ -419,13 +419,11 @@ void SkStrike::dump() const {
     SkDebugf("%s\n", msg.c_str());
 }
 
-bool SkStrike::hasImage(const SkGlyph& glyph) {
-    return !glyph.isEmpty() && this->findImage(glyph) != nullptr;
-}
-
-bool SkStrike::hasPath(const SkGlyph& glyph) {
+bool SkStrike::decideCouldDrawFromPath(const SkGlyph& glyph) {
     return !glyph.isEmpty() && this->findPath(glyph) != nullptr;
 }
+
+void SkStrike::onAboutToExitScope() { }
 
 #ifdef SK_DEBUG
 void SkStrike::forceValidate() const {

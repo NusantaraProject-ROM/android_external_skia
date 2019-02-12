@@ -1297,12 +1297,8 @@ public:
     /** Draws SkImage image, with its top-left corner at (left, top),
         using clip, SkMatrix, and optional SkPaint paint.
 
-        If paint is supplied, apply SkColorFilter, alpha, SkImageFilter, SkBlendMode,
-        and SkDrawLooper. If image is kAlpha_8_SkColorType, apply SkShader.
-        If paint contains SkMaskFilter, generate mask from image bounds. If generated
-        mask extends beyond image bounds, replicate image edge colors, just as SkShader
-        made from SkImage::makeShader with SkShader::kClamp_TileMode set replicates the
-        image edge color when it samples outside of its bounds.
+        This is equivalent to drawImageRect() using a dst rect at (x,y) with the
+        same width and height of the image.
 
         @param image  uncompressed rectangular map of pixels
         @param left   left side of image
@@ -1316,12 +1312,8 @@ public:
     /** Draws SkImage image, with its top-left corner at (left, top),
         using clip, SkMatrix, and optional SkPaint paint.
 
-        If SkPaint paint is supplied, apply SkColorFilter, alpha, SkImageFilter,
-        SkBlendMode, and SkDrawLooper. If image is kAlpha_8_SkColorType, apply SkShader.
-        If paint contains SkMaskFilter, generate mask from image bounds. If generated
-        mask extends beyond image bounds, replicate image edge colors, just as SkShader
-        made from SkImage::makeShader with SkShader::kClamp_TileMode set replicates the
-        image edge color when it samples outside of its bounds.
+        This is equivalent to drawImageRect() using a dst rect at (x,y) with the
+        same width and height of the image.
 
         @param image  uncompressed rectangular map of pixels
         @param left   left side of image
@@ -1360,6 +1352,10 @@ public:
         as SkShader made from SkImage::makeShader with SkShader::kClamp_TileMode set
         replicates the image edge color when it samples outside of its bounds.
 
+        When using a shader or shader mask filter, its coordinate system is based on the
+        current CTM, so will reflect the dst rect geometry and is equivalent to
+        drawRect(dst). The src rect is only used to access the provided image.
+
         constraint set to kStrict_SrcRectConstraint limits SkPaint SkFilterQuality to
         sample within src; set to kFast_SrcRectConstraint allows sampling outside to
         improve performance.
@@ -1388,6 +1384,10 @@ public:
         as SkShader made from SkImage::makeShader with SkShader::kClamp_TileMode set
         replicates the image edge color when it samples outside of its bounds.
 
+        When using a shader or shader mask filter, its coordinate system is based on the
+        current CTM, so will reflect the dst rect geometry and is equivalent to
+        drawRect(dst). The src rect is only used to access the provided image.
+
         constraint set to kStrict_SrcRectConstraint limits SkPaint SkFilterQuality to
         sample within isrc; set to kFast_SrcRectConstraint allows sampling outside to
         improve performance.
@@ -1414,6 +1414,10 @@ public:
         as SkShader made from SkImage::makeShader with SkShader::kClamp_TileMode set
         replicates the image edge color when it samples outside of its bounds.
 
+        When using a shader or shader mask filter, its coordinate system is based on the
+        current CTM, so will reflect the dst rect geometry and is equivalent to
+        drawRect(dst).
+
         @param image       SkImage containing pixels, dimensions, and format
         @param dst         destination SkRect of image to draw to
         @param paint       SkPaint containing SkBlendMode, SkColorFilter, SkImageFilter,
@@ -1431,6 +1435,10 @@ public:
         If generated mask extends beyond image bounds, replicate image edge colors, just
         as SkShader made from SkImage::makeShader with SkShader::kClamp_TileMode set
         replicates the image edge color when it samples outside of its bounds.
+
+        When using a shader or shader mask filter, its coordinate system is based on the
+        current CTM, so will reflect the dst rect geometry and is equivalent to
+        drawRect(dst). The src rect is only used to access the provided image.
 
         @param image       SkImage containing pixels, dimensions, and format
         @param src         source SkRect of image to draw from
@@ -1456,6 +1464,10 @@ public:
         If generated mask extends beyond image bounds, replicate image edge colors, just
         as SkShader made from SkImage::makeShader with SkShader::kClamp_TileMode set
         replicates the image edge color when it samples outside of its bounds.
+
+        When using a shader or shader mask filter, its coordinate system is based on the
+        current CTM, so will reflect the dst rect geometry and is equivalent to
+        drawRect(dst). The src rect is only used to access the provided image.
 
         constraint set to kStrict_SrcRectConstraint limits SkPaint SkFilterQuality to
         sample within image; set to kFast_SrcRectConstraint allows sampling outside to
@@ -1484,6 +1496,10 @@ public:
         If generated mask extends beyond image bounds, replicate image edge colors, just
         as SkShader made from SkImage::makeShader with SkShader::kClamp_TileMode set
         replicates the image edge color when it samples outside of its bounds.
+
+        When using a shader or shader mask filter, its coordinate system is based on the
+        current CTM, so will reflect the dst rect geometry and is equivalent to
+        drawRect(dst).
 
         constraint set to kStrict_SrcRectConstraint limits SkPaint SkFilterQuality to
         sample within image; set to kFast_SrcRectConstraint allows sampling outside to
@@ -1823,8 +1839,17 @@ public:
     /** Draws text, with origin at (x, y), using clip, SkMatrix, SkFont font,
         and SkPaint paint.
 
-        Does not perform typeface fallback for characters not found in the SkTypeface.
-        Glyphs are positioned based on their default advances.
+        When encoding is SkTextEncoding::kUTF8, SkTextEncoding::kUTF16, or
+        SkTextEncoding::kUTF32, this function uses the default
+        character-to-glyph mapping from the SkTypeface in font.  It does not
+        perform typeface fallback for characters not found in the SkTypeface.
+        It does not perform kerning or other complex shaping; glyphs are
+        positioned based on their default advances.
+
+        Text meaning depends on SkTextEncoding.
+
+        Text size is affected by SkMatrix and SkFont text size. Default text
+        size is 12 point.
 
         All elements of paint: SkPathEffect, SkMaskFilter, SkShader,
         SkColorFilter, SkImageFilter, and SkDrawLooper; apply to text. By
@@ -1843,51 +1868,64 @@ public:
 
     /** Experimental.
 
-        Helper for drawSimpleText that takes a string class.
-        Assumes string is encoded as UTF-8.
+        Draws null terminated string, with origin at (x, y), using clip, SkMatrix,
+        SkFont font, and SkPaint paint.
 
-        @param str     string of character code points
+        This function uses the default character-to-glyph mapping from the
+        SkTypeface in font.  It does not perform typeface fallback for
+        characters not found in the SkTypeface.  It does not perform kerning;
+        glyphs are positioned based on their default advances.
+
+        String str is encoded as UTF-8.
+
+        Text size is affected by SkMatrix and font text size. Default text
+        size is 12 point.
+
+        All elements of paint: SkPathEffect, SkMaskFilter, SkShader,
+        SkColorFilter, SkImageFilter, and SkDrawLooper; apply to text. By
+        default, draws filled black glyphs.
+
+        @param str     character code points drawn,
+                       ending with a char value of zero
         @param x       start of string on x-axis
         @param y       start of string on y-axis
         @param font    typeface, text size and so, used to describe the text
         @param paint   blend, color, and so on, used to draw
     */
-    template <typename T> void drawString(const T& str, SkScalar x, SkScalar y, const SkFont& font,
-                                          const SkPaint& paint) {
-        this->drawSimpleText(str.data(), str.size(), kUTF8_SkTextEncoding, x, y, font, paint);
-    }
-
-    /** Experimental.
-        Helper for drawSimpleText that takes array of chars, treated as cstring (null-terminated).
-        Assumes text is encoded as UTF-8.
-
-        @param str     string of character code points
-        @param x       start of string on x-axis
-        @param y       start of string on y-axis
-        @param font    typeface, text size and so, used to describe the text
-        @param paint   blend, color, and so on, used to draw
-     */
-    template <size_t N> void drawString(const char (&cstr)[N], SkScalar x, SkScalar y,
-                                        const SkFont& font, const SkPaint& paint) {
-        // Even though we know the allocated size of the array, we cannot assume that the caller
-        // wants to use all of it, hence the call to strlen() and the dox mentioning that we
-        // require the string to be null-terminated.
-        this->drawSimpleText(cstr, strlen(cstr), kUTF8_SkTextEncoding, x, y, font, paint);
-    }
-
-    /** Experimental.
-        Helper for drawSimpleText that takes char*, treated as cstring (null-terminated)
-        Assumes text is encoded as UTF-8.
-
-        @param str     string of character code points
-        @param x       start of string on x-axis
-        @param y       start of string on y-axis
-        @param font    typeface, text size and so, used to describe the text
-        @param paint   blend, color, and so on, used to draw
-     */
-    void drawString(const char cstr[], SkScalar x, SkScalar y, const SkFont& font,
+    void drawString(const char str[], SkScalar x, SkScalar y, const SkFont& font,
                     const SkPaint& paint) {
-        this->drawSimpleText(cstr, strlen(cstr), kUTF8_SkTextEncoding, x, y, font, paint);
+        this->drawSimpleText(str, strlen(str), kUTF8_SkTextEncoding, x, y, font, paint);
+    }
+
+    /** Experimental.
+
+        Draws SkString, with origin at (x, y), using clip, SkMatrix, SkFont font,
+        and SkPaint paint.
+
+        This function uses the default character-to-glyph mapping from the
+        SkTypeface in font.  It does not perform typeface fallback for
+        characters not found in the SkTypeface.  It does not perform kerning;
+        glyphs are positioned based on their default advances.
+
+        SkString str is encoded as UTF-8.
+
+        Text size is affected by SkMatrix and SkFont text size. Default text
+        size is 12 point.
+
+        All elements of paint: SkPathEffect, SkMaskFilter, SkShader,
+        SkColorFilter, SkImageFilter, and SkDrawLooper; apply to text. By
+        default, draws filled black glyphs.
+
+        @param str     character code points drawn,
+                       ending with a char value of zero
+        @param x       start of string on x-axis
+        @param y       start of string on y-axis
+        @param font    typeface, text size and so, used to describe the text
+        @param paint   blend, color, and so on, used to draw
+    */
+    void drawString(const SkString& str, SkScalar x, SkScalar y, const SkFont& font,
+                    const SkPaint& paint) {
+        this->drawSimpleText(str.c_str(), str.size(), kUTF8_SkTextEncoding, x, y, font, paint);
     }
 
     /** Draws SkTextBlob blob at (x, y), using clip, SkMatrix, and SkPaint paint.

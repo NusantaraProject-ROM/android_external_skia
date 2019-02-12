@@ -27,6 +27,7 @@ def upload_dm_results(buildername):
     'ASAN',
     'Coverage',
     'MSAN',
+    'MSRTC',
     'TSAN',
     'UBSAN',
     'Valgrind',
@@ -754,31 +755,27 @@ def dm_flags(api, bot):
 
   if 'Metal' in bot:
     # skia:8243
-    match.append('~^ClearOp$')
-    match.append('~^DDLSurfaceCharacterizationTest$')
+    match.append('~^DDLMakeRenderTargetTest$')
     match.append('~^DDLNonTextureabilityTest$')
     match.append('~^DDLOperatorEqTest$')
-    match.append('~^DeferredProxyTest$')
-    match.append('~^GPUMemorySize$')
+    match.append('~^DDLSurfaceCharacterizationTest$')
     match.append('~^GrContext_colorTypeSupportedAsImage$')
     match.append('~^GrContext_colorTypeSupportedAsSurface$')
     match.append('~^GrContext_maxSurfaceSamplesForColorType$')
     match.append('~^GrContextFactory_sharedContexts$')
+    match.append('~^GrDefaultPathRendererTest$')
     match.append('~^GrPipelineDynamicStateTest$')
     match.append('~^InitialTextureClear$')
-    match.append('~^PromiseImageTestNoDelayedRelease$')
-    match.append('~^PromiseImageTestDelayedRelease$')
-    match.append('~^PromiseImageTextureReuse$')
-    match.append('~^PromiseImageTextureReuseDifferentConfig$')
-    match.append('~^PromiseImageTextureShutdown$')
     match.append('~^PromiseImageTextureFullCache$')
-    match.append('~^ResourceAllocatorTest$')
-    match.append('~^RGB565TextureTest$')
-    match.append('~^RGBA4444TextureTest$')
-    match.append('~^TransferPixelsTest$')
+    match.append('~^PromiseImageTextureReuseDifferentConfig$')
     match.append('~^SurfaceSemaphores$')
+    match.append('~^SurfaceTest$')
+    match.append('~^TransferPixelsTest$')
     match.append('~^VertexAttributeCount$')
-    match.append('~^WrappedProxyTest$')
+    match.append('~^WritePixelsNonTexture_Gpu$')
+    if 'Mac' in bot:
+      match.append('~^RGB565TextureTest$')
+      match.append('~^RGBA4444TextureTest$')
 
   if blacklisted:
     args.append('--blacklist')
@@ -951,6 +948,11 @@ def test_steps(api):
 
   if 'Lottie' in api.vars.builder_cfg.get('extra_config', ''):
     keys.extend(['renderer', 'skottie'])
+  if 'DDL' in api.vars.builder_cfg.get('extra_config', ''):
+    # 'DDL' style means "--skpViewportSize 2048 --pr ~small"
+    keys.extend(['style', 'DDL'])
+  else:
+    keys.extend(['style', 'default'])
 
   args.extend(keys)
 
@@ -1058,6 +1060,7 @@ TEST_BUILDERS = [
   'Test-Win2016-Clang-GCE-CPU-AVX2-x86_64-Debug-All-FAAA',
   'Test-Win2016-Clang-GCE-CPU-AVX2-x86_64-Debug-All-FDAA',
   'Test-Win2016-Clang-GCE-CPU-AVX2-x86_64-Debug-All-FSAA',
+  'Test-Win2016-MSVC-GCE-CPU-AVX2-x86_64-Debug-All-MSRTC',
   'Test-iOS-Clang-iPadPro-GPU-PowerVRGT7800-arm64-Release-All',
 ]
 

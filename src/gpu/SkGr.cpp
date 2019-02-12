@@ -71,7 +71,7 @@ void main(int x, int y, inout half4 color) {
     } else {
         // Simulate the integer effect used above using step/mod. For speed, simulates a 4x4
         // dither pattern rather than an 8x8 one.
-        half4 modValues = mod(float4(x, y, x, y), half4(2.0, 2.0, 4.0, 4.0));
+        half4 modValues = mod(half4(x, y, x, y), half4(2.0, 2.0, 4.0, 4.0));
         half4 stepValues = step(modValues, half4(1.0, 1.0, 2.0, 2.0));
         value = dot(stepValues, half4(8.0 / 16.0, 4.0 / 16.0, 2.0 / 16.0, 1.0 / 16.0)) - 15.0 / 32.0;
     }
@@ -119,8 +119,8 @@ sk_sp<GrTextureProxy> GrUploadBitmapToTextureProxy(GrProxyProvider* proxyProvide
     // In non-ddl we will always instantiate right away. Thus we never want to copy the SkBitmap
     // even if it's mutable. In ddl, if the bitmap is mutable then we must make a copy since the
     // upload of the data to the gpu can happen at anytime and the bitmap may change by then.
-    SkCopyPixelsMode cpyMode = proxyProvider->recordingDDL() ? kIfMutable_SkCopyPixelsMode
-                                                             : kNever_SkCopyPixelsMode;
+    SkCopyPixelsMode cpyMode = proxyProvider->renderingDirectly() ? kNever_SkCopyPixelsMode
+                                                                  : kIfMutable_SkCopyPixelsMode;
     sk_sp<SkImage> image = SkMakeImageFromRasterBitmap(bitmap, cpyMode);
 
     return proxyProvider->createTextureProxy(std::move(image), kNone_GrSurfaceFlags, 1,
@@ -148,11 +148,11 @@ void GrInstallBitmapUniqueKeyInvalidator(const GrUniqueKey& key, uint32_t contex
 sk_sp<GrTextureProxy> GrCopyBaseMipMapToTextureProxy(GrContext* ctx, GrTextureProxy* baseProxy) {
     SkASSERT(baseProxy);
 
-    if (!ctx->contextPriv().caps()->isConfigCopyable(baseProxy->config())) {
+    if (!ctx->priv().caps()->isConfigCopyable(baseProxy->config())) {
         return nullptr;
     }
 
-    GrProxyProvider* proxyProvider = ctx->contextPriv().proxyProvider();
+    GrProxyProvider* proxyProvider = ctx->priv().proxyProvider();
     GrSurfaceDesc desc;
     desc.fFlags = kNone_GrSurfaceFlags;
     desc.fWidth = baseProxy->width();
@@ -172,8 +172,7 @@ sk_sp<GrTextureProxy> GrCopyBaseMipMapToTextureProxy(GrContext* ctx, GrTexturePr
     }
 
     // Copy the base layer to our proxy
-    sk_sp<GrSurfaceContext> sContext =
-            ctx->contextPriv().makeWrappedSurfaceContext(proxy);
+    sk_sp<GrSurfaceContext> sContext = ctx->priv().makeWrappedSurfaceContext(proxy);
     SkASSERT(sContext);
     SkAssertResult(sContext->copy(baseProxy));
 
@@ -197,8 +196,8 @@ sk_sp<GrTextureProxy> GrMakeCachedBitmapProxy(GrProxyProvider* proxyProvider,
     // In non-ddl we will always instantiate right away. Thus we never want to copy the SkBitmap
     // even if its mutable. In ddl, if the bitmap is mutable then we must make a copy since the
     // upload of the data to the gpu can happen at anytime and the bitmap may change by then.
-    SkCopyPixelsMode cpyMode = proxyProvider->recordingDDL() ? kIfMutable_SkCopyPixelsMode
-                                                             : kNever_SkCopyPixelsMode;
+    SkCopyPixelsMode cpyMode = proxyProvider->renderingDirectly() ? kNever_SkCopyPixelsMode
+                                                                  : kIfMutable_SkCopyPixelsMode;
     sk_sp<SkImage> image = SkMakeImageFromRasterBitmap(bitmap, cpyMode);
 
     if (!image) {
@@ -245,8 +244,8 @@ sk_sp<GrTextureProxy> GrMakeCachedImageProxy(GrProxyProvider* proxyProvider,
             const SkBitmap* bm = as_IB(srcImage.get())->onPeekBitmap();
             // When recording DDLs we do not want to install change listeners because doing
             // so isn't threadsafe.
-            if (bm && !proxyProvider->recordingDDL()) {
-                GrInstallBitmapUniqueKeyInvalidator(originalKey, proxyProvider->contextUniqueID(),
+            if (bm && proxyProvider->renderingDirectly()) {
+                GrInstallBitmapUniqueKeyInvalidator(originalKey, proxyProvider->contextID(),
                                                     bm->pixelRef());
             }
         }
@@ -378,7 +377,7 @@ static inline bool skpaint_to_grpaint_impl(GrContext* context,
                                            GrPaint* grPaint) {
     // Convert SkPaint color to 4f format in the destination color space
     SkColor4f origColor = SkColor4fPrepForDst(skPaint.getColor4f(), colorSpaceInfo,
-                                              *context->contextPriv().caps());
+                                              *context->priv().caps());
 
     const GrFPArgs fpArgs(context, &viewM, skPaint.getFilterQuality(), &colorSpaceInfo);
 

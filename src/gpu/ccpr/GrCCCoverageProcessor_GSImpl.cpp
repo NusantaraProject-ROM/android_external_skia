@@ -62,7 +62,7 @@ protected:
         if (PrimitiveType::kWeightedTriangles == proc.fPrimitiveType) {
             SkASSERT(3 == numInputPoints);
             SkASSERT(kFloat4_GrVertexAttribType == proc.fVertexAttribute.cpuType());
-            g->codeAppendf("%s *= sk_in[0].sk_Position.w;", wind.c_str());
+            g->codeAppendf("%s *= half(sk_in[0].sk_Position.w);", wind.c_str());
         }
 
         SkString emitVertexFn;
@@ -396,7 +396,7 @@ void GrCCCoverageProcessor::initGS() {
     this->setWillUseGeoShader();
 }
 
-void GrCCCoverageProcessor::appendGSMesh(sk_sp<const GrBuffer> instanceBuffer, int instanceCount,
+void GrCCCoverageProcessor::appendGSMesh(sk_sp<const GrGpuBuffer> instanceBuffer, int instanceCount,
                                          int baseInstance, SkTArray<GrMesh>* out) const {
     // GSImpl doesn't actually make instanced draw calls. Instead, we feed transposed x,y point
     // values to the GPU in a regular vertex array and draw kLines (see initGS). Then, each vertex

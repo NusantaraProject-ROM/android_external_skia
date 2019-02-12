@@ -794,7 +794,7 @@ private:
         if (flushInfo->fInstancesToFlush) {
             GrMesh* mesh = target->allocMesh(GrPrimitiveType::kTriangles);
             int maxInstancesPerDraw =
-                static_cast<int>(flushInfo->fIndexBuffer->gpuMemorySize() / sizeof(uint16_t) / 6);
+                    static_cast<int>(flushInfo->fIndexBuffer->size() / sizeof(uint16_t) / 6);
             mesh->setIndexedPatterned(flushInfo->fIndexBuffer, kIndicesPerQuad, kVerticesPerQuad,
                                       flushInfo->fInstancesToFlush, maxInstancesPerDraw);
             mesh->setVertexData(flushInfo->fVertexBuffer, flushInfo->fVertexOffset);
@@ -873,9 +873,9 @@ bool GrSmallPathRenderer::onDrawPath(const DrawPathArgs& args) {
     SkASSERT(args.fShape->hasUnstyledKey());
     if (!fAtlas) {
         const GrBackendFormat format =
-                args.fContext->contextPriv().caps()->getBackendFormatFromColorType(
+                args.fContext->priv().caps()->getBackendFormatFromColorType(
                         kAlpha_8_SkColorType);
-        fAtlas = GrDrawOpAtlas::Make(args.fContext->contextPriv().proxyProvider(),
+        fAtlas = GrDrawOpAtlas::Make(args.fContext->priv().proxyProvider(),
                                      format,
                                      kAlpha_8_GrPixelConfig,
                                      ATLAS_TEXTURE_WIDTH, ATLAS_TEXTURE_HEIGHT,
@@ -960,12 +960,12 @@ GR_DRAW_OP_TEST_DEFINE(SmallPathOp) {
     using PathTestStruct = GrSmallPathRenderer::PathTestStruct;
     static PathTestStruct gTestStruct;
 
-    if (context->contextPriv().contextID() != gTestStruct.fContextID) {
-        gTestStruct.fContextID = context->contextPriv().contextID();
+    if (context->priv().contextID() != gTestStruct.fContextID) {
+        gTestStruct.fContextID = context->priv().contextID();
         gTestStruct.reset();
         const GrBackendFormat format =
-                context->contextPriv().caps()->getBackendFormatFromColorType(kAlpha_8_SkColorType);
-        gTestStruct.fAtlas = GrDrawOpAtlas::Make(context->contextPriv().proxyProvider(),
+                context->priv().caps()->getBackendFormatFromColorType(kAlpha_8_SkColorType);
+        gTestStruct.fAtlas = GrDrawOpAtlas::Make(context->priv().proxyProvider(),
                                                  format, kAlpha_8_GrPixelConfig,
                                                  ATLAS_TEXTURE_WIDTH, ATLAS_TEXTURE_HEIGHT,
                                                  PLOT_WIDTH, PLOT_HEIGHT,

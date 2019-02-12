@@ -74,7 +74,7 @@ public:
     // returns the GL target the buffer was bound to.
     // When 'type' is kIndex_GrBufferType, this function will also implicitly bind the default VAO.
     // If the caller wishes to bind an index buffer to a specific VAO, it can call glBind directly.
-    GrGLenum bindBuffer(GrBufferType type, const GrBuffer*);
+    GrGLenum bindBuffer(GrGpuBufferType type, const GrBuffer*);
 
     // The GrGLGpuRTCommandBuffer does not buffer up draws before submitting them to the gpu.
     // Thus this is the implementation of the draw call for the corresponding passthrough function
@@ -182,13 +182,15 @@ private:
     // GrGpu overrides
     void onResetContext(uint32_t resetBits) override;
 
+    void onResetTextureBindings() override;
+
     void xferBarrier(GrRenderTarget*, GrXferBarrierType) override;
 
     sk_sp<GrTexture> onCreateTexture(const GrSurfaceDesc& desc, SkBudgeted budgeted,
                                      const GrMipLevel texels[], int mipLevelCount) override;
 
-    sk_sp<GrBuffer> onCreateBuffer(size_t size, GrBufferType intendedType, GrAccessPattern,
-                                   const void* data) override;
+    sk_sp<GrGpuBuffer> onCreateBuffer(size_t size, GrGpuBufferType intendedType, GrAccessPattern,
+                                      const void* data) override;
 
     sk_sp<GrTexture> onWrapBackendTexture(const GrBackendTexture&, GrWrapOwnership, GrWrapCacheable,
                                           GrIOType) override;
@@ -233,7 +235,7 @@ private:
                        const GrMipLevel texels[], int mipLevelCount) override;
 
     bool onTransferPixels(GrTexture*, int left, int top, int width, int height, GrColorType,
-                          GrBuffer* transferBuffer, size_t offset, size_t rowBytes) override;
+                          GrGpuBuffer* transferBuffer, size_t offset, size_t rowBytes) override;
 
     // Before calling any variation of TexImage, TexSubImage, etc..., call this to ensure that the
     // PIXEL_UNPACK_BUFFER is unbound.
@@ -351,9 +353,13 @@ private:
     void flushWindowRectangles(const GrWindowRectsState&, const GrGLRenderTarget*, GrSurfaceOrigin);
     void disableWindowRectangles();
 
-    // sets a texture unit to use for texture operations other than binding a texture to a program.
-    // ensures that such operations don't negatively interact with tracking bound textures.
-    void setScratchTextureUnit();
+    int numTextureUnits() const { return this->caps()->shaderCaps()->maxFragmentSamplers(); }
+
+    // Binds a texture to a target on the "scratch" texture unit to use for texture operations
+    // other than usual draw flow (i.e. a GrGLProgram derived from a GrPipeline used to draw
+    // GrMesh). It ensures that such operations don't negatively interact with draws.
+    // The active texture unit and the binding for 'target' will change.
+    void bindTextureToScratchUnit(GrGLenum target, GrGLint textureID);
 
     // The passed bounds contains the render target's color values that will subsequently be
     // written.
@@ -557,7 +563,13 @@ private:
             fBoundBufferUniqueID.makeInvalid();
             fBufferZeroKnownBound = false;
         }
-    }                                       fHWBufferState[kGrBufferTypeCount];
+    }                                       fHWBufferState[kGrGpuBufferTypeCount];
+
+    auto* hwBufferState(GrGpuBufferType type) {
+        unsigned typeAsUInt = static_cast<unsigned>(type);
+        SkASSERT(typeAsUInt < SK_ARRAY_COUNT(fHWBufferState));
+        return &fHWBufferState[typeAsUInt];
+    }
 
     struct {
         GrBlendEquation fEquation;
@@ -585,7 +597,27 @@ private:
     TriState                                fHWWriteToColor;
     GrGpuResource::UniqueID                 fHWBoundRenderTargetUniqueID;
     TriState                                fHWSRGBFramebuffer;
-    SkTArray<GrGpuResource::UniqueID, true> fHWBoundTextureUniqueIDs;
+
+    class TextureUnitBindings {
+    public:
+        TextureUnitBindings() = default;
+        TextureUnitBindings(const TextureUnitBindings&) = delete;
+        TextureUnitBindings& operator=(const TextureUnitBindings&) = delete;
+
+        GrGpuResource::UniqueID boundID(GrGLenum target) const;
+        bool hasBeenModified(GrGLenum target) const;
+        void setBoundID(GrGLenum target, GrGpuResource::UniqueID);
+        void invalidateForScratchUse(GrGLenum target);
+        void invalidateAllTargets(bool markUnmodified);
+
+    private:
+        struct TargetBinding {
+            GrGpuResource::UniqueID fBoundResourceID;
+            bool fHasBeenModified = false;
+        };
+        TargetBinding fTargetBindings[3];
+    };
+    SkAutoTArray<TextureUnitBindings> fHWTextureUnitBindings;
 
     GrGLfloat fHWClearColor[4];
 

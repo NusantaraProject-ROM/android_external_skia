@@ -10,7 +10,6 @@
 
 #include "GrBackendSemaphore.h"
 #include "GrBackendSurface.h"
-#include "GrBuffer.h"
 #include "GrCaps.h"
 #include "GrContext.h"
 #include "GrContextPriv.h"
@@ -217,10 +216,10 @@ sk_sp<GrRenderTarget> GrGpu::onWrapVulkanSecondaryCBAsRenderTarget(const SkImage
     return nullptr;
 }
 
-sk_sp<GrBuffer> GrGpu::createBuffer(size_t size, GrBufferType intendedType,
-                                    GrAccessPattern accessPattern, const void* data) {
+sk_sp<GrGpuBuffer> GrGpu::createBuffer(size_t size, GrGpuBufferType intendedType,
+                                       GrAccessPattern accessPattern, const void* data) {
     this->handleDirtyContext();
-    sk_sp<GrBuffer> buffer = this->onCreateBuffer(size, intendedType, accessPattern, data);
+    sk_sp<GrGpuBuffer> buffer = this->onCreateBuffer(size, intendedType, accessPattern, data);
     if (!this->caps()->reuseScratchBuffers()) {
         buffer->resourcePriv().removeScratchKey();
     }
@@ -303,7 +302,7 @@ bool GrGpu::writePixels(GrSurface* surface, int left, int top, int width, int he
 }
 
 bool GrGpu::transferPixels(GrTexture* texture, int left, int top, int width, int height,
-                           GrColorType bufferColorType, GrBuffer* transferBuffer, size_t offset,
+                           GrColorType bufferColorType, GrGpuBuffer* transferBuffer, size_t offset,
                            size_t rowBytes) {
     SkASSERT(texture);
     SkASSERT(transferBuffer);
@@ -347,6 +346,11 @@ bool GrGpu::regenerateMipMapLevels(GrTexture* texture) {
     return false;
 }
 
+void GrGpu::resetTextureBindings() {
+    this->handleDirtyContext();
+    this->onResetTextureBindings();
+}
+
 void GrGpu::resolveRenderTarget(GrRenderTarget* target) {
     SkASSERT(target);
     this->handleDirtyContext();
@@ -378,7 +382,7 @@ void GrGpu::didWriteToSurface(GrSurface* surface, GrSurfaceOrigin origin, const 
 GrSemaphoresSubmitted GrGpu::finishFlush(int numSemaphores,
                                          GrBackendSemaphore backendSemaphores[]) {
     this->stats()->incNumFinishFlushes();
-    GrResourceProvider* resourceProvider = fContext->contextPriv().resourceProvider();
+    GrResourceProvider* resourceProvider = fContext->priv().resourceProvider();
 
     if (this->caps()->fenceSyncSupport()) {
         for (int i = 0; i < numSemaphores; ++i) {
@@ -425,4 +429,26 @@ GrBackendTexture GrGpu::createTestingOnlyBackendTexture(const void* pixels, int 
     return this->createTestingOnlyBackendTexture(pixels, w, h, grCT, isRenderTarget, isMipped,
                                                  rowBytes);
 }
+
+#if GR_GPU_STATS
+void GrGpu::Stats::dump(SkString* out) {
+    out->appendf("Render Target Binds: %d\n", fRenderTargetBinds);
+    out->appendf("Shader Compilations: %d\n", fShaderCompilations);
+    out->appendf("Textures Created: %d\n", fTextureCreates);
+    out->appendf("Texture Uploads: %d\n", fTextureUploads);
+    out->appendf("Transfers to Texture: %d\n", fTransfersToTexture);
+    out->appendf("Stencil Buffer Creates: %d\n", fStencilAttachmentCreates);
+    out->appendf("Number of draws: %d\n", fNumDraws);
+}
+
+void GrGpu::Stats::dumpKeyValuePairs(SkTArray<SkString>* keys, SkTArray<double>* values) {
+    keys->push_back(SkString("render_target_binds")); values->push_back(fRenderTargetBinds);
+    keys->push_back(SkString("shader_compilations")); values->push_back(fShaderCompilations);
+    keys->push_back(SkString("texture_uploads")); values->push_back(fTextureUploads);
+    keys->push_back(SkString("number_of_draws")); values->push_back(fNumDraws);
+    keys->push_back(SkString("number_of_failed_draws")); values->push_back(fNumFailedDraws);
+}
+
+#endif
+
 #endif

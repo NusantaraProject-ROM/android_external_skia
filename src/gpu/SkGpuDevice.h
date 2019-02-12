@@ -81,7 +81,6 @@ public:
     void drawArc(const SkRect& oval, SkScalar startAngle, SkScalar sweepAngle,
                  bool useCenter, const SkPaint& paint) override;
     void drawPath(const SkPath& path, const SkPaint& paint, bool pathIsMutable) override;
-    void drawBitmap(const SkBitmap&, SkScalar x, SkScalar y, const SkPaint&) override;
     void drawBitmapRect(const SkBitmap&, const SkRect* srcOrNull, const SkRect& dst,
                         const SkPaint& paint, SkCanvas::SrcRectConstraint) override;
     void drawSprite(const SkBitmap& bitmap, int x, int y,
@@ -94,7 +93,6 @@ public:
                    const SkColor[], int count, SkBlendMode, const SkPaint&) override;
     void drawDevice(SkBaseDevice*, int x, int y, const SkPaint&) override;
 
-    void drawImage(const SkImage*, SkScalar x, SkScalar y, const SkPaint&) override;
     void drawImageRect(const SkImage*, const SkRect* src, const SkRect& dst,
                        const SkPaint&, SkCanvas::SrcRectConstraint) override;
 
@@ -157,7 +155,7 @@ private:
 
     GrClipStackClip clip() const { return GrClipStackClip(&this->cs()); }
 
-    const GrCaps* caps() const { return fContext->contextPriv().caps(); }
+    const GrCaps* caps() const { return fContext->priv().caps(); }
 
     /**
      * Helper functions called by drawBitmapCommon. By the time these are called the SkDraw's

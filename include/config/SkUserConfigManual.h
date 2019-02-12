@@ -22,6 +22,7 @@
   // Legacy flags
   #define SK_IGNORE_GPU_DITHER
   #define SK_SUPPORT_DEPRECATED_CLIPOPS
+  #define SK_SUPPORT_LEGACY_DRAWLOOPER
 
   // Needed until we fix https://bug.skia.org/2440
   #define SK_SUPPORT_LEGACY_CLIPTOLAYERFLAG
@@ -31,5 +32,8 @@
   #define SK_SUPPORT_LEGACY_AAA_CHOICE
 
   #define SK_DISABLE_DAA  // skbug.com/6886
+
+  // b/123377741
+  #define SK_SUPPORT_LEGACY_ANDROID_CODEC_COLORSPACE
 
 #endif // SkUserConfigManual_DEFINED
