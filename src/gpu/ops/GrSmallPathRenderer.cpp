@@ -370,7 +370,6 @@ private:
 
         // allocate vertices
         const size_t kVertexStride = flushInfo.fGeometryProcessor->vertexStride();
-        const GrBuffer* vertexBuffer;
 
         // We need to make sure we don't overflow a 32 bit int when we request space in the
         // makeVertexSpace call below.
@@ -379,9 +378,8 @@ private:
         }
         GrVertexWriter vertices{target->makeVertexSpace(kVertexStride,
                                                         kVerticesPerQuad * instanceCount,
-                                                        &vertexBuffer,
+                                                        &flushInfo.fVertexBuffer,
                                                         &flushInfo.fVertexOffset)};
-        flushInfo.fVertexBuffer.reset(SkRef(vertexBuffer));
         flushInfo.fIndexBuffer = target->resourceProvider()->refQuadIndexBuffer();
         if (!vertices.fPtr || !flushInfo.fIndexBuffer) {
             SkDebugf("Could not allocate vertices\n");
@@ -797,10 +795,9 @@ private:
             GrMesh* mesh = target->allocMesh(GrPrimitiveType::kTriangles);
             int maxInstancesPerDraw =
                 static_cast<int>(flushInfo->fIndexBuffer->gpuMemorySize() / sizeof(uint16_t) / 6);
-            mesh->setIndexedPatterned(flushInfo->fIndexBuffer.get(), kIndicesPerQuad,
-                                      kVerticesPerQuad, flushInfo->fInstancesToFlush,
-                                      maxInstancesPerDraw);
-            mesh->setVertexData(flushInfo->fVertexBuffer.get(), flushInfo->fVertexOffset);
+            mesh->setIndexedPatterned(flushInfo->fIndexBuffer, kIndicesPerQuad, kVerticesPerQuad,
+                                      flushInfo->fInstancesToFlush, maxInstancesPerDraw);
+            mesh->setVertexData(flushInfo->fVertexBuffer, flushInfo->fVertexOffset);
             target->draw(flushInfo->fGeometryProcessor, flushInfo->fPipeline,
                          flushInfo->fFixedDynamicState, mesh);
             flushInfo->fVertexOffset += kVerticesPerQuad * flushInfo->fInstancesToFlush;
@@ -963,8 +960,8 @@ GR_DRAW_OP_TEST_DEFINE(SmallPathOp) {
     using PathTestStruct = GrSmallPathRenderer::PathTestStruct;
     static PathTestStruct gTestStruct;
 
-    if (context->uniqueID() != gTestStruct.fContextID) {
-        gTestStruct.fContextID = context->uniqueID();
+    if (context->contextPriv().contextID() != gTestStruct.fContextID) {
+        gTestStruct.fContextID = context->contextPriv().contextID();
         gTestStruct.reset();
         const GrBackendFormat format =
                 context->contextPriv().caps()->getBackendFormatFromColorType(kAlpha_8_SkColorType);

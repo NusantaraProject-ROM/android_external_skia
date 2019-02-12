@@ -79,7 +79,8 @@ public:
     // The GrGLGpuRTCommandBuffer does not buffer up draws before submitting them to the gpu.
     // Thus this is the implementation of the draw call for the corresponding passthrough function
     // on GrGLRTGpuCommandBuffer.
-    void draw(const GrPrimitiveProcessor&,
+    void draw(GrRenderTarget*, GrSurfaceOrigin,
+              const GrPrimitiveProcessor&,
               const GrPipeline&,
               const GrPipeline::FixedDynamicState*,
               const GrPipeline::DynamicStateArrays*,
@@ -186,14 +187,13 @@ private:
     sk_sp<GrTexture> onCreateTexture(const GrSurfaceDesc& desc, SkBudgeted budgeted,
                                      const GrMipLevel texels[], int mipLevelCount) override;
 
-    GrBuffer* onCreateBuffer(size_t size, GrBufferType intendedType, GrAccessPattern,
-                             const void* data) override;
+    sk_sp<GrBuffer> onCreateBuffer(size_t size, GrBufferType intendedType, GrAccessPattern,
+                                   const void* data) override;
 
-    sk_sp<GrTexture> onWrapBackendTexture(const GrBackendTexture&, GrWrapOwnership, GrIOType,
-                                          bool purgeImmediately) override;
-    sk_sp<GrTexture> onWrapRenderableBackendTexture(const GrBackendTexture&,
-                                                    int sampleCnt,
-                                                    GrWrapOwnership) override;
+    sk_sp<GrTexture> onWrapBackendTexture(const GrBackendTexture&, GrWrapOwnership, GrWrapCacheable,
+                                          GrIOType) override;
+    sk_sp<GrTexture> onWrapRenderableBackendTexture(const GrBackendTexture&, int sampleCnt,
+                                                    GrWrapOwnership, GrWrapCacheable) override;
     sk_sp<GrRenderTarget> onWrapBackendRenderTarget(const GrBackendRenderTarget&) override;
     sk_sp<GrRenderTarget> onWrapBackendTextureAsRenderTarget(const GrBackendTexture&,
                                                              int sampleCnt) override;
@@ -251,8 +251,6 @@ private:
     // binds texture unit in GL
     void setTextureUnit(int unitIdx);
 
-    void setTextureSwizzle(int unitIdx, GrGLenum target, const GrGLenum swizzle[]);
-
     /**
      * primitiveProcessorTextures must contain GrPrimitiveProcessor::numTextureSamplers() *
      * numPrimitiveProcessorTextureSets entries.
@@ -266,9 +264,10 @@ private:
     // willDrawPoints must be true if point primitives will be rendered after setting the GL state.
     // If DynamicStateArrays is not null then dynamicStateArraysLength is the number of dynamic
     // state entries in each array.
-    bool flushGLState(const GrPrimitiveProcessor&, const GrPipeline&,
-                      const GrPipeline::FixedDynamicState*, const GrPipeline::DynamicStateArrays*,
-                      int dynamicStateArraysLength, bool willDrawPoints);
+    bool flushGLState(GrRenderTarget*, GrSurfaceOrigin, const GrPrimitiveProcessor&,
+                      const GrPipeline&, const GrPipeline::FixedDynamicState*,
+                      const GrPipeline::DynamicStateArrays*, int dynamicStateArraysLength,
+                      bool willDrawPoints);
 
     void flushProgram(sk_sp<GrGLProgram>);
 
@@ -286,8 +285,6 @@ private:
     void flushBlend(const GrXferProcessor::BlendInfo& blendInfo, const GrSwizzle&);
 
     void onFinishFlush(bool insertedSemaphores) override;
-
-    bool hasExtension(const char* ext) const { return fGLContext->hasExtension(ext); }
 
     bool copySurfaceAsDraw(GrSurface* dst, GrSurfaceOrigin dstOrigin,
                            GrSurface* src, GrSurfaceOrigin srcOrigin,
@@ -307,7 +304,8 @@ private:
         ~ProgramCache();
 
         void abandon();
-        GrGLProgram* refProgram(GrGLGpu*, const GrPrimitiveProcessor&,
+        GrGLProgram* refProgram(GrGLGpu*, GrRenderTarget*, GrSurfaceOrigin,
+                                const GrPrimitiveProcessor&,
                                 const GrTextureProxy* const primProcProxies[],
                                 const GrPipeline&, bool hasPointSize);
 
@@ -339,6 +337,7 @@ private:
     };
 
     void flushColorWrite(bool writeColor);
+    void flushClearColor(GrGLfloat r, GrGLfloat g, GrGLfloat b, GrGLfloat a);
 
     // flushes the scissor. see the note on flushBoundTextureAndParams about
     // flushing the scissor after that function is called.
@@ -588,6 +587,8 @@ private:
     TriState                                fHWSRGBFramebuffer;
     SkTArray<GrGpuResource::UniqueID, true> fHWBoundTextureUniqueIDs;
 
+    GrGLfloat fHWClearColor[4];
+
     GrGLuint fBoundDrawFramebuffer = 0;
 
     // EXT_raster_multisample.
@@ -611,16 +612,6 @@ private:
         GrGLint     fTexCoordXformUniform = 0;
     }                                       fMipmapPrograms[4];
     sk_sp<GrGLBuffer>                       fMipmapProgramArrayBuffer;
-
-    GrGLuint                                fStencilClipClearProgram = 0;
-    sk_sp<GrGLBuffer>                       fStencilClipClearArrayBuffer;
-
-    /** IDs for clear render target color program. */
-    struct {
-        GrGLuint    fProgram = 0;
-        GrGLint     fColorUniform = 0;
-    }                                       fClearColorProgram;
-    sk_sp<GrGLBuffer>                       fClearProgramArrayBuffer;
 
     static int TextureToCopyProgramIdx(GrTexture* texture);
 

@@ -689,8 +689,7 @@ void GrCCStroker::drawStrokes(GrOpFlushState* flushState, BatchID batchID,
     startIndices[(int)GrScissorTest::kEnabled] = (!startScissorSubBatch)
             ? &fZeroTallies : fScissorSubBatches[startScissorSubBatch - 1].fEndInstances;
 
-    GrPipeline pipeline(flushState->drawOpArgs().fProxy, GrScissorTest::kEnabled,
-                        SkBlendMode::kPlus);
+    GrPipeline pipeline(GrScissorTest::kEnabled, SkBlendMode::kPlus);
 
     // Draw linear strokes.
     this->appendStrokeMeshesToBuffers(0, batch, startIndices, startScissorSubBatch, drawBounds);
@@ -735,7 +734,7 @@ void GrCCStroker::appendStrokeMeshesToBuffers(int numSegmentsLog2, const Batch& 
     SkASSERT(endIdx >= startIdx);
     if (int instanceCount = endIdx - startIdx) {
         GrMesh& mesh = fMeshesBuffer.emplace_back(GrPrimitiveType::kTriangleStrip);
-        mesh.setInstanced(fInstanceBuffer.get(), instanceCount, baseInstance + startIdx,
+        mesh.setInstanced(fInstanceBuffer, instanceCount, baseInstance + startIdx,
                           numStripVertices);
         fScissorsBuffer.push_back(drawBounds);
     }
@@ -749,7 +748,7 @@ void GrCCStroker::appendStrokeMeshesToBuffers(int numSegmentsLog2, const Batch& 
         SkASSERT(endIdx >= startIdx);
         if (int instanceCount = endIdx - startIdx) {
             GrMesh& mesh = fMeshesBuffer.emplace_back(GrPrimitiveType::kTriangleStrip);
-            mesh.setInstanced(fInstanceBuffer.get(), instanceCount, baseInstance + startIdx,
+            mesh.setInstanced(fInstanceBuffer, instanceCount, baseInstance + startIdx,
                               numStripVertices);
             fScissorsBuffer.push_back(subBatch.fScissor);
             startIdx = endIdx;
@@ -784,7 +783,7 @@ void GrCCStroker::drawConnectingGeometry(GrOpFlushState* flushState, const GrPip
     int endIdx = batch.fNonScissorEndInstances->*InstanceType;
     SkASSERT(endIdx >= startIdx);
     if (int instanceCount = endIdx - startIdx) {
-        processor.appendMesh(fInstanceBuffer.get(), instanceCount, baseInstance + startIdx,
+        processor.appendMesh(fInstanceBuffer, instanceCount, baseInstance + startIdx,
                              &fMeshesBuffer);
         fScissorsBuffer.push_back(drawBounds);
     }
@@ -797,7 +796,7 @@ void GrCCStroker::drawConnectingGeometry(GrOpFlushState* flushState, const GrPip
         endIdx = subBatch.fEndInstances->*InstanceType;
         SkASSERT(endIdx >= startIdx);
         if (int instanceCount = endIdx - startIdx) {
-            processor.appendMesh(fInstanceBuffer.get(), instanceCount, baseInstance + startIdx,
+            processor.appendMesh(fInstanceBuffer, instanceCount, baseInstance + startIdx,
                                  &fMeshesBuffer);
             fScissorsBuffer.push_back(subBatch.fScissor);
             startIdx = endIdx;

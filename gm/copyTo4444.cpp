@@ -33,8 +33,8 @@ protected:
     virtual void onDraw(SkCanvas* canvas) {
         SkBitmap bm, bm4444;
         if (!GetResourceAsBitmap("images/dog.jpg", &bm)) {
-            SkDebugf("Could not decode the file. Did you forget to set the "
-                     "resourcePath?\n");
+            DrawFailureMessage(canvas, "Could not decode the file. "
+                                       "Did you forget to set the resourcePath?");
             return;
         }
         canvas->drawBitmap(bm, 0, 0);
@@ -50,8 +50,7 @@ private:
 
 //////////////////////////////////////////////////////////////////////////////
 
-static GM* MyFactory(void*) { return new CopyTo4444GM; }
-static GMRegistry reg(MyFactory);
+DEF_GM( return new CopyTo4444GM; )
 
 }
 

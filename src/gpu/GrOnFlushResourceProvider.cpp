@@ -78,7 +78,7 @@ sk_sp<GrBuffer> GrOnFlushResourceProvider::makeBuffer(GrBufferType intendedType,
     auto resourceProvider = fDrawingMgr->getContext()->contextPriv().resourceProvider();
     return sk_sp<GrBuffer>(resourceProvider->createBuffer(size, intendedType,
                                                           kDynamic_GrAccessPattern,
-                                                          GrResourceProvider::Flags::kNoPendingIO,
+                                                          GrResourceProvider::Flags::kNone,
                                                           data));
 }
 
@@ -94,8 +94,8 @@ sk_sp<const GrBuffer> GrOnFlushResourceProvider::findOrMakeStaticBuffer(GrBuffer
     return buffer;
 }
 
-uint32_t GrOnFlushResourceProvider::contextUniqueID() const {
-    return fDrawingMgr->getContext()->uniqueID();
+uint32_t GrOnFlushResourceProvider::contextID() const {
+    return fDrawingMgr->getContext()->contextPriv().contextID();
 }
 
 const GrCaps* GrOnFlushResourceProvider::caps() const {

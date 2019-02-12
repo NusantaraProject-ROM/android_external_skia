@@ -46,7 +46,7 @@ GrBufferAllocPool::GrBufferAllocPool(GrGpu* gpu, GrBufferType bufferType, void* 
 
 void GrBufferAllocPool::deleteBlocks() {
     if (fBlocks.count()) {
-        GrBuffer* buffer = fBlocks.back().fBuffer;
+        GrBuffer* buffer = fBlocks.back().fBuffer.get();
         if (buffer->isMapped()) {
             UNMAP_BUFFER(fBlocks.back());
         }
@@ -94,10 +94,7 @@ void GrBufferAllocPool::validate(bool unusedBlockAllowed) const {
     bool wasDestroyed = false;
     if (fBufferPtr) {
         SkASSERT(!fBlocks.empty());
-        if (fBlocks.back().fBuffer->isMapped()) {
-            GrBuffer* buf = fBlocks.back().fBuffer;
-            SkASSERT(buf->mapPtr() == fBufferPtr);
-        } else {
+        if (!fBlocks.back().fBuffer->isMapped()) {
             SkASSERT(fCpuData == fBufferPtr);
         }
     } else {
@@ -131,7 +128,7 @@ void GrBufferAllocPool::validate(bool unusedBlockAllowed) const {
 
 void* GrBufferAllocPool::makeSpace(size_t size,
                                    size_t alignment,
-                                   const GrBuffer** buffer,
+                                   sk_sp<const GrBuffer>* buffer,
                                    size_t* offset) {
     VALIDATE();
 
@@ -184,7 +181,7 @@ void* GrBufferAllocPool::makeSpace(size_t size,
 void* GrBufferAllocPool::makeSpaceAtLeast(size_t minSize,
                                           size_t fallbackSize,
                                           size_t alignment,
-                                          const GrBuffer** buffer,
+                                          sk_sp<const GrBuffer>* buffer,
                                           size_t* offset,
                                           size_t* actualSize) {
     VALIDATE();
@@ -324,11 +321,7 @@ bool GrBufferAllocPool::createBlock(size_t requestSize) {
 
 void GrBufferAllocPool::destroyBlock() {
     SkASSERT(!fBlocks.empty());
-
-    BufferBlock& block = fBlocks.back();
-
-    SkASSERT(!block.fBuffer->isMapped());
-    block.fBuffer->unref();
+    SkASSERT(!fBlocks.back().fBuffer->isMapped());
     fBlocks.pop_back();
     fBufferPtr = nullptr;
 }
@@ -352,7 +345,7 @@ void* GrBufferAllocPool::resetCpuData(size_t newSize) {
 
 
 void GrBufferAllocPool::flushCpuData(const BufferBlock& block, size_t flushSize) {
-    GrBuffer* buffer = block.fBuffer;
+    GrBuffer* buffer = block.fBuffer.get();
     SkASSERT(buffer);
     SkASSERT(!buffer->isMapped());
     SkASSERT(fCpuData == fBufferPtr);
@@ -372,13 +365,11 @@ void GrBufferAllocPool::flushCpuData(const BufferBlock& block, size_t flushSize)
     VALIDATE(true);
 }
 
-GrBuffer* GrBufferAllocPool::getBuffer(size_t size) {
-
+sk_sp<GrBuffer> GrBufferAllocPool::getBuffer(size_t size) {
     auto resourceProvider = fGpu->getContext()->contextPriv().resourceProvider();
 
-    // Shouldn't have to use this flag (https://bug.skia.org/4156)
-    static const auto kFlags = GrResourceProvider::Flags::kNoPendingIO;
-    return resourceProvider->createBuffer(size, fBufferType, kDynamic_GrAccessPattern, kFlags);
+    return resourceProvider->createBuffer(size, fBufferType, kDynamic_GrAccessPattern,
+            GrResourceProvider::Flags::kNone);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -388,9 +379,8 @@ GrVertexBufferAllocPool::GrVertexBufferAllocPool(GrGpu* gpu, void* initialCpuBuf
 
 void* GrVertexBufferAllocPool::makeSpace(size_t vertexSize,
                                          int vertexCount,
-                                         const GrBuffer** buffer,
+                                         sk_sp<const GrBuffer>* buffer,
                                          int* startVertex) {
-
     SkASSERT(vertexCount >= 0);
     SkASSERT(buffer);
     SkASSERT(startVertex);
@@ -407,9 +397,9 @@ void* GrVertexBufferAllocPool::makeSpace(size_t vertexSize,
 }
 
 void* GrVertexBufferAllocPool::makeSpaceAtLeast(size_t vertexSize, int minVertexCount,
-                                                int fallbackVertexCount, const GrBuffer** buffer,
-                                                int* startVertex, int* actualVertexCount) {
-
+                                                int fallbackVertexCount,
+                                                sk_sp<const GrBuffer>* buffer, int* startVertex,
+                                                int* actualVertexCount) {
     SkASSERT(minVertexCount >= 0);
     SkASSERT(fallbackVertexCount >= minVertexCount);
     SkASSERT(buffer);
@@ -440,10 +430,8 @@ void* GrVertexBufferAllocPool::makeSpaceAtLeast(size_t vertexSize, int minVertex
 GrIndexBufferAllocPool::GrIndexBufferAllocPool(GrGpu* gpu, void* initialCpuBuffer)
         : GrBufferAllocPool(gpu, kIndex_GrBufferType, initialCpuBuffer) {}
 
-void* GrIndexBufferAllocPool::makeSpace(int indexCount,
-                                        const GrBuffer** buffer,
+void* GrIndexBufferAllocPool::makeSpace(int indexCount, sk_sp<const GrBuffer>* buffer,
                                         int* startIndex) {
-
     SkASSERT(indexCount >= 0);
     SkASSERT(buffer);
     SkASSERT(startIndex);
@@ -460,7 +448,7 @@ void* GrIndexBufferAllocPool::makeSpace(int indexCount,
 }
 
 void* GrIndexBufferAllocPool::makeSpaceAtLeast(int minIndexCount, int fallbackIndexCount,
-                                               const GrBuffer** buffer, int* startIndex,
+                                               sk_sp<const GrBuffer>* buffer, int* startIndex,
                                                int* actualIndexCount) {
     SkASSERT(minIndexCount >= 0);
     SkASSERT(fallbackIndexCount >= minIndexCount);

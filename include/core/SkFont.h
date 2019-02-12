@@ -188,7 +188,15 @@ public:
 
         @return  SkTypeface if previously set, nullptr otherwise
     */
-    SkTypeface* getTypeface() const { return fTypeface.get(); }
+    SkTypeface* getTypeface() const {return fTypeface.get(); }
+
+    /** Returns SkTypeface if set, or the default typeface.
+        Does not alter SkTypeface SkRefCnt.
+
+        @return  SkTypeface if previously set or, a pointer to the default typeface if not
+        previously set.
+    */
+    SkTypeface* getTypefaceOrDefault() const;
 
     /** Returns text size in points.
 
@@ -215,6 +223,13 @@ public:
         @return  SkTypeface if previously set, nullptr otherwise
     */
     sk_sp<SkTypeface> refTypeface() const { return fTypeface; }
+
+    /** Increases SkTypeface SkRefCnt by one.
+
+        @return  SkTypeface if previously set or, a pointer to the default typeface if not
+        previously set.
+    */
+    sk_sp<SkTypeface> refTypefaceOrDefault() const;
 
     /** Sets SkTypeface to typeface, decreasing SkRefCnt of the previous SkTypeface.
         Pass nullptr to clear SkTypeface and use the default typeface. Increments
@@ -285,9 +300,7 @@ public:
         @param uni  Unicode character
         @return     glyph index
     */
-    uint16_t unicharToGlyph(SkUnichar uni) const {
-        return fTypeface->unicharToGlyph(uni);
-    }
+    SkGlyphID unicharToGlyph(SkUnichar uni) const;
 
     /** Returns number of glyphs represented by text.
 
@@ -304,41 +317,6 @@ public:
     int countText(const void* text, size_t byteLength, SkTextEncoding encoding) const {
         return this->textToGlyphs(text, byteLength, encoding, nullptr, 0);
     }
-
-    /** Returns true if all text corresponds to a non-zero glyph index.
-        Returns false if any characters in text are not supported in
-        SkTypeface.
-
-        If SkTextEncoding is kGlyphID_SkTextEncoding,
-        returns true if all glyph indices in text are non-zero;
-        does not check to see if text contains valid glyph indices for SkTypeface.
-
-        Returns true if byteLength is zero.
-
-        @param text        array of characters or glyphs
-        @param byteLength  number of bytes in text array
-        @param encoding    text encoding
-        @return            true if all text corresponds to a non-zero glyph index
-     */
-    bool containsText(const void* text, size_t byteLength, SkTextEncoding encoding) const;
-
-    /** Returns the bytes of text that fit within maxWidth.
-        The text fragment fits if its advance width is less than or equal to maxWidth.
-        Measures only while the advance is less than or equal to maxWidth.
-        Returns the advance or the text fragment in measuredWidth if it not nullptr.
-        Uses encoding to decode text, SkTypeface to get the font metrics,
-        and text size to scale the metrics.
-        Does not scale the advance or bounds by fake bold.
-
-        @param text           character codes or glyph indices to be measured
-        @param length         number of bytes of text to measure
-        @param encoding       text encoding
-        @param maxWidth       advance limit; text is measured while advance is less than maxWidth
-        @param measuredWidth  returns the width of the text less than or equal to maxWidth
-        @return               bytes of text that fit, always less than or equal to length
-    */
-    size_t breakText(const void* text, size_t length, SkTextEncoding encoding, SkScalar maxWidth,
-                     SkScalar* measuredWidth = nullptr) const;
 
     /** Returns the advance width of text.
         The advance is the normal distance to move before drawing additional text.
@@ -498,18 +476,6 @@ public:
         @return  recommended spacing between lines
     */
     SkScalar getSpacing() const { return this->getMetrics(nullptr); }
-
-#ifdef SK_SUPPORT_LEGACY_PAINT_FONT_FIELDS
-    /** Deprecated.
-    */
-    void LEGACY_applyToPaint(SkPaint* paint) const;
-    /** Deprecated.
-     */
-    void LEGACY_applyPaintFlags(uint32_t paintFlags);
-    /** Deprecated.
-    */
-    static SkFont LEGACY_ExtractFromPaint(const SkPaint& paint);
-#endif
 
     /** Experimental.
      *  Dumps fields of the font to SkDebugf. May change its output over time, so clients should

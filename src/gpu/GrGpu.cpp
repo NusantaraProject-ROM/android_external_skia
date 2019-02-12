@@ -148,9 +148,8 @@ sk_sp<GrTexture> GrGpu::createTexture(const GrSurfaceDesc& desc, SkBudgeted budg
 }
 
 sk_sp<GrTexture> GrGpu::wrapBackendTexture(const GrBackendTexture& backendTex,
-                                           GrWrapOwnership ownership,
-                                           GrIOType ioType,
-                                           bool purgeImmediately) {
+                                           GrWrapOwnership ownership, GrWrapCacheable cacheable,
+                                           GrIOType ioType) {
     SkASSERT(ioType != kWrite_GrIOType);
     this->handleDirtyContext();
     SkASSERT(this->caps());
@@ -161,11 +160,12 @@ sk_sp<GrTexture> GrGpu::wrapBackendTexture(const GrBackendTexture& backendTex,
         backendTex.height() > this->caps()->maxTextureSize()) {
         return nullptr;
     }
-    return this->onWrapBackendTexture(backendTex, ownership, ioType, purgeImmediately);
+    return this->onWrapBackendTexture(backendTex, ownership, cacheable, ioType);
 }
 
 sk_sp<GrTexture> GrGpu::wrapRenderableBackendTexture(const GrBackendTexture& backendTex,
-                                                     int sampleCnt, GrWrapOwnership ownership) {
+                                                     int sampleCnt, GrWrapOwnership ownership,
+                                                     GrWrapCacheable cacheable) {
     this->handleDirtyContext();
     if (sampleCnt < 1) {
         return nullptr;
@@ -179,7 +179,8 @@ sk_sp<GrTexture> GrGpu::wrapRenderableBackendTexture(const GrBackendTexture& bac
         backendTex.height() > this->caps()->maxRenderTargetSize()) {
         return nullptr;
     }
-    sk_sp<GrTexture> tex = this->onWrapRenderableBackendTexture(backendTex, sampleCnt, ownership);
+    sk_sp<GrTexture> tex =
+            this->onWrapRenderableBackendTexture(backendTex, sampleCnt, ownership, cacheable);
     SkASSERT(!tex || tex->asRenderTarget());
     return tex;
 }
@@ -216,10 +217,10 @@ sk_sp<GrRenderTarget> GrGpu::onWrapVulkanSecondaryCBAsRenderTarget(const SkImage
     return nullptr;
 }
 
-GrBuffer* GrGpu::createBuffer(size_t size, GrBufferType intendedType,
-                              GrAccessPattern accessPattern, const void* data) {
+sk_sp<GrBuffer> GrGpu::createBuffer(size_t size, GrBufferType intendedType,
+                                    GrAccessPattern accessPattern, const void* data) {
     this->handleDirtyContext();
-    GrBuffer* buffer = this->onCreateBuffer(size, intendedType, accessPattern, data);
+    sk_sp<GrBuffer> buffer = this->onCreateBuffer(size, intendedType, accessPattern, data);
     if (!this->caps()->reuseScratchBuffers()) {
         buffer->resourcePriv().removeScratchKey();
     }

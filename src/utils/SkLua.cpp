@@ -16,6 +16,7 @@
 #include "SkColorFilter.h"
 #include "SkData.h"
 #include "SkFont.h"
+#include "SkFontMetrics.h"
 #include "SkFontStyle.h"
 #include "SkGradientShader.h"
 #include "SkImage.h"
@@ -556,7 +557,8 @@ static int lcanvas_drawText(lua_State* L) {
         return 0;
     }
 
-#ifdef SK_SUPPORT_LEGACY_PAINT_FONT_FIELDS
+    // TODO: restore this logic based on SkFont instead of SkPaint
+#if 0
     if (lua_isstring(L, 2) && lua_isnumber(L, 3) && lua_isnumber(L, 4)) {
         size_t len;
         const char* text = lua_tolstring(L, 2, &len);
@@ -951,7 +953,7 @@ static int lfont_setSize(lua_State* L) {
 }
 
 static int lfont_getTypeface(lua_State* L) {
-    push_ref(L, get_obj<SkFont>(L, 1)->getTypeface());
+    push_ref(L, get_obj<SkFont>(L, 1)->getTypefaceOrDefault());
     return 1;
 }
 
@@ -966,7 +968,7 @@ static int lfont_getHinting(lua_State* L) {
 }
 
 static int lfont_getFontID(lua_State* L) {
-    SkTypeface* face = get_obj<SkFont>(L, 1)->getTypeface();
+    SkTypeface* face = get_obj<SkFont>(L, 1)->getTypefaceOrDefault();
     SkLua(L).pushU32(SkTypeface::UniqueID(face));
     return 1;
 }
@@ -1873,7 +1875,8 @@ static int lsk_newTextBlob(lua_State* L) {
 
     SkShaper shaper(nullptr);
 
-#ifdef SK_SUPPORT_LEGACY_PAINT_FONT_FIELDS
+    // TODO: restore this logic based on SkFont instead of SkPaint
+#if 0
     const SkPaint& paint = *get_obj<SkPaint>(L, 3);
     SkFont font = SkFont::LEGACY_ExtractFromPaint(paint);
 #else

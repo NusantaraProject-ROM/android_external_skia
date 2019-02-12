@@ -136,13 +136,12 @@ private:
     }
     void onPrepare(GrOpFlushState*) override {}
     void onExecute(GrOpFlushState* state, const SkRect& chainBounds) override {
-        GrRenderTargetProxy* proxy = state->drawOpArgs().fProxy;
-        GrPipeline pipeline(proxy, fScissorTest, SkBlendMode::kSrc);
+        GrPipeline pipeline(fScissorTest, SkBlendMode::kSrc);
         SkSTArray<kNumMeshes, GrMesh> meshes;
         for (int i = 0; i < kNumMeshes; ++i) {
             GrMesh& mesh = meshes.emplace_back(GrPrimitiveType::kTriangleStrip);
             mesh.setNonIndexedNonInstanced(4);
-            mesh.setVertexData(fVertexBuffer.get(), 4 * i);
+            mesh.setVertexData(fVertexBuffer, 4 * i);
         }
         GrPipeline::DynamicStateArrays dynamicState;
         dynamicState.fScissorRects = kDynamicScissors;
@@ -197,7 +196,6 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrPipelineDynamicStateTest, reporter, ctxInfo
 
     sk_sp<const GrBuffer> vbuff(rp->createBuffer(sizeof(vdata), kVertex_GrBufferType,
                                                  kDynamic_GrAccessPattern,
-                                                 GrResourceProvider::Flags::kNoPendingIO |
                                                  GrResourceProvider::Flags::kRequireGpuMemory,
                                                  vdata));
     if (!vbuff) {

@@ -175,7 +175,7 @@ public:
 
 private:
     GrVkGpu(GrContext*, const GrContextOptions&, const GrVkBackendContext&,
-            sk_sp<const GrVkInterface>);
+            sk_sp<const GrVkInterface>, uint32_t instanceVersion, uint32_t physicalDeviceVersion);
 
     void onResetContext(uint32_t resetBits) override {}
 
@@ -184,11 +184,12 @@ private:
     sk_sp<GrTexture> onCreateTexture(const GrSurfaceDesc&, SkBudgeted, const GrMipLevel[],
                                      int mipLevelCount) override;
 
-    sk_sp<GrTexture> onWrapBackendTexture(const GrBackendTexture&, GrWrapOwnership, GrIOType,
-                                          bool purgeImmediately) override;
+    sk_sp<GrTexture> onWrapBackendTexture(const GrBackendTexture&, GrWrapOwnership, GrWrapCacheable,
+                                          GrIOType) override;
     sk_sp<GrTexture> onWrapRenderableBackendTexture(const GrBackendTexture&,
                                                     int sampleCnt,
-                                                    GrWrapOwnership) override;
+                                                    GrWrapOwnership,
+                                                    GrWrapCacheable) override;
     sk_sp<GrRenderTarget> onWrapBackendRenderTarget(const GrBackendRenderTarget&) override;
 
     sk_sp<GrRenderTarget> onWrapBackendTextureAsRenderTarget(const GrBackendTexture&,
@@ -197,8 +198,8 @@ private:
     sk_sp<GrRenderTarget> onWrapVulkanSecondaryCBAsRenderTarget(const SkImageInfo&,
                                                                 const GrVkDrawableInfo&) override;
 
-    GrBuffer* onCreateBuffer(size_t size, GrBufferType type, GrAccessPattern,
-                             const void* data) override;
+    sk_sp<GrBuffer> onCreateBuffer(size_t size, GrBufferType type, GrAccessPattern,
+                                   const void* data) override;
 
     bool onReadPixels(GrSurface* surface, int left, int top, int width, int height, GrColorType,
                       void* buffer, size_t rowBytes) override;

@@ -402,6 +402,26 @@ void SkGpuDevice::drawRect(const SkRect& rect, const SkPaint& paint) {
                                    this->ctm(), rect, &style);
 }
 
+void SkGpuDevice::drawEdgeAARect(const SkRect& r, SkCanvas::QuadAAFlags aa, SkColor color,
+                                 SkBlendMode mode) {
+    ASSERT_SINGLE_OWNER
+    GR_CREATE_TRACE_MARKER_CONTEXT("SkGpuDevice", "drawEdgeAARect", fContext.get());
+
+    SkPMColor4f dstColor = SkColor4fPrepForDst(SkColor4f::FromColor(color),
+                                              fRenderTargetContext->colorSpaceInfo(),
+                                              *fContext->contextPriv().caps())
+                           .premul();
+
+    GrPaint grPaint;
+    grPaint.setColor4f(dstColor);
+    if (mode != SkBlendMode::kSrcOver) {
+        grPaint.setXPFactory(SkBlendMode_AsXPFactory(mode));
+    }
+
+    fRenderTargetContext->fillRectWithEdgeAA(this->clip(), std::move(grPaint),
+                                             SkToGrQuadAAFlags(aa), this->ctm(), r);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 void SkGpuDevice::drawRRect(const SkRRect& rrect, const SkPaint& paint) {
@@ -749,8 +769,8 @@ bool SkGpuDevice::shouldTileImage(const SkImage* image, const SkRect* srcRectPtr
     GrSamplerState samplerState;
     bool doBicubic;
     GrSamplerState::Filter textureFilterMode = GrSkFilterQualityToGrFilterMode(
-            quality, viewMatrix, srcToDstRect, fContext->contextPriv().sharpenMipmappedTextures(),
-            &doBicubic);
+            quality, viewMatrix, srcToDstRect,
+            fContext->contextPriv().options().fSharpenMipmappedTextures, &doBicubic);
 
     int tileFilterPad;
     if (doBicubic) {
@@ -801,7 +821,7 @@ void SkGpuDevice::drawBitmap(const SkBitmap& bitmap,
         bool doBicubic;
         GrSamplerState::Filter textureFilterMode = GrSkFilterQualityToGrFilterMode(
                 paint.getFilterQuality(), viewMatrix, SkMatrix::I(),
-                fContext->contextPriv().sharpenMipmappedTextures(), &doBicubic);
+                fContext->contextPriv().options().fSharpenMipmappedTextures, &doBicubic);
 
         int tileFilterPad;
 
@@ -1160,7 +1180,7 @@ void SkGpuDevice::drawBitmapRect(const SkBitmap& bitmap,
         bool doBicubic;
         GrSamplerState::Filter textureFilterMode = GrSkFilterQualityToGrFilterMode(
                 paint.getFilterQuality(), this->ctm(), srcToDstMatrix,
-                fContext->contextPriv().sharpenMipmappedTextures(), &doBicubic);
+                fContext->contextPriv().options().fSharpenMipmappedTextures, &doBicubic);
 
         int tileFilterPad;
 
@@ -1496,11 +1516,7 @@ void SkGpuDevice::drawBitmapLattice(const SkBitmap& bitmap,
 void SkGpuDevice::drawImageSet(const SkCanvas::ImageSetEntry set[], int count,
                                SkFilterQuality filterQuality, SkBlendMode mode) {
     SkASSERT(count > 0);
-    if (mode != SkBlendMode::kSrcOver ||
-        !fContext->contextPriv().caps()->dynamicStateArrayGeometryProcessorTextureSupport()) {
-        INHERITED::drawImageSet(set, count, filterQuality, mode);
-        return;
-    }
+
     GrSamplerState sampler;
     sampler.setFilterMode(kNone_SkFilterQuality == filterQuality ? GrSamplerState::Filter::kNearest
                                                                  : GrSamplerState::Filter::kBilerp);
@@ -1514,7 +1530,7 @@ void SkGpuDevice::drawImageSet(const SkCanvas::ImageSetEntry set[], int count,
                     set[base].fImage->colorSpace(), set[base].fImage->alphaType(),
                     fRenderTargetContext->colorSpaceInfo().colorSpace(), kPremul_SkAlphaType);
             fRenderTargetContext->drawTextureSet(this->clip(), textures.get() + base, n,
-                                                 sampler.filter(), this->ctm(),
+                                                 sampler.filter(), mode, this->ctm(),
                                                  std::move(textureXform));
         }
     };
@@ -1741,7 +1757,7 @@ void SkGpuDevice::drawGlyphRunList(const SkGlyphRunList& glyphRunList) {
 ///////////////////////////////////////////////////////////////////////////////
 
 void SkGpuDevice::drawDrawable(SkDrawable* drawable, const SkMatrix* matrix, SkCanvas* canvas) {
-    GrBackendApi api = this->context()->contextPriv().getBackend();
+    GrBackendApi api = this->context()->backend();
     if (GrBackendApi::kVulkan == api) {
         const SkMatrix& ctm = canvas->getTotalMatrix();
         const SkMatrix& combinedMatrix = matrix ? SkMatrix::Concat(ctm, *matrix) : ctm;

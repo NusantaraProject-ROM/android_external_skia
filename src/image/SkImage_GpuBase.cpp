@@ -31,6 +31,13 @@ SkImage_GpuBase::~SkImage_GpuBase() {}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if GR_TEST_UTILS
+void SkImage_GpuBase::resetContext(sk_sp<GrContext> newContext) {
+    SkASSERT(fContext->contextPriv().contextID() == newContext->contextPriv().contextID());
+    fContext = newContext;
+}
+#endif
+
 bool SkImage_GpuBase::ValidateBackendTexture(GrContext* ctx, const GrBackendTexture& tex,
                                              GrPixelConfig* config, SkColorType ct, SkAlphaType at,
                                              sk_sp<SkColorSpace> cs) {
@@ -52,6 +59,10 @@ bool SkImage_GpuBase::ValidateBackendTexture(GrContext* ctx, const GrBackendText
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
+
+uint32_t SkImage_GpuBase::contextID() const {
+    return fContext->contextPriv().contextID();
+}
 
 bool SkImage_GpuBase::getROPixels(SkBitmap* dst, CachingHint chint) const {
     if (!fContext->contextPriv().resourceProvider()) {
@@ -200,7 +211,7 @@ bool SkImage_GpuBase::onReadPixels(const SkImageInfo& dstInfo, void* dstPixels, 
 sk_sp<GrTextureProxy> SkImage_GpuBase::asTextureProxyRef(GrContext* context,
                                                          const GrSamplerState& params,
                                                          SkScalar scaleAdjust[2]) const {
-    if (context->uniqueID() != fContext->uniqueID()) {
+    if (context->contextPriv().contextID() != fContext->contextPriv().contextID()) {
         SkASSERT(0);
         return nullptr;
     }
@@ -292,9 +303,9 @@ bool SkImage_GpuBase::MakeTempTextureProxies(GrContext* ctx, const GrBackendText
         }
         SkASSERT(yuvaTexturesCopy[textureIndex].isValid());
 
-        tempTextureProxies[textureIndex] =
-                proxyProvider->wrapBackendTexture(yuvaTexturesCopy[textureIndex], imageOrigin,
-                                                  kBorrow_GrWrapOwnership, kRead_GrIOType);
+        tempTextureProxies[textureIndex] = proxyProvider->wrapBackendTexture(
+                yuvaTexturesCopy[textureIndex], imageOrigin, kBorrow_GrWrapOwnership,
+                GrWrapCacheable::kNo, kRead_GrIOType);
         if (!tempTextureProxies[textureIndex]) {
             return false;
         }
@@ -360,7 +371,8 @@ sk_sp<GrTextureProxy> SkImage_GpuBase::MakePromiseImageLazyProxy(
         PromiseImageTextureFulfillProc fulfillProc,
         PromiseImageTextureReleaseProc releaseProc,
         PromiseImageTextureDoneProc doneProc,
-        PromiseImageTextureContext textureContext) {
+        PromiseImageTextureContext textureContext,
+        DelayReleaseCallback delayReleaseCallback) {
     SkASSERT(context);
     SkASSERT(width > 0 && height > 0);
     SkASSERT(doneProc);
@@ -402,9 +414,11 @@ sk_sp<GrTextureProxy> SkImage_GpuBase::MakePromiseImageLazyProxy(
                                        PromiseImageTextureReleaseProc releaseProc,
                                        PromiseImageTextureDoneProc doneProc,
                                        PromiseImageTextureContext context,
+                                       DelayReleaseCallback delayReleaseCallback,
                                        GrPixelConfig config)
                 : fFulfillProc(fulfillProc)
-                , fConfig(config) {
+                , fConfig(config)
+                , fDelayReleaseCallback(delayReleaseCallback) {
             auto doneHelper = sk_make_sp<GrReleaseProcHelper>(doneProc, context);
             fReleaseContext = sk_make_sp<IdleContext::PromiseImageReleaseContext>(
                     releaseProc, context, std::move(doneHelper));
@@ -414,7 +428,13 @@ sk_sp<GrTextureProxy> SkImage_GpuBase::MakePromiseImageLazyProxy(
 
         sk_sp<GrSurface> operator()(GrResourceProvider* resourceProvider) {
             if (!resourceProvider) {
+                if (fDelayedReleaseTexture) {
+                    fDelayedReleaseTexture.reset();
+                }
                 return nullptr;
+            }
+            if (fDelayedReleaseTexture) {
+                return fDelayedReleaseTexture;
             }
 
             sk_sp<GrTexture> cachedTexture;
@@ -459,25 +479,38 @@ sk_sp<GrTextureProxy> SkImage_GpuBase::MakePromiseImageLazyProxy(
                 return sk_sp<GrTexture>();
             }
 
-            auto tex = resourceProvider->wrapBackendTexture(backendTexture, kBorrow_GrWrapOwnership,
-                                                            kRead_GrIOType);
-            if (!tex) {
-                // Even though we failed to wrap the backend texture, we must call the release
-                // proc to keep our contract of always calling Fulfill and Release in pairs.
-                fReleaseContext->release();
-                return sk_sp<GrTexture>();
-            }
-            // The texture gets a ref, which is balanced when the idle callback is called.
-            this->addToIdleContext(tex.get());
+            sk_sp<GrTexture> tex;
             static const GrUniqueKey::Domain kDomain = GrUniqueKey::GenerateDomain();
             GrUniqueKey::Builder builder(&fLastFulfilledKey, kDomain, 2, "promise");
             builder[0] = promiseTexture->uniqueID();
             builder[1] = fConfig;
             builder.finish();
+            // A texture with this key may already exist from a different instance of this lazy
+            // callback. This could happen if the client fulfills a promise image with a texture
+            // that was previously used to fulfill a different promise image.
+            if (auto surf = resourceProvider->findByUniqueKey<GrSurface>(fLastFulfilledKey)) {
+                tex = sk_ref_sp(surf->asTexture());
+                SkASSERT(tex);
+            } else {
+                if ((tex = resourceProvider->wrapBackendTexture(
+                             backendTexture, kBorrow_GrWrapOwnership, GrWrapCacheable::kYes,
+                             kRead_GrIOType))) {
+                    tex->resourcePriv().setUniqueKey(fLastFulfilledKey);
+                } else {
+                    // Even though we failed to wrap the backend texture, we must call the release
+                    // proc to keep our contract of always calling Fulfill and Release in pairs.
+                    fReleaseContext->release();
+                    return sk_sp<GrTexture>();
+                }
+            }
+            this->addToIdleContext(tex.get());
+            if (fDelayReleaseCallback == DelayReleaseCallback::kYes) {
+                fDelayedReleaseTexture = tex;
+            }
             tex->resourcePriv().setUniqueKey(fLastFulfilledKey);
             SkASSERT(fContextID == SK_InvalidUniqueID ||
-                     fContextID == tex->getContext()->uniqueID());
-            fContextID = tex->getContext()->uniqueID();
+                     fContextID == tex->getContext()->contextPriv().contextID());
+            fContextID = tex->getContext()->contextPriv().contextID();
             promiseTexture->addKeyToInvalidate(fContextID, fLastFulfilledKey);
             return std::move(tex);
         }
@@ -557,15 +590,17 @@ sk_sp<GrTextureProxy> SkImage_GpuBase::MakePromiseImageLazyProxy(
         }
 
         sk_sp<IdleContext::PromiseImageReleaseContext> fReleaseContext;
+        sk_sp<GrTexture> fDelayedReleaseTexture;
         PromiseImageTextureFulfillProc fFulfillProc;
         GrPixelConfig fConfig;
+        DelayReleaseCallback fDelayReleaseCallback;
 
         // ID of the last SkPromiseImageTexture given to us by the client.
         uint32_t fLastFulfillID = 0;
         // ID of the GrContext that we are interacting with.
         uint32_t fContextID = SK_InvalidUniqueID;
         GrUniqueKey fLastFulfilledKey;
-    } callback(fulfillProc, releaseProc, doneProc, textureContext, config);
+    } callback(fulfillProc, releaseProc, doneProc, textureContext, delayReleaseCallback, config);
 
     GrProxyProvider* proxyProvider = context->contextPriv().proxyProvider();
 
