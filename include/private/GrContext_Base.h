@@ -13,9 +13,11 @@
 #include "GrTypes.h"
 
 class GrBaseContextPriv;
+class GrCaps;
 class GrContext;
 class GrImageContext;
 class GrRecordingContext;
+class GrSkSLFPFactoryCache;
 
 class SK_API GrContext_Base : public SkRefCnt {
 public:
@@ -33,7 +35,7 @@ public:
 protected:
     friend class GrBaseContextPriv; // for hidden functions
 
-    GrContext_Base(GrBackendApi backend, const GrContextOptions& options, uint32_t uniqueID);
+    GrContext_Base(GrBackendApi backend, const GrContextOptions& options, uint32_t contextID);
 
     /**
      * An identifier for this context. The id is used by all compatible contexts. For example,
@@ -44,20 +46,32 @@ protected:
      */
     uint32_t contextID() const { return fContextID; }
 
+    bool matches(GrContext_Base* candidate) const {
+        return candidate->contextID() == this->contextID();
+    }
+
     /*
      * The options in effect for this context
      */
     const GrContextOptions& options() const { return fOptions; }
 
-    GrContext_Base* asBaseContext() { return this; }
+    const GrCaps* caps() const;
+    sk_sp<const GrCaps> refCaps() const;
+
+    sk_sp<GrSkSLFPFactoryCache> fpFactoryCache();
+
     virtual GrImageContext* asImageContext() { return nullptr; }
     virtual GrRecordingContext* asRecordingContext() { return nullptr; }
     virtual GrContext* asDirectContext() { return nullptr; }
 
+    virtual bool init(sk_sp<const GrCaps>, sk_sp<GrSkSLFPFactoryCache>);
+
 private:
-    const GrBackendApi     fBackend;
-    const GrContextOptions fOptions;
-    const uint32_t         fContextID;
+    const GrBackendApi          fBackend;
+    const GrContextOptions      fOptions;
+    const uint32_t              fContextID;
+    sk_sp<const GrCaps>         fCaps;
+    sk_sp<GrSkSLFPFactoryCache> fFPFactoryCache;
 
     typedef SkRefCnt INHERITED;
 };

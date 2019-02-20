@@ -36,12 +36,16 @@ public:
         return fCache.getGlyphMetrics(glyphID, position);
     }
 
-    bool hasImage(const SkGlyph& glyph) override {
-        return fCache.hasImage(glyph);
+    bool decideCouldDrawFromPath(const SkGlyph& glyph) override {
+        return fCache.decideCouldDrawFromPath(glyph);
     }
 
-    bool hasPath(const SkGlyph& glyph) override {
-        return fCache.hasPath(glyph);
+    const SkDescriptor& getDescriptor() const override {
+        return fCache.getDescriptor();
+    }
+
+    void onAboutToExitScope() override {
+        fStrikeCache->attachNode(this);
     }
 
     SkStrikeCache* const            fStrikeCache;
@@ -163,6 +167,17 @@ auto SkStrikeCache::findOrCreateStrike(const SkDescriptor& desc,
         node = this->createStrike(desc, std::move(scaler));
     }
     return node;
+}
+
+SkScopedStrike SkStrikeCache::findOrCreateScopedStrike(const SkDescriptor& desc,
+                                                       const SkScalerContextEffects& effects,
+                                                       const SkTypeface& typeface) {
+    Node* node = this->findAndDetachStrike(desc);
+    if (node == nullptr) {
+        auto scaler = CreateScalerContext(desc, effects, typeface);
+        node = this->createStrike(desc, std::move(scaler));
+    }
+    return SkScopedStrike{node};
 }
 
 SkExclusiveStrikePtr SkStrikeCache::FindOrCreateStrikeExclusive(

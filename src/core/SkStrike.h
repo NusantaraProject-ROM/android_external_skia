@@ -38,8 +38,6 @@ public:
              std::unique_ptr<SkScalerContext> scaler,
              const SkFontMetrics&);
 
-    const SkDescriptor& getDescriptor() const;
-
     /** Return true if glyph is cached. */
     bool isGlyphCached(SkGlyphID glyphID, SkFixed x, SkFixed y) const;
 
@@ -127,9 +125,11 @@ public:
 
     const SkGlyph& getGlyphMetrics(SkGlyphID glyphID, SkPoint position) override;
 
-    bool hasImage(const SkGlyph& glyph) override;
+    bool decideCouldDrawFromPath(const SkGlyph& glyph) override;
 
-    bool hasPath(const SkGlyph& glyph) override;
+    const SkDescriptor& getDescriptor() const override;
+
+    void onAboutToExitScope() override;
 
     /** Return the approx RAM usage for this cache. */
     size_t getMemoryUsed() const { return fMemoryUsed; }

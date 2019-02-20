@@ -241,8 +241,8 @@ enum class GrScissorTest : bool {
 };
 
 struct GrMipLevel {
-    const void* fPixels;
-    size_t fRowBytes;
+    const void* fPixels = nullptr;
+    size_t fRowBytes = 0;
 };
 
 /**
@@ -413,7 +413,7 @@ enum GrShaderFlags {
     kGeometry_GrShaderFlag = 1 << kGeometry_GrShaderType,
     kFragment_GrShaderFlag = 1 << kFragment_GrShaderType
 };
-GR_MAKE_BITFIELD_OPS(GrShaderFlags);
+GR_MAKE_BITFIELD_OPS(GrShaderFlags)
 
 /**
  * Precisions of shader language variables. Not all shading languages support precisions or actually
@@ -821,25 +821,13 @@ enum GrIOType {
 /**
  * Indicates the type of data that a GPU buffer will be used for.
  */
-enum GrBufferType {
-    kVertex_GrBufferType,
-    kIndex_GrBufferType,
-    kTexel_GrBufferType,
-    kDrawIndirect_GrBufferType,
-    kXferCpuToGpu_GrBufferType,
-    kXferGpuToCpu_GrBufferType,
-
-    kLast_GrBufferType = kXferGpuToCpu_GrBufferType
+enum class GrGpuBufferType {
+    kVertex,
+    kIndex,
+    kXferCpuToGpu,
+    kXferGpuToCpu,
 };
-static const int kGrBufferTypeCount = kLast_GrBufferType + 1;
-
-static inline bool GrBufferTypeIsVertexOrIndex(GrBufferType type) {
-    SkASSERT(type >= 0 && type < kGrBufferTypeCount);
-    return type <= kIndex_GrBufferType;
-
-    GR_STATIC_ASSERT(0 == kVertex_GrBufferType);
-    GR_STATIC_ASSERT(1 == kIndex_GrBufferType);
-}
+static const int kGrGpuBufferTypeCount = static_cast<int>(GrGpuBufferType::kXferGpuToCpu) + 1;
 
 /**
  * Provides a performance hint regarding the frequency at which a data store will be accessed.

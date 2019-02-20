@@ -8,6 +8,7 @@
 #ifndef GrDrawingManager_DEFINED
 #define GrDrawingManager_DEFINED
 
+#include "GrBufferAllocPool.h"
 #include "GrDeferredUpload.h"
 #include "GrPathRenderer.h"
 #include "GrPathRendererChain.h"
@@ -37,7 +38,6 @@ class GrDrawingManager {
 public:
     ~GrDrawingManager();
 
-    bool wasAbandoned() const { return fAbandoned; }
     void freeGpuResources();
 
     sk_sp<GrRenderTargetContext> makeRenderTargetContext(sk_sp<GrSurfaceProxy>,
@@ -77,7 +77,10 @@ public:
                                                       GrBackendSemaphore backendSemaphores[]);
 
     void addOnFlushCallbackObject(GrOnFlushCallbackObject*);
+
+#if GR_TEST_UTILS
     void testingOnly_removeOnFlushCallbackObject(GrOnFlushCallbackObject*);
+#endif
 
     void moveOpListsToDDL(SkDeferredDisplayList* ddl);
     void copyOpListsFromDDL(const SkDeferredDisplayList*, GrRenderTargetProxy* newDest);
@@ -136,7 +139,8 @@ private:
                      bool explicitlyAllocating, GrContextOptions::Enable sortRenderTargets,
                      GrContextOptions::Enable reduceOpListSplitting);
 
-    void abandon();
+    bool wasAbandoned() const;
+
     void cleanup();
 
     // return true if any opLists were actually executed; false otherwise
@@ -158,13 +162,12 @@ private:
     GrContext*                        fContext;
     GrPathRendererChain::Options      fOptionsForPathRendererChain;
     GrTextContext::Options            fOptionsForTextContext;
-
-    std::unique_ptr<char[]>           fVertexBufferSpace;
-    std::unique_ptr<char[]>           fIndexBufferSpace;
+    // This cache is used by both the vertex and index pools. It reuses memory across multiple
+    // flushes.
+    sk_sp<GrBufferAllocPool::CpuBufferCache> fCpuBufferCache;
     // In debug builds we guard against improper thread handling
     GrSingleOwner*                    fSingleOwner;
 
-    bool                              fAbandoned;
     OpListDAG                         fDAG;
     GrOpList*                         fActiveOpList = nullptr;
     // These are the IDs of the opLists currently being flushed (in internalFlush)

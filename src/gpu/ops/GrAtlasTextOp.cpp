@@ -29,7 +29,7 @@ std::unique_ptr<GrAtlasTextOp> GrAtlasTextOp::MakeBitmap(GrContext* context,
                                                          GrMaskFormat maskFormat,
                                                          int glyphCount,
                                                          bool needsTransform) {
-        GrOpMemoryPool* pool = context->contextPriv().opMemoryPool();
+        GrOpMemoryPool* pool = context->priv().opMemoryPool();
 
         std::unique_ptr<GrAtlasTextOp> op = pool->allocate<GrAtlasTextOp>(std::move(paint));
 
@@ -61,7 +61,7 @@ std::unique_ptr<GrAtlasTextOp> GrAtlasTextOp::MakeDistanceField(
                                             const SkSurfaceProps& props,
                                             bool isAntiAliased,
                                             bool useLCD) {
-        GrOpMemoryPool* pool = context->contextPriv().opMemoryPool();
+        GrOpMemoryPool* pool = context->priv().opMemoryPool();
 
         std::unique_ptr<GrAtlasTextOp> op = pool->allocate<GrAtlasTextOp>(std::move(paint));
 
@@ -423,8 +423,7 @@ void GrAtlasTextOp::flush(GrMeshDrawOp::Target* target, FlushInfo* flushInfo) co
                                                                       samplerState);
         }
     }
-    int maxGlyphsPerDraw =
-            static_cast<int>(flushInfo->fIndexBuffer->gpuMemorySize() / sizeof(uint16_t) / 6);
+    int maxGlyphsPerDraw = static_cast<int>(flushInfo->fIndexBuffer->size() / sizeof(uint16_t) / 6);
     GrMesh* mesh = target->allocMesh(GrPrimitiveType::kTriangles);
     mesh->setIndexedPatterned(flushInfo->fIndexBuffer, kIndicesPerGlyph, kVerticesPerGlyph,
                               flushInfo->fGlyphsToFlush, maxGlyphsPerDraw);

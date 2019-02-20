@@ -24,6 +24,10 @@
 
 #include "GrTypes.h"
 
+#if defined(SK_BUILD_FOR_ANDROID) && __ANDROID_API__ >= 26
+#include <android/hardware_buffer.h>
+#endif
+
 class SkCanvas;
 class SkDeferredDisplayList;
 class SkPaint;
@@ -163,9 +167,16 @@ public:
         @return              SkSurface if all parameters are valid; otherwise, nullptr
     */
     static sk_sp<SkSurface> MakeRasterN32Premul(int width, int height,
-                                                const SkSurfaceProps* surfaceProps = nullptr) {
-        return MakeRaster(SkImageInfo::MakeN32Premul(width, height), surfaceProps);
-    }
+                                                const SkSurfaceProps* surfaceProps = nullptr);
+
+    /** Caller data passed to RenderTarget/TextureReleaseProc; may be nullptr. */
+    typedef void* ReleaseContext;
+
+    /** User function called when supplied render target may be deleted. */
+    typedef void (*RenderTargetReleaseProc)(ReleaseContext releaseContext);
+
+    /** User function called when supplied texture may be deleted. */
+    typedef void (*TextureReleaseProc)(ReleaseContext releaseContext);
 
     /** Wraps a GPU-backed texture into SkSurface. Caller must ensure the texture is
         valid for the lifetime of returned SkSurface. If sampleCnt greater than zero,
@@ -180,27 +191,31 @@ public:
 
         If SK_SUPPORT_GPU is defined as zero, has no effect and returns nullptr.
 
-        @param context         GPU context
-        @param backendTexture  texture residing on GPU
-        @param origin          one of: kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin
-        @param sampleCnt       samples per pixel, or 0 to disable full scene anti-aliasing
-        @param colorType       one of:
-                               kUnknown_SkColorType, kAlpha_8_SkColorType, kRGB_565_SkColorType,
-                               kARGB_4444_SkColorType, kRGBA_8888_SkColorType,
-                               kRGB_888x_SkColorType, kBGRA_8888_SkColorType,
-                               kRGBA_1010102_SkColorType, kRGB_101010x_SkColorType,
-                               kGray_8_SkColorType, kRGBA_F16_SkColorType
-        @param colorSpace      range of colors; may be nullptr
-        @param surfaceProps    LCD striping orientation and setting for device independent
-                               fonts; may be nullptr
-        @return                SkSurface if all parameters are valid; otherwise, nullptr
+        @param context             GPU context
+        @param backendTexture      texture residing on GPU
+        @param origin              one of: kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin
+        @param sampleCnt           samples per pixel, or 0 to disable full scene anti-aliasing
+        @param colorType           one of:
+                                   kUnknown_SkColorType, kAlpha_8_SkColorType, kRGB_565_SkColorType,
+                                   kARGB_4444_SkColorType, kRGBA_8888_SkColorType,
+                                   kRGB_888x_SkColorType, kBGRA_8888_SkColorType,
+                                   kRGBA_1010102_SkColorType, kRGB_101010x_SkColorType,
+                                   kGray_8_SkColorType, kRGBA_F16_SkColorType
+        @param colorSpace          range of colors; may be nullptr
+        @param surfaceProps        LCD striping orientation and setting for device independent
+                                   fonts; may be nullptr
+        @param textureReleaseProc  function called when texture can be released
+        @param releaseContext      state passed to textureReleaseProc
+        @return                    SkSurface if all parameters are valid; otherwise, nullptr
     */
     static sk_sp<SkSurface> MakeFromBackendTexture(GrContext* context,
                                                    const GrBackendTexture& backendTexture,
                                                    GrSurfaceOrigin origin, int sampleCnt,
                                                    SkColorType colorType,
                                                    sk_sp<SkColorSpace> colorSpace,
-                                                   const SkSurfaceProps* surfaceProps);
+                                                   const SkSurfaceProps* surfaceProps,
+                                                   TextureReleaseProc textureReleaseProc = nullptr,
+                                                   ReleaseContext releaseContext = nullptr);
 
     /** Wraps a GPU-backed buffer into SkSurface. Caller must ensure backendRenderTarget
         is valid for the lifetime of returned SkSurface.
@@ -214,27 +229,32 @@ public:
 
         If SK_SUPPORT_GPU is defined as zero, has no effect and returns nullptr.
 
-        @param context              GPU context
-        @param backendRenderTarget  GPU intermediate memory buffer
-        @param origin               one of: kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin
-        @param colorType            one of:
-                                    kUnknown_SkColorType, kAlpha_8_SkColorType,
-                                    kRGB_565_SkColorType,
-                                    kARGB_4444_SkColorType, kRGBA_8888_SkColorType,
-                                    kRGB_888x_SkColorType, kBGRA_8888_SkColorType,
-                                    kRGBA_1010102_SkColorType, kRGB_101010x_SkColorType,
-                                    kGray_8_SkColorType, kRGBA_F16_SkColorType
-        @param colorSpace           range of colors
-        @param surfaceProps         LCD striping orientation and setting for device independent
-                                    fonts; may be nullptr
-        @return                     SkSurface if all parameters are valid; otherwise, nullptr
+        @param context                  GPU context
+        @param backendRenderTarget      GPU intermediate memory buffer
+        @param origin                   one of:
+                                        kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin
+        @param colorType                one of:
+                                        kUnknown_SkColorType, kAlpha_8_SkColorType,
+                                        kRGB_565_SkColorType,
+                                        kARGB_4444_SkColorType, kRGBA_8888_SkColorType,
+                                        kRGB_888x_SkColorType, kBGRA_8888_SkColorType,
+                                        kRGBA_1010102_SkColorType, kRGB_101010x_SkColorType,
+                                        kGray_8_SkColorType, kRGBA_F16_SkColorType
+        @param colorSpace               range of colors
+        @param surfaceProps             LCD striping orientation and setting for device independent
+                                        fonts; may be nullptr
+        @param renderTargetReleaseProc  function called when texture can be released
+        @param releaseContext           state passed to textureReleaseProc
+        @return                         SkSurface if all parameters are valid; otherwise, nullptr
     */
     static sk_sp<SkSurface> MakeFromBackendRenderTarget(GrContext* context,
                                                 const GrBackendRenderTarget& backendRenderTarget,
                                                 GrSurfaceOrigin origin,
                                                 SkColorType colorType,
                                                 sk_sp<SkColorSpace> colorSpace,
-                                                const SkSurfaceProps* surfaceProps);
+                                                const SkSurfaceProps* surfaceProps,
+                                                TextureReleaseProc textureReleaseProc = nullptr,
+                                                ReleaseContext releaseContext = nullptr);
 
     /** Wraps a GPU-backed texture into SkSurface. Caller must ensure backendTexture is
         valid for the lifetime of returned SkSurface. If sampleCnt greater than zero,
@@ -273,6 +293,33 @@ public:
                                                             SkColorType colorType,
                                                             sk_sp<SkColorSpace> colorSpace,
                                                             const SkSurfaceProps* surfaceProps);
+
+#if defined(SK_BUILD_FOR_ANDROID) && __ANDROID_API__ >= 26
+    /** Creates SkSurface from Android hardware buffer.
+        Returned SkSurface takes a reference on the buffer. The ref on the buffer will be released
+        when the SkSurface is destroyed and there is no pending work on the GPU involving the
+        buffer.
+
+        Only available on Android, when __ANDROID_API__ is defined to be 26 or greater.
+
+        Currently this is only supported for buffers that can be textured as well as rendered to.
+        In other workds that must have both AHARDWAREBUFFER_USAGE_GPU_COLOR_OUTPUT and
+        AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE usage bits.
+
+        @param context         GPU context
+        @param hardwareBuffer  AHardwareBuffer Android hardware buffer
+        @param origin          one of: kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin
+        @param colorSpace      range of colors; may be nullptr
+        @param surfaceProps    LCD striping orientation and setting for device independent
+                               fonts; may be nullptr
+        @return                created SkSurface, or nullptr
+    */
+    static sk_sp<SkSurface> MakeFromAHardwareBuffer(GrContext* context,
+                                                    AHardwareBuffer* hardwareBuffer,
+                                                    GrSurfaceOrigin origin,
+                                                    sk_sp<SkColorSpace> colorSpace,
+                                                    const SkSurfaceProps* surfaceProps);
+#endif
 
     /** Returns SkSurface on GPU indicated by context. Allocates memory for
         pixels, based on the width, height, and SkColorType in SkImageInfo.  budgeted

@@ -53,20 +53,16 @@ SkPoint SkShaper::shape(RunHandler* handler,
     point.fY -= metrics.fAscent;
 
     const RunHandler::RunInfo info = {
-        0,
         { font.measureText(utf8text, textBytes, SkTextEncoding::kUTF8), 0 },
         metrics.fAscent,
         metrics.fDescent,
         metrics.fLeading,
     };
-    const auto buffer = handler->newRunBuffer(info, font, glyphCount, textBytes);
+    const auto buffer = handler->newRunBuffer(info, font, glyphCount,
+                                              SkSpan<const char>(utf8text, textBytes));
     SkAssertResult(font.textToGlyphs(utf8text, textBytes, SkTextEncoding::kUTF8, buffer.glyphs,
                                      glyphCount) == glyphCount);
     font.getPos(buffer.glyphs, glyphCount, buffer.positions, point);
-
-    if (buffer.utf8text) {
-        memcpy(buffer.utf8text, utf8text, textBytes);
-    }
 
     if (buffer.clusters) {
         const char* txtPtr = utf8text;
@@ -77,6 +73,8 @@ SkPoint SkShaper::shape(RunHandler* handler,
             SkASSERT(txtPtr <= utf8text + textBytes);
         }
     }
+    handler->commitRun();
+    handler->commitLine();
 
     return point + SkVector::Make(0, metrics.fDescent + metrics.fLeading);
 }

@@ -56,16 +56,13 @@ static SkDescriptor* auto_descriptor_from_desc(const SkDescriptor* source_desc,
     return desc;
 }
 
-enum DescriptorType : bool { kKey = false, kDevice = true };
 static const SkDescriptor* create_descriptor(
-        DescriptorType type, const SkPaint& paint, const SkFont& font, const SkMatrix& m,
+        const SkPaint& paint, const SkFont& font, const SkMatrix& m,
         const SkSurfaceProps& props, SkScalerContextFlags flags,
         SkAutoDescriptor* ad, SkScalerContextEffects* effects) {
-    SkScalerContextRec deviceRec;
-    bool enableTypefaceFiltering = (type == kDevice);
-    SkScalerContext::MakeRecAndEffects(
-            font, paint, props, flags, m, &deviceRec, effects, enableTypefaceFiltering);
-    return SkScalerContext::AutoDescriptorGivenRecAndEffects(deviceRec, *effects, ad);
+    SkScalerContextRec rec;
+    SkScalerContext::MakeRecAndEffects(font, paint, props, flags, m, &rec, effects);
+    return SkScalerContext::AutoDescriptorGivenRecAndEffects(rec, *effects, ad);
 }
 
 // -- Serializer ----------------------------------------------------------------------------------
@@ -309,16 +306,22 @@ SkStrikeServer::SkGlyphCacheState* SkStrikeServer::getOrCreateCache(
         const SkMatrix& matrix,
         SkScalerContextFlags flags,
         SkScalerContextEffects* effects) {
-    SkAutoDescriptor keyAutoDesc;
-    auto keyDesc = create_descriptor(
-            kKey, paint, font, matrix, props, flags, &keyAutoDesc, effects);
+    SkAutoDescriptor descStorage;
+    auto desc = create_descriptor(paint, font, matrix, props, flags, &descStorage, effects);
+
+    return this->getOrCreateCache(*desc, *font.getTypefaceOrDefault(), *effects);
+
+}
+
+SkStrikeServer::SkGlyphCacheState* SkStrikeServer::getOrCreateCache(
+        const SkDescriptor& desc, const SkTypeface& typeface, SkScalerContextEffects effects) {
 
     // In cases where tracing is turned off, make sure not to get an unused function warning.
     // Lambdaize the function.
     TRACE_EVENT1("skia", "RecForDesc", "rec",
             TRACE_STR_COPY(
-                    [keyDesc](){
-                        auto ptr = keyDesc->findEntry(kRec_SkDescriptorTag, nullptr);
+                    [&desc](){
+                        auto ptr = desc.findEntry(kRec_SkDescriptorTag, nullptr);
                         SkScalerContextRec rec;
                         std::memcpy(&rec, ptr, sizeof(rec));
                         return rec.dump();
@@ -327,29 +330,22 @@ SkStrikeServer::SkGlyphCacheState* SkStrikeServer::getOrCreateCache(
     );
 
     // Already locked.
-    if (fLockedDescs.find(keyDesc) != fLockedDescs.end()) {
-        auto it = fRemoteGlyphStateMap.find(keyDesc);
+    if (fLockedDescs.find(&desc) != fLockedDescs.end()) {
+        auto it = fRemoteGlyphStateMap.find(&desc);
         SkASSERT(it != fRemoteGlyphStateMap.end());
         SkGlyphCacheState* cache = it->second.get();
-        cache->setFontAndEffects(font, SkScalerContextEffects{paint});
+        cache->setTypefaceAndEffects(&typeface, effects);
         return cache;
     }
 
     // Try to lock.
-    auto it = fRemoteGlyphStateMap.find(keyDesc);
+    auto it = fRemoteGlyphStateMap.find(&desc);
     if (it != fRemoteGlyphStateMap.end()) {
         SkGlyphCacheState* cache = it->second.get();
-#ifdef SK_DEBUG
-        SkScalerContextEffects deviceEffects;
-        SkAutoDescriptor deviceAutoDesc;
-        auto deviceDesc = create_descriptor(
-                kDevice, paint, font, matrix, props, flags, &deviceAutoDesc, &deviceEffects);
-        SkASSERT(cache->getDeviceDescriptor() == *deviceDesc);
-#endif
         bool locked = fDiscardableHandleManager->lockHandle(it->second->discardableHandleId());
         if (locked) {
             fLockedDescs.insert(it->first);
-            cache->setFontAndEffects(font, SkScalerContextEffects{paint});
+            cache->setTypefaceAndEffects(&typeface, effects);
             return cache;
         }
 
@@ -358,34 +354,29 @@ SkStrikeServer::SkGlyphCacheState* SkStrikeServer::getOrCreateCache(
         fRemoteGlyphStateMap.erase(it);
     }
 
-    auto* tf = font.getTypefaceOrDefault();
-    const SkFontID typefaceId = tf->uniqueID();
+    const SkFontID typefaceId = typeface.uniqueID();
     if (!fCachedTypefaces.contains(typefaceId)) {
         fCachedTypefaces.add(typefaceId);
-        fTypefacesToSend.emplace_back(typefaceId, tf->countGlyphs(), tf->fontStyle(),
-                                      tf->isFixedPitch());
+        fTypefacesToSend.emplace_back(typefaceId, typeface.countGlyphs(),
+                                      typeface.fontStyle(),
+                                      typeface.isFixedPitch());
     }
 
-    SkScalerContextEffects deviceEffects;
-    SkAutoDescriptor deviceAutoDesc;
-    auto deviceDesc = create_descriptor(
-            kDevice, paint, font, matrix, props, flags, &deviceAutoDesc, &deviceEffects);
-
-    auto context = tf->createScalerContext(deviceEffects, deviceDesc);
+    auto context = typeface.createScalerContext(effects, &desc);
 
     // Create a new cache state and insert it into the map.
     auto newHandle = fDiscardableHandleManager->createHandle();
     auto cacheState = skstd::make_unique<SkGlyphCacheState>(
-            *keyDesc, *deviceDesc, std::move(context), newHandle);
+            desc, std::move(context), newHandle);
 
     auto* cacheStatePtr = cacheState.get();
 
-    fLockedDescs.insert(&cacheStatePtr->getKeyDescriptor());
-    fRemoteGlyphStateMap[&cacheStatePtr->getKeyDescriptor()] = std::move(cacheState);
+    fLockedDescs.insert(&cacheStatePtr->getDescriptor());
+    fRemoteGlyphStateMap[&cacheStatePtr->getDescriptor()] = std::move(cacheState);
 
     checkForDeletedEntries();
 
-    cacheStatePtr->setFontAndEffects(font, SkScalerContextEffects{paint});
+    cacheStatePtr->setTypefaceAndEffects(&typeface, effects);
     return cacheStatePtr;
 }
 
@@ -403,19 +394,16 @@ void SkStrikeServer::checkForDeletedEntries() {
 
 // -- SkGlyphCacheState ----------------------------------------------------------------------------
 SkStrikeServer::SkGlyphCacheState::SkGlyphCacheState(
-        const SkDescriptor& keyDescriptor,
-        const SkDescriptor& deviceDescriptor,
+        const SkDescriptor& descriptor,
         std::unique_ptr<SkScalerContext> context,
         uint32_t discardableHandleId)
-        : fKeyDescriptor{keyDescriptor}
-        , fDeviceDescriptor{deviceDescriptor}
+        : fDescriptor{descriptor}
         , fDiscardableHandleId(discardableHandleId)
         , fIsSubpixel{context->isSubpixel()}
         , fAxisAlignmentForHText{context->computeAxisAlignmentForHText()}
         // N.B. context must come last because it is used above.
         , fContext{std::move(context)} {
-    SkASSERT(fKeyDescriptor.getDesc() != nullptr);
-    SkASSERT(fDeviceDescriptor.getDesc() != nullptr);
+    SkASSERT(fDescriptor.getDesc() != nullptr);
     SkASSERT(fContext != nullptr);
 }
 
@@ -461,7 +449,7 @@ void SkStrikeServer::SkGlyphCacheState::writePendingGlyphs(Serializer* serialize
 
     // Write the desc.
     serializer->emplace<StrikeSpec>(fContext->getTypeface()->uniqueID(), fDiscardableHandleId);
-    serializer->writeDescriptor(*fKeyDescriptor.getDesc());
+    serializer->writeDescriptor(*fDescriptor.getDesc());
 
     // Write FontMetrics.
     // TODO(khushalsagar): Do we need to re-send each time?
@@ -498,33 +486,20 @@ void SkStrikeServer::SkGlyphCacheState::writePendingGlyphs(Serializer* serialize
     this->resetScalerContext();
 }
 
-const SkGlyph& SkStrikeServer::SkGlyphCacheState::findGlyph(SkPackedGlyphID glyphID) {
-    SkGlyph* glyphPtr = fGlyphMap.findOrNull(glyphID);
-    if (glyphPtr == nullptr) {
-        glyphPtr = fAlloc.make<SkGlyph>(glyphID);
-        fGlyphMap.set(glyphPtr);
-        this->ensureScalerContext();
-        fContext->getMetrics(glyphPtr);
-    }
-
-    return *glyphPtr;
-}
-
 void SkStrikeServer::SkGlyphCacheState::ensureScalerContext() {
     if (fContext == nullptr) {
-        auto tf = fFont->getTypefaceOrDefault();
-        fContext = tf->createScalerContext(fEffects, fDeviceDescriptor.getDesc());
+        fContext = fTypeface->createScalerContext(fEffects, fDescriptor.getDesc());
     }
 }
 
 void SkStrikeServer::SkGlyphCacheState::resetScalerContext() {
     fContext.reset();
-    fFont = nullptr;
+    fTypeface = nullptr;
 }
 
-void SkStrikeServer::SkGlyphCacheState::setFontAndEffects(
-        const SkFont& font, SkScalerContextEffects effects) {
-    fFont = &font;
+void SkStrikeServer::SkGlyphCacheState::setTypefaceAndEffects(
+        const SkTypeface* typeface, SkScalerContextEffects effects) {
+    fTypeface = typeface;
     fEffects = effects;
 }
 
@@ -532,22 +507,60 @@ SkVector SkStrikeServer::SkGlyphCacheState::rounding() const {
     return SkStrikeCommon::PixelRounding(fIsSubpixel, fAxisAlignmentForHText);
 }
 
+// Note: In the split Renderer/GPU architecture, if getGlyphMetrics is called in the Renderer
+// process, then it will be called on the GPU process because they share the rendering code. Any
+// data that is created in the Renderer process needs to be found in the GPU process. By
+// implication, any cache-miss/glyph-creation data needs to be sent to the GPU.
 const SkGlyph& SkStrikeServer::SkGlyphCacheState::getGlyphMetrics(
         SkGlyphID glyphID, SkPoint position) {
     SkIPoint lookupPoint = SkStrikeCommon::SubpixelLookup(fAxisAlignmentForHText, position);
     SkPackedGlyphID packedGlyphID = fIsSubpixel ? SkPackedGlyphID{glyphID, lookupPoint}
                                                 : SkPackedGlyphID{glyphID};
 
-    return this->findGlyph(packedGlyphID);
+    // Check the cache for the glyph.
+    SkGlyph* glyphPtr = fGlyphMap.findOrNull(packedGlyphID);
+
+    // Has this glyph ever been seen before?
+    if (glyphPtr == nullptr) {
+
+        // Never seen before. Make a new glyph.
+        glyphPtr = fAlloc.make<SkGlyph>(packedGlyphID);
+        fGlyphMap.set(glyphPtr);
+        this->ensureScalerContext();
+        fContext->getMetrics(glyphPtr);
+
+        // Make sure to send the glyph to the GPU because we always send the image for a glyph.
+        fCachedGlyphImages.add(packedGlyphID);
+        fPendingGlyphImages.push_back(packedGlyphID);
+    }
+
+    return *glyphPtr;
 }
 
-bool SkStrikeServer::SkGlyphCacheState::hasImage(const SkGlyph& glyph) {
-    // If a glyph has width and height, it must have an image available to it.
-    return !glyph.isEmpty();
-}
+// Because the strike calls between the Renderer and the GPU are mirror images of each other, the
+// information needed to make the call in the Renderer needs to be sent to the GPU so it can also
+// make the call. If there is a path then it should be sent, and the path is queued to be sent and
+// true returned. Otherwise, false is returned signaling an empty glyph.
+//
+// A key reason for no path is the fact that the glyph is a color image or is a bitmap only
+// font.
+bool SkStrikeServer::SkGlyphCacheState::decideCouldDrawFromPath(const SkGlyph& glyph) {
 
-bool SkStrikeServer::SkGlyphCacheState::hasPath(const SkGlyph& glyph) {
-    return const_cast<SkGlyph&>(glyph).addPath(fContext.get(), &fAlloc) != nullptr;
+    // Check to see if we have processed this glyph for a path before.
+    if (glyph.fPathData == nullptr) {
+
+        // Never checked for a path before. Add the path now.
+        auto path = const_cast<SkGlyph&>(glyph).addPath(fContext.get(), &fAlloc);
+        if (path != nullptr) {
+
+            // A path was added make sure to send it to the GPU.
+            fCachedGlyphPaths.add(glyph.getPackedID());
+            fPendingGlyphPaths.push_back(glyph.getPackedID());
+            return true;
+        }
+    }
+
+    return glyph.path() != nullptr;
 }
 
 void SkStrikeServer::SkGlyphCacheState::writeGlyphPath(const SkPackedGlyphID& glyphID,

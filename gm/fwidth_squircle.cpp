@@ -21,20 +21,13 @@
 #include "glsl/GrGLSLVarying.h"
 #include "glsl/GrGLSLVertexGeoBuilder.h"
 
+/**
+ * This test ensures that fwidth() works properly on GPU configs by drawing a squircle.
+ */
 namespace skiagm {
 
 static constexpr GrGeometryProcessor::Attribute gVertex =
         {"bboxcoord", kFloat2_GrVertexAttribType, kFloat2_GrSLType};
-
-/**
- * This ensures that fwidth() works properly on GPU configs by drawing a squircle.
- */
-class FwidthSquircleGM : public GM {
-private:
-    SkString onShortName() final { return SkString("fwidth_squircle"); }
-    SkISize onISize() override { return SkISize::Make(200, 200); }
-    void onDraw(SkCanvas*) override;
-};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // SkSL code.
@@ -85,10 +78,10 @@ class FwidthSquircleTestProcessor::Impl : public GrGLSLGeometryProcessor {
                        squircleCoord.fsIn(), squircleCoord.fsIn());
 
         // Squircle function!
-        f->codeAppendf("float fn = pow(x, golden_ratio*pi) + pow(y, golden_ratio*pi) - 1;");
+        f->codeAppendf("float fn = half(pow(x, golden_ratio*pi) + pow(y, golden_ratio*pi) - 1);");
         f->codeAppendf("float fnwidth = fwidth(fn);");
         f->codeAppendf("fnwidth += 1e-10;");  // Guard against divide-by-zero.
-        f->codeAppendf("half coverage = clamp(.5 - fn/fnwidth, 0, 1);");
+        f->codeAppendf("half coverage = clamp(half(.5 - fn/fnwidth), 0, 1);");
 
         f->codeAppendf("%s = half4(.51, .42, .71, 1) * .89;", args.fOutputColor);
         f->codeAppendf("%s = half4(coverage);", args.fOutputCoverage);
@@ -116,7 +109,7 @@ public:
     DEFINE_OP_CLASS_ID
 
     static std::unique_ptr<GrDrawOp> Make(GrContext* ctx, const SkMatrix& viewMatrix) {
-        GrOpMemoryPool* pool = ctx->contextPriv().opMemoryPool();
+        GrOpMemoryPool* pool = ctx->priv().opMemoryPool();
         return pool->allocate<FwidthSquircleTestOp>(viewMatrix);
     }
 
@@ -141,8 +134,7 @@ private:
             {+1, +1},
         };
         sk_sp<const GrBuffer> vertexBuffer(flushState->resourceProvider()->createBuffer(
-                sizeof(vertices), kVertex_GrBufferType, kStatic_GrAccessPattern,
-                GrResourceProvider::Flags::kNone, vertices));
+                sizeof(vertices), GrGpuBufferType::kVertex, kStatic_GrAccessPattern, vertices));
         if (!vertexBuffer) {
             return;
         }
@@ -162,28 +154,17 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Test.
 
-void FwidthSquircleGM::onDraw(SkCanvas* canvas) {
-    GrContext* ctx = canvas->getGrContext();
-    GrRenderTargetContext* rtc = canvas->internal_private_accessTopLayerRenderTargetContext();
-
-    canvas->clear(SK_ColorWHITE);
-
-    if (!ctx || !rtc) {
-        DrawGpuOnlyMessage(canvas);
-        return;
-    }
-
-    if (!ctx->contextPriv().caps()->shaderCaps()->shaderDerivativeSupport()) {
-        SkFont font(sk_tool_utils::create_portable_typeface(), 15);
-        DrawFailureMessage(canvas, "Shader derivatives not supported.");
-        return;
+DEF_SIMPLE_GPU_GM_CAN_FAIL(fwidth_squircle, ctx, rtc, canvas, errorMsg, 200, 200) {
+    if (!ctx->priv().caps()->shaderCaps()->shaderDerivativeSupport()) {
+        *errorMsg = "Shader derivatives not supported.";
+        return DrawResult::kSkip;
     }
 
     // Draw the test directly to the frame buffer.
+    canvas->clear(SK_ColorWHITE);
     rtc->priv().testingOnly_addDrawOp(FwidthSquircleTestOp::Make(ctx, canvas->getTotalMatrix()));
+    return skiagm::DrawResult::kOk;
 }
-
-DEF_GM( return new FwidthSquircleGM(); )
 
 }
 

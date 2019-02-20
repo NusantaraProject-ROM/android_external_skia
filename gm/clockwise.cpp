@@ -30,11 +30,11 @@ static constexpr GrGeometryProcessor::Attribute gVertex =
  * triangles (sk_Clockwise), in terms of to Skia device space, in all backends and with all render
  * target origins. We draw clockwise triangles green and counter-clockwise red.
  */
-class ClockwiseGM : public GM {
+class ClockwiseGM : public GpuGM {
 private:
     SkString onShortName() final { return SkString("clockwise"); }
     SkISize onISize() override { return SkISize::Make(300, 200); }
-    void onDraw(SkCanvas*) override;
+    void onDraw(GrContext*, GrRenderTargetContext*, SkCanvas*) override;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +73,7 @@ class GLSLClockwiseTestProcessor : public GrGLSLGeometryProcessor {
             args.fFragBuilder->codeAppendf("%s = half4(1);", args.fOutputCoverage);
         } else {
             // Verify layout(origin_upper_left) on gl_FragCoord does not affect gl_FrontFacing.
-            args.fFragBuilder->codeAppendf("%s = half4(min(sk_FragCoord.y, 1));",
+            args.fFragBuilder->codeAppendf("%s = half4(min(half(sk_FragCoord.y), 1));",
                                            args.fOutputCoverage);
         }
     }
@@ -92,7 +92,7 @@ public:
     DEFINE_OP_CLASS_ID
 
     static std::unique_ptr<GrDrawOp> Make(GrContext* context, bool readSkFragCoord, int y = 0) {
-        GrOpMemoryPool* pool = context->contextPriv().opMemoryPool();
+        GrOpMemoryPool* pool = context->priv().opMemoryPool();
         return pool->allocate<ClockwiseTestOp>(readSkFragCoord, y);
     }
 
@@ -116,8 +116,7 @@ private:
             {100, fY+100},
         };
         sk_sp<const GrBuffer> vertexBuffer(flushState->resourceProvider()->createBuffer(
-                sizeof(vertices), kVertex_GrBufferType, kStatic_GrAccessPattern,
-                GrResourceProvider::Flags::kNone, vertices));
+                sizeof(vertices), GrGpuBufferType::kVertex, kStatic_GrAccessPattern, vertices));
         if (!vertexBuffer) {
             return;
         }
@@ -138,14 +137,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Test.
 
-void ClockwiseGM::onDraw(SkCanvas* canvas) {
-    GrContext* ctx = canvas->getGrContext();
-    GrRenderTargetContext* rtc = canvas->internal_private_accessTopLayerRenderTargetContext();
-    if (!ctx || !rtc) {
-        DrawGpuOnlyMessage(canvas);
-        return;
-    }
-
+void ClockwiseGM::onDraw(GrContext* ctx, GrRenderTargetContext* rtc, SkCanvas* canvas) {
     rtc->clear(nullptr, { 0, 0, 0, 1 }, GrRenderTargetContext::CanClearFullscreen::kYes);
 
     // Draw the test directly to the frame buffer.
@@ -153,7 +145,7 @@ void ClockwiseGM::onDraw(SkCanvas* canvas) {
     rtc->priv().testingOnly_addDrawOp(ClockwiseTestOp::Make(ctx, true, 100));
 
     // Draw the test to an off-screen, top-down render target.
-    if (auto topLeftRTC = ctx->contextPriv().makeDeferredRenderTargetContext(
+    if (auto topLeftRTC = ctx->priv().makeDeferredRenderTargetContext(
             rtc->asSurfaceProxy()->backendFormat(), SkBackingFit::kExact, 100, 200,
             rtc->asSurfaceProxy()->config(), nullptr, 1, GrMipMapped::kNo,
             kTopLeft_GrSurfaceOrigin, nullptr, SkBudgeted::kYes)) {
@@ -169,7 +161,7 @@ void ClockwiseGM::onDraw(SkCanvas* canvas) {
     }
 
     // Draw the test to an off-screen, bottom-up render target.
-    if (auto topLeftRTC = ctx->contextPriv().makeDeferredRenderTargetContext(
+    if (auto topLeftRTC = ctx->priv().makeDeferredRenderTargetContext(
             rtc->asSurfaceProxy()->backendFormat(), SkBackingFit::kExact, 100, 200,
             rtc->asSurfaceProxy()->config(), nullptr, 1, GrMipMapped::kNo,
             kBottomLeft_GrSurfaceOrigin, nullptr, SkBudgeted::kYes)) {
