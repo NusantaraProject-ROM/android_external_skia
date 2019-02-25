@@ -12,6 +12,7 @@
 #include "GrMemoryPool.h"
 #include "GrOnFlushResourceProvider.h"
 #include "GrProxyProvider.h"
+#include "GrRecordingContextPriv.h"
 #include "GrRenderTargetContext.h"
 #include "GrRenderTargetContextPriv.h"
 #include "GrSurfaceProxy.h"
@@ -19,6 +20,7 @@
 #include "GrTexture.h"
 #include "GrTextureProxy.h"
 #include "GrTextureProxyPriv.h"
+#include "SkExchange.h"
 #include "SkMakeUnique.h"
 #include "SkRectPriv.h"
 #include "mock/GrMockGpu.h"
@@ -55,7 +57,7 @@ public:
     public:
         DEFINE_OP_CLASS_ID
 
-        static std::unique_ptr<GrDrawOp> Make(GrContext* context,
+        static std::unique_ptr<GrDrawOp> Make(GrRecordingContext* context,
                                               GrProxyProvider* proxyProvider,
                                               LazyProxyTest* test,
                                               bool nullTexture) {
@@ -76,7 +78,8 @@ public:
     private:
         friend class GrOpMemoryPool; // for ctor
 
-        Op(GrContext* ctx, GrProxyProvider* proxyProvider, LazyProxyTest* test, bool nullTexture)
+        Op(GrRecordingContext* ctx, GrProxyProvider* proxyProvider,
+           LazyProxyTest* test, bool nullTexture)
                     : GrDrawOp(ClassID()), fTest(test) {
             const GrBackendFormat format =
                     ctx->priv().caps()->getBackendFormatFromColorType(kRGB_565_SkColorType);
@@ -119,7 +122,7 @@ public:
 
     class ClipFP : public GrFragmentProcessor {
     public:
-        ClipFP(GrContext* ctx, GrProxyProvider* proxyProvider, LazyProxyTest* test,
+        ClipFP(GrRecordingContext* ctx, GrProxyProvider* proxyProvider, LazyProxyTest* test,
                GrTextureProxy* atlas)
                 : GrFragmentProcessor(kTestFP_ClassID, kNone_OptimizationFlags)
                 , fContext(ctx)
@@ -158,7 +161,7 @@ public:
         bool onIsEqual(const GrFragmentProcessor&) const override { return false; }
         const TextureSampler& onTextureSampler(int) const override { return fAccess; }
 
-        GrContext* const fContext;
+        GrRecordingContext* const fContext;
         GrProxyProvider* const fProxyProvider;
         LazyProxyTest* const fTest;
         GrTextureProxy* const fAtlas;
@@ -174,8 +177,8 @@ public:
                 , fAtlas(atlas) {}
 
     private:
-        bool apply(GrContext* context, GrRenderTargetContext*, bool, bool, GrAppliedClip* out,
-                   SkRect* bounds) const override {
+        bool apply(GrRecordingContext* context, GrRenderTargetContext*, bool useHWAA,
+                   bool hasUserStencilSettings, GrAppliedClip* out, SkRect* bounds) const override {
             GrProxyProvider* proxyProvider = context->priv().proxyProvider();
             out->addCoverageFP(skstd::make_unique<ClipFP>(context, proxyProvider, fTest, fAtlas));
             return true;
@@ -249,18 +252,33 @@ DEF_GPUTEST(LazyProxyReleaseTest, reporter, /* options */) {
                               LazyInstantiationType::kMultipleUse,
                               LazyInstantiationType::kDeinstantiate}) {
             int testCount = 0;
-            int* testCountPtr = &testCount;
+            // Sets an integer to 1 when the callback is called and -1 when it is deleted.
+            class TestCallback {
+            public:
+                TestCallback(int* value) : fValue(value) {}
+                TestCallback(const TestCallback& that) { SkASSERT(0); }
+                TestCallback(TestCallback&& that) : fValue(that.fValue) { that.fValue = nullptr; }
+
+                ~TestCallback() { fValue ? (void)(*fValue = -1) : void(); }
+
+                TestCallback& operator=(TestCallback&& that) {
+                    fValue = skstd::exchange(that.fValue, nullptr);
+                    return *this;
+                }
+                TestCallback& operator=(const TestCallback& that) = delete;
+
+                sk_sp<GrSurface> operator()(GrResourceProvider* resourceProvider) const {
+                    *fValue = 1;
+                    return {};
+                }
+
+            private:
+                int* fValue = nullptr;
+            };
             sk_sp<GrTextureProxy> proxy = proxyProvider->createLazyProxy(
-                    [testCountPtr](GrResourceProvider* resourceProvider) {
-                        if (!resourceProvider) {
-                            *testCountPtr = -1;
-                            return sk_sp<GrTexture>();
-                        }
-                        *testCountPtr = 1;
-                        return sk_sp<GrTexture>();
-                    },
-                    format, desc, kTopLeft_GrSurfaceOrigin, GrMipMapped::kNo,
-                    GrInternalSurfaceFlags::kNone, SkBackingFit::kExact, SkBudgeted::kNo, lazyType);
+                    TestCallback(&testCount), format, desc, kTopLeft_GrSurfaceOrigin,
+                    GrMipMapped::kNo, GrInternalSurfaceFlags::kNone, SkBackingFit::kExact,
+                    SkBudgeted::kNo, lazyType);
 
             REPORTER_ASSERT(reporter, proxy.get());
             REPORTER_ASSERT(reporter, 0 == testCount);
@@ -319,9 +337,6 @@ private:
 
         fLazyProxy = proxyProvider->createLazyProxy(
                 [testExecuteValue, shouldFailInstantiation, desc](GrResourceProvider* rp) {
-                    if (!rp) {
-                        return sk_sp<GrTexture>();
-                    }
                     if (shouldFailInstantiation) {
                         *testExecuteValue = 1;
                         return sk_sp<GrTexture>();
@@ -462,10 +477,6 @@ DEF_GPUTEST(LazyProxyDeinstantiateTest, reporter, /* options */) {
 
         sk_sp<GrTextureProxy> lazyProxy = proxyProvider->createLazyProxy(
                 [instantiatePtr, releasePtr, backendTex](GrResourceProvider* rp) {
-                    if (!rp) {
-                        return sk_sp<GrTexture>();
-                    }
-
                     sk_sp<GrTexture> texture =
                             rp->wrapBackendTexture(backendTex, kBorrow_GrWrapOwnership,
                                                    GrWrapCacheable::kNo, kRead_GrIOType);
