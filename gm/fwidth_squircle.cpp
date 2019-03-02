@@ -129,8 +129,8 @@ private:
 
     const char* name() const override { return "ClockwiseTestOp"; }
     FixedFunctionFlags fixedFunctionFlags() const override { return FixedFunctionFlags::kNone; }
-    RequiresDstTexture finalize(const GrCaps&, const GrAppliedClip*) override {
-        return RequiresDstTexture::kNo;
+    GrProcessorSet::Analysis finalize(const GrCaps&, const GrAppliedClip*) override {
+        return GrProcessorSet::EmptySetAnalysis();
     }
     void onPrepare(GrOpFlushState*) override {}
     void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
@@ -140,17 +140,16 @@ private:
             {-1, +1},
             {+1, +1},
         };
-        sk_sp<GrBuffer> vertexBuffer(flushState->resourceProvider()->createBuffer(
+        sk_sp<const GrBuffer> vertexBuffer(flushState->resourceProvider()->createBuffer(
                 sizeof(vertices), kVertex_GrBufferType, kStatic_GrAccessPattern,
                 GrResourceProvider::Flags::kNone, vertices));
         if (!vertexBuffer) {
             return;
         }
-        GrPipeline pipeline(flushState->drawOpArgs().fProxy, GrScissorTest::kDisabled,
-                            SkBlendMode::kSrcOver);
+        GrPipeline pipeline(GrScissorTest::kDisabled, SkBlendMode::kSrcOver);
         GrMesh mesh(GrPrimitiveType::kTriangleStrip);
         mesh.setNonIndexedNonInstanced(4);
-        mesh.setVertexData(vertexBuffer.get());
+        mesh.setVertexData(std::move(vertexBuffer));
         flushState->rtCommandBuffer()->draw(FwidthSquircleTestProcessor(fViewMatrix), pipeline,
                                             nullptr, nullptr, &mesh, 1, SkRect::MakeIWH(100, 100));
     }
@@ -175,12 +174,8 @@ void FwidthSquircleGM::onDraw(SkCanvas* canvas) {
     }
 
     if (!ctx->contextPriv().caps()->shaderCaps()->shaderDerivativeSupport()) {
-        SkPaint paint;
-        paint.setAntiAlias(true);
-        paint.setTextSize(15);
-        sk_tool_utils::set_portable_typeface(&paint);
-        SkTextUtils::DrawString(canvas, "Shader derivatives not supported.", 150,
-                                150 - 8, paint, SkTextUtils::kCenter_Align);
+        SkFont font(sk_tool_utils::create_portable_typeface(), 15);
+        DrawFailureMessage(canvas, "Shader derivatives not supported.");
         return;
     }
 

@@ -45,36 +45,19 @@ SkPoint Text::alignedPosition(SkScalar advance) const {
 SkRect Text::onRevalidate(InvalidationController*, const SkMatrix&) {
     // TODO: we could potentially track invals which don't require rebuilding the blob.
 
-    SkPaint font;
-    font.setFlags(fFlags);
+    SkFont font;
     font.setTypeface(fTypeface);
-    font.setTextSize(fSize);
-    font.setTextScaleX(fScaleX);
-    font.setTextSkewX(fSkewX);
+    font.setSize(fSize);
+    font.setScaleX(fScaleX);
+    font.setSkewX(fSkewX);
+    font.setEdging(fEdging);
     font.setHinting(fHinting);
 
     // N.B.: fAlign is applied externally (in alignedPosition()), because
     //  1) SkTextBlob has some trouble computing accurate bounds with alignment.
     //  2) SkPaint::Align is slated for deprecation.
 
-    // First, convert to glyphIDs.
-    font.setTextEncoding(SkPaint::kUTF8_TextEncoding);
-    SkSTArray<256, SkGlyphID, true> glyphs;
-    glyphs.reset(font.textToGlyphs(fText.c_str(), fText.size(), nullptr));
-    SkAssertResult(font.textToGlyphs(fText.c_str(), fText.size(), glyphs.begin()) == glyphs.count());
-    font.setTextEncoding(SkPaint::kGlyphID_TextEncoding);
-
-    // Next, build the cached blob.
-    SkTextBlobBuilder builder;
-    const auto& buf = builder.allocRun(font, glyphs.count(), 0, 0, nullptr);
-    if (!buf.glyphs) {
-        fBlob.reset();
-        return SkRect::MakeEmpty();
-    }
-
-    memcpy(buf.glyphs, glyphs.begin(), glyphs.count() * sizeof(SkGlyphID));
-
-    fBlob = builder.make();
+    fBlob = SkTextBlob::MakeFromText(fText.c_str(), fText.size(), font, kUTF8_SkTextEncoding);
     if (!fBlob) {
         return SkRect::MakeEmpty();
     }

@@ -377,7 +377,9 @@ static sk_sp<SkImageFilter> make_blue(sk_sp<SkImageFilter> input,
 
 static sk_sp<SkSpecialSurface> create_empty_special_surface(GrContext* context, int widthHeight) {
     if (context) {
-        return SkSpecialSurface::MakeRenderTarget(context,
+        GrBackendFormat format =
+            context->contextPriv().caps()->getBackendFormatFromColorType(kRGBA_8888_SkColorType);
+        return SkSpecialSurface::MakeRenderTarget(context, format,
                                                   widthHeight, widthHeight,
                                                   kRGBA_8888_GrPixelConfig, nullptr);
     } else {
@@ -722,9 +724,8 @@ DEF_TEST(ImageFilterDrawTiled, reporter) {
     const int tileSize = 8;
 
     SkPaint textPaint;
-    sk_tool_utils::set_portable_typeface(&textPaint);
-    textPaint.setTextSize(SkIntToScalar(height));
     textPaint.setColor(SK_ColorWHITE);
+    SkFont font(sk_tool_utils::create_portable_typeface(), height);
 
     const char* text = "ABC";
     const SkScalar yPos = SkIntToScalar(height);
@@ -732,15 +733,13 @@ DEF_TEST(ImageFilterDrawTiled, reporter) {
     for (int scale = 1; scale <= 2; ++scale) {
         for (int i = 0; i < filters.count(); ++i) {
             SkPaint combinedPaint;
-            sk_tool_utils::set_portable_typeface(&combinedPaint);
-            combinedPaint.setTextSize(SkIntToScalar(height));
             combinedPaint.setColor(SK_ColorWHITE);
             combinedPaint.setImageFilter(sk_ref_sp(filters.getFilter(i)));
 
             untiledCanvas.clear(SK_ColorTRANSPARENT);
             untiledCanvas.save();
             untiledCanvas.scale(SkIntToScalar(scale), SkIntToScalar(scale));
-            untiledCanvas.drawString(text, 0, yPos, combinedPaint);
+            untiledCanvas.drawString(text, 0, yPos, font, combinedPaint);
             untiledCanvas.restore();
             untiledCanvas.flush();
 
@@ -754,11 +753,11 @@ DEF_TEST(ImageFilterDrawTiled, reporter) {
                         const SkRect layerBounds = SkRect::MakeWH(width, height);
                         tiledCanvas.saveLayer(&layerBounds, &combinedPaint);
                             tiledCanvas.scale(SkIntToScalar(scale), SkIntToScalar(scale));
-                            tiledCanvas.drawString(text, 0, yPos, textPaint);
+                            tiledCanvas.drawString(text, 0, yPos, font, textPaint);
                         tiledCanvas.restore();
                     } else {
                         tiledCanvas.scale(SkIntToScalar(scale), SkIntToScalar(scale));
-                        tiledCanvas.drawString(text, 0, yPos, combinedPaint);
+                        tiledCanvas.drawString(text, 0, yPos, font, combinedPaint);
                     }
 
                     tiledCanvas.restore();

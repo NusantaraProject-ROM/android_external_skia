@@ -57,7 +57,7 @@ private:
 };
 
 void SkAlphaThresholdFilter::RegisterFlattenables() {
-    SK_REGISTER_FLATTENABLE(SkAlphaThresholdFilterImpl)
+    SK_REGISTER_FLATTENABLE(SkAlphaThresholdFilterImpl);
 }
 
 static SkScalar pin_0_1(SkScalar x) {
@@ -105,25 +105,29 @@ SkAlphaThresholdFilterImpl::SkAlphaThresholdFilterImpl(const SkRegion& region,
 sk_sp<GrTextureProxy> SkAlphaThresholdFilterImpl::createMaskTexture(GrContext* context,
                                                                     const SkMatrix& inMatrix,
                                                                     const SkIRect& bounds) const {
-
+    GrBackendFormat format =
+            context->contextPriv().caps()->getBackendFormatFromColorType(kAlpha_8_SkColorType);
     sk_sp<GrRenderTargetContext> rtContext(
         context->contextPriv().makeDeferredRenderTargetContextWithFallback(
-            SkBackingFit::kApprox, bounds.width(), bounds.height(), kAlpha_8_GrPixelConfig,
+            format, SkBackingFit::kApprox, bounds.width(), bounds.height(), kAlpha_8_GrPixelConfig,
             nullptr));
     if (!rtContext) {
         return nullptr;
     }
 
-    GrPaint paint;
-    paint.setPorterDuffXPFactory(SkBlendMode::kSrc);
     SkRegion::Iterator iter(fRegion);
     rtContext->clear(nullptr, SK_PMColor4fTRANSPARENT,
                      GrRenderTargetContext::CanClearFullscreen::kYes);
 
     GrFixedClip clip(SkIRect::MakeWH(bounds.width(), bounds.height()));
     while (!iter.done()) {
+        GrPaint paint;
+        paint.setPorterDuffXPFactory(SkBlendMode::kSrc);
+
         SkRect rect = SkRect::Make(iter.rect());
+
         rtContext->drawRect(clip, std::move(paint), GrAA::kNo, inMatrix, rect);
+
         iter.next();
     }
 

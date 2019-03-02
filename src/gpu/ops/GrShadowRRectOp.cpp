@@ -255,8 +255,8 @@ public:
 
     FixedFunctionFlags fixedFunctionFlags() const override { return FixedFunctionFlags::kNone; }
 
-    RequiresDstTexture finalize(const GrCaps&, const GrAppliedClip*) override {
-        return RequiresDstTexture::kNo;
+    GrProcessorSet::Analysis finalize(const GrCaps&, const GrAppliedClip*) override {
+        return GrProcessorSet::EmptySetAnalysis();
     }
 
 private:
@@ -543,7 +543,7 @@ private:
         int instanceCount = fGeoData.count();
         SkASSERT(sizeof(CircleVertex) == gp->vertexStride());
 
-        const GrBuffer* vertexBuffer;
+        sk_sp<const GrBuffer> vertexBuffer;
         int firstVertex;
         CircleVertex* verts = (CircleVertex*)target->makeVertexSpace(
                 sizeof(CircleVertex), fVertCount, &vertexBuffer, &firstVertex);
@@ -552,7 +552,7 @@ private:
             return;
         }
 
-        const GrBuffer* indexBuffer = nullptr;
+        sk_sp<const GrBuffer> indexBuffer;
         int firstIndex = 0;
         uint16_t* indices = target->makeIndexSpace(fIndexCount, &indexBuffer, &firstIndex);
         if (!indices) {
@@ -594,9 +594,9 @@ private:
                                          target->detachAppliedClip());
 
         GrMesh* mesh = target->allocMesh(GrPrimitiveType::kTriangles);
-        mesh->setIndexed(indexBuffer, fIndexCount, firstIndex, 0, fVertCount - 1,
+        mesh->setIndexed(std::move(indexBuffer), fIndexCount, firstIndex, 0, fVertCount - 1,
                          GrPrimitiveRestart::kNo);
-        mesh->setVertexData(vertexBuffer, firstVertex);
+        mesh->setVertexData(std::move(vertexBuffer), firstVertex);
         target->draw(std::move(gp), pipe.fPipeline, pipe.fFixedDynamicState, mesh);
     }
 

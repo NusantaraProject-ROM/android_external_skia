@@ -9,7 +9,6 @@
 #define GrRenderTargetContext_DEFINED
 
 #include "../private/GrRenderTargetProxy.h"
-#include "GrColor.h"
 #include "GrContext.h"
 #include "GrContextPriv.h"
 #include "GrPaint.h"
@@ -129,21 +128,40 @@ public:
                                  const SkMatrix& localMatrix);
 
     /**
+     * Creates an op that draws a fill rect with per-edge control over anti-aliasing.
+     */
+    void fillRectWithEdgeAA(const GrClip& clip, GrPaint&& paint, GrQuadAAFlags edgeAA,
+                            const SkMatrix& viewMatrix, const SkRect& rect);
+
+    /** Used with drawQuadSet */
+    struct QuadSetEntry {
+        SkRect fRect;
+        SkPMColor4f fColor; // Overrides any color on the GrPaint
+        SkMatrix fLocalMatrix;
+        GrQuadAAFlags fAAFlags;
+    };
+
+    // TODO(michaelludwig) - remove if the bulk API is not useful for SkiaRenderer
+    void drawQuadSet(const GrClip& clip, GrPaint&& paint, GrAA aa, const SkMatrix& viewMatrix,
+                     const QuadSetEntry[], int cnt);
+
+    /**
      * Creates an op that draws a subrectangle of a texture. The passed color is modulated by the
      * texture's color. 'srcRect' specifies the rectangle of the texture to draw. 'dstRect'
      * specifies the rectangle to draw in local coords which will be transformed by 'viewMatrix' to
      * device space.
      */
-    void drawTexture(const GrClip& clip, sk_sp<GrTextureProxy>, GrSamplerState::Filter, GrColor,
-                     const SkRect& srcRect, const SkRect& dstRect, GrQuadAAFlags,
-                     SkCanvas::SrcRectConstraint, const SkMatrix& viewMatrix,
-                     sk_sp<GrColorSpaceXform> texXform, sk_sp<GrColorSpaceXform> colorXform);
+    void drawTexture(const GrClip& clip, sk_sp<GrTextureProxy>, GrSamplerState::Filter,
+                     const SkPMColor4f&, const SkRect& srcRect, const SkRect& dstRect,
+                     GrQuadAAFlags, SkCanvas::SrcRectConstraint, const SkMatrix& viewMatrix,
+                     sk_sp<GrColorSpaceXform> texXform);
 
     /** Used with drawTextureSet */
     struct TextureSetEntry {
         sk_sp<GrTextureProxy> fProxy;
         SkRect fSrcRect;
         SkRect fDstRect;
+        float fAlpha;
         GrQuadAAFlags fAAFlags;
     };
     /**
@@ -151,8 +169,8 @@ public:
      * texture color xform. The textures must all have the same GrTextureType and GrConfig.
      */
     void drawTextureSet(const GrClip&, const TextureSetEntry[], int cnt, GrSamplerState::Filter,
-                        GrColor, const SkMatrix& viewMatrix, sk_sp<GrColorSpaceXform> texXform,
-                        sk_sp<GrColorSpaceXform> colorXform);
+                        SkBlendMode mode, const SkMatrix& viewMatrix,
+                        sk_sp<GrColorSpaceXform> texXform);
 
     /**
      * Draw a roundrect using a paint.
@@ -367,6 +385,7 @@ public:
     int numStencilSamples() const { return fRenderTargetProxy->numStencilSamples(); }
     const SkSurfaceProps& surfaceProps() const { return fSurfaceProps; }
     GrSurfaceOrigin origin() const { return fRenderTargetProxy->origin(); }
+    bool wrapsVkSecondaryCB() const { return fRenderTargetProxy->wrapsVkSecondaryCB(); }
     GrMipMapped mipMapped() const;
 
     bool wasAbandoned() const;
@@ -442,6 +461,7 @@ private:
                              sk_sp<GrTextureProxy>);
 
     void internalClear(const GrFixedClip&, const SkPMColor4f&, CanClearFullscreen);
+    void internalStencilClear(const GrFixedClip&, bool insideStencilMask);
 
     // Only consumes the GrPaint if successful.
     bool drawFilledDRRect(const GrClip& clip,
@@ -451,13 +471,19 @@ private:
                           const SkRRect& origOuter,
                           const SkRRect& origInner);
 
-    // Only consumes the GrPaint if successful.
-    bool drawFilledRect(const GrClip& clip,
+    void drawFilledRect(const GrClip& clip,
                         GrPaint&& paint,
                         GrAA,
                         const SkMatrix& viewMatrix,
                         const SkRect& rect,
-                        const GrUserStencilSettings* ss);
+                        const GrUserStencilSettings* ss = nullptr);
+
+    // Only consumes the GrPaint if successful.
+    bool drawFilledRectAsClear(const GrClip& clip,
+                               GrPaint&& paint,
+                               GrAA aa,
+                               const SkMatrix& viewMatrix,
+                               const SkRect& rect);
 
     void drawShapeUsingPathRenderer(const GrClip&, GrPaint&&, GrAA, const SkMatrix&,
                                     const GrShape&);

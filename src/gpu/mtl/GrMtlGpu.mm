@@ -131,9 +131,9 @@ void GrMtlGpu::submitCommandBuffer(SyncQueue sync) {
     fCmdBuffer = [fQueue commandBuffer];
 }
 
-GrBuffer* GrMtlGpu::onCreateBuffer(size_t size, GrBufferType type, GrAccessPattern accessPattern,
-                                   const void* data) {
-    return GrMtlBuffer::Create(this, size, type, accessPattern, data);
+sk_sp<GrBuffer> GrMtlGpu::onCreateBuffer(size_t size, GrBufferType type,
+                                         GrAccessPattern accessPattern, const void* data) {
+    return GrMtlBuffer::Make(this, size, type, accessPattern, data);
 }
 
 static bool check_max_blit_width(int widthInPixels) {
@@ -247,6 +247,10 @@ sk_sp<GrTexture> GrMtlGpu::onCreateTexture(const GrSurfaceDesc& desc, SkBudgeted
         return nullptr;
     }
 
+    if (GrPixelConfigIsCompressed(desc.fConfig)) {
+        return nullptr; // TODO: add compressed texture support
+    }
+
     bool renderTarget = SkToBool(desc.fFlags & kRenderTarget_GrSurfaceFlag);
 
     // This TexDesc refers to the texture that will be read by the client. Thus even if msaa is
@@ -338,7 +342,8 @@ static inline void init_surface_desc(GrSurfaceDesc* surfaceDesc, id<MTLTexture> 
 }
 
 sk_sp<GrTexture> GrMtlGpu::onWrapBackendTexture(const GrBackendTexture& backendTex,
-                                                GrWrapOwnership ownership, bool purgeImmediately) {
+                                                GrWrapOwnership ownership,
+                                                GrWrapCacheable cacheable, GrIOType ioType) {
     id<MTLTexture> mtlTexture = get_texture_from_backend(backendTex, ownership);
     if (!mtlTexture) {
         return nullptr;
@@ -347,12 +352,13 @@ sk_sp<GrTexture> GrMtlGpu::onWrapBackendTexture(const GrBackendTexture& backendT
     GrSurfaceDesc surfDesc;
     init_surface_desc(&surfDesc, mtlTexture, false, backendTex.config());
 
-    return GrMtlTexture::MakeWrappedTexture(this, surfDesc, mtlTexture, purgeImmediately);
+    return GrMtlTexture::MakeWrappedTexture(this, surfDesc, mtlTexture, cacheable, ioType);
 }
 
 sk_sp<GrTexture> GrMtlGpu::onWrapRenderableBackendTexture(const GrBackendTexture& backendTex,
                                                           int sampleCnt,
-                                                          GrWrapOwnership ownership) {
+                                                          GrWrapOwnership ownership,
+                                                          GrWrapCacheable cacheable) {
     id<MTLTexture> mtlTexture = get_texture_from_backend(backendTex, ownership);
     if (!mtlTexture) {
         return nullptr;
@@ -365,7 +371,8 @@ sk_sp<GrTexture> GrMtlGpu::onWrapRenderableBackendTexture(const GrBackendTexture
         return nullptr;
     }
 
-    return GrMtlTextureRenderTarget::MakeWrappedTextureRenderTarget(this, surfDesc, mtlTexture);
+    return GrMtlTextureRenderTarget::MakeWrappedTextureRenderTarget(this, surfDesc, mtlTexture,
+                                                                    cacheable);
 }
 
 sk_sp<GrRenderTarget> GrMtlGpu::onWrapBackendRenderTarget(const GrBackendRenderTarget& backendRT) {

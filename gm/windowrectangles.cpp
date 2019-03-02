@@ -125,7 +125,6 @@ private:
     void visualizeAlphaMask(GrContext*, GrRenderTargetContext*, const GrReducedClip&, GrPaint&&);
     void visualizeStencilMask(GrContext*, GrRenderTargetContext*, const GrReducedClip&, GrPaint&&);
     void stencilCheckerboard(GrRenderTargetContext*, bool flip);
-    void fail(SkCanvas*);
 };
 
 /**
@@ -176,7 +175,7 @@ void WindowRectanglesMaskGM::onCoverClipStack(const SkClipStack& stack, SkCanvas
     GrRenderTargetContext* rtc = canvas->internal_private_accessTopLayerRenderTargetContext();
 
     if (!ctx || !rtc || rtc->priv().maxWindowRectangles() < kNumWindows) {
-        this->fail(canvas);
+        DrawFailureMessage(canvas, "Requires GPU with %i window rectangles", kNumWindows);
         return;
     }
 
@@ -196,9 +195,11 @@ void WindowRectanglesMaskGM::visualizeAlphaMask(GrContext* ctx, GrRenderTargetCo
                                                 const GrReducedClip& reducedClip, GrPaint&& paint) {
     const int padRight = (kDeviceRect.right() - kCoverRect.right()) / 2;
     const int padBottom = (kDeviceRect.bottom() - kCoverRect.bottom()) / 2;
+    const GrBackendFormat format =
+            ctx->contextPriv().caps()->getBackendFormatFromColorType(kAlpha_8_SkColorType);
     sk_sp<GrRenderTargetContext> maskRTC(
         ctx->contextPriv().makeDeferredRenderTargetContextWithFallback(
-                                                         SkBackingFit::kExact,
+                                                         format, SkBackingFit::kExact,
                                                          kCoverRect.width() + padRight,
                                                          kCoverRect.height() + padBottom,
                                                          kAlpha_8_GrPixelConfig, nullptr));
@@ -261,23 +262,6 @@ void WindowRectanglesMaskGM::stencilCheckerboard(GrRenderTargetContext* rtc, boo
                                     SkRect::Make(checker));
         }
     }
-}
-
-void WindowRectanglesMaskGM::fail(SkCanvas* canvas) {
-    SkPaint paint;
-    paint.setAntiAlias(true);
-    paint.setTextSize(20);
-    sk_tool_utils::set_portable_typeface(&paint);
-
-    SkString errorMsg;
-    errorMsg.printf("Requires GPU with %i window rectangles", kNumWindows);
-
-    canvas->clipRect(SkRect::Make(kCoverRect));
-    canvas->clear(SK_ColorWHITE);
-
-    SkTextUtils::DrawString(canvas, errorMsg, SkIntToScalar((kCoverRect.left() + kCoverRect.right())/2),
-                     SkIntToScalar((kCoverRect.top() + kCoverRect.bottom())/2 - 10), paint,
-                            SkTextUtils::kCenter_Align);
 }
 
 DEF_GM( return new WindowRectanglesMaskGM(); )

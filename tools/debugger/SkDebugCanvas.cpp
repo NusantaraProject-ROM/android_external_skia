@@ -8,6 +8,7 @@
 #include "SkCanvasPriv.h"
 #include "SkDebugCanvas.h"
 #include "SkDrawCommand.h"
+#include "SkJSONWriter.h"
 #include "SkPaintFilterCanvas.h"
 #include "SkPicture.h"
 #include "SkRectPriv.h"
@@ -248,43 +249,42 @@ void SkDebugCanvas::cleanupAuditTrail(SkCanvas* canvas) {
     }
 }
 
-Json::Value SkDebugCanvas::toJSON(UrlDataManager& urlDataManager, int n, SkCanvas* canvas) {
+void SkDebugCanvas::toJSON(SkJSONWriter& writer, UrlDataManager& urlDataManager, int n,
+                           SkCanvas* canvas) {
     this->drawAndCollectOps(n, canvas);
 
     // now collect json
     GrAuditTrail* at = this->getAuditTrail(canvas);
-    Json::Value result = Json::Value(Json::objectValue);
-    result[SKDEBUGCANVAS_ATTRIBUTE_VERSION] = Json::Value(SKDEBUGCANVAS_VERSION);
-    Json::Value commands = Json::Value(Json::arrayValue);
-    for (int i = 0; i < this->getSize() && i <= n; i++) {
-        commands[i] = this->getDrawCommandAt(i)->toJSON(urlDataManager);
-        if (at) {
-            // TODO if this is inefficient we could add a method to GrAuditTrail which takes
-            // a Json::Value and is only compiled in this file
-            Json::Value parsedFromString;
-            Json::Reader reader;
-            SkAssertResult(reader.parse(at->toJson(i).c_str(), parsedFromString));
+    writer.appendS32(SKDEBUGCANVAS_ATTRIBUTE_VERSION, SKDEBUGCANVAS_VERSION);
+    writer.beginArray(SKDEBUGCANVAS_ATTRIBUTE_COMMANDS);
 
-            commands[i][SKDEBUGCANVAS_ATTRIBUTE_AUDITTRAIL] = parsedFromString;
+    for (int i = 0; i < this->getSize() && i <= n; i++) {
+        writer.beginObject(); // command
+        this->getDrawCommandAt(i)->toJSON(writer, urlDataManager);
+
+        if (at) {
+            writer.appendName(SKDEBUGCANVAS_ATTRIBUTE_AUDITTRAIL);
+            at->toJson(writer, i);
         }
+        writer.endObject(); // command
     }
+
+    writer.endArray(); // commands
     this->cleanupAuditTrail(canvas);
-    result[SKDEBUGCANVAS_ATTRIBUTE_COMMANDS] = commands;
-    return result;
 }
 
-Json::Value SkDebugCanvas::toJSONOpList(int n, SkCanvas* canvas) {
+void SkDebugCanvas::toJSONOpList(SkJSONWriter& writer, int n, SkCanvas* canvas) {
     this->drawAndCollectOps(n, canvas);
 
-    Json::Value parsedFromString;
     GrAuditTrail* at = this->getAuditTrail(canvas);
     if (at) {
         GrAuditTrail::AutoManageOpList enable(at);
-        Json::Reader reader;
-        SkAssertResult(reader.parse(at->toJson().c_str(), parsedFromString));
+        at->toJson(writer);
+    } else {
+        writer.beginObject();
+        writer.endObject();
     }
     this->cleanupAuditTrail(canvas);
-    return parsedFromString;
 }
 
 void SkDebugCanvas::setOverdrawViz(bool overdrawViz) {
@@ -357,9 +357,9 @@ void SkDebugCanvas::onDrawImageNine(const SkImage* image, const SkIRect& center,
     this->addDrawCommand(new SkDrawImageNineCommand(image, center, dst, paint));
 }
 
-void SkDebugCanvas::onDrawImageSet(const SkCanvas::ImageSetEntry set[], int count, float alpha,
+void SkDebugCanvas::onDrawImageSet(const SkCanvas::ImageSetEntry set[], int count,
                                    SkFilterQuality filterQuality, SkBlendMode mode) {
-    this->addDrawCommand(new SkDrawImageSetCommand(set, count, alpha, filterQuality, mode));
+    this->addDrawCommand(new SkDrawImageSetCommand(set, count, filterQuality, mode));
 }
 
 void SkDebugCanvas::onDrawOval(const SkRect& oval, const SkPaint& paint) {
@@ -397,20 +397,14 @@ void SkDebugCanvas::onDrawPoints(PointMode mode, size_t count,
     this->addDrawCommand(new SkDrawPointsCommand(mode, count, pts, paint));
 }
 
-void SkDebugCanvas::onDrawPosText(const void* text, size_t byteLength, const SkPoint pos[],
-                                  const SkPaint& paint) {
-    this->addDrawCommand(new SkDrawPosTextCommand(text, byteLength, pos, paint));
-}
-
-void SkDebugCanvas::onDrawPosTextH(const void* text, size_t byteLength, const SkScalar xpos[],
-                                   SkScalar constY, const SkPaint& paint) {
-    this->addDrawCommand(
-        new SkDrawPosTextHCommand(text, byteLength, xpos, constY, paint));
-}
-
 void SkDebugCanvas::onDrawRect(const SkRect& rect, const SkPaint& paint) {
     // NOTE(chudy): Messing up when renamed to DrawRect... Why?
     addDrawCommand(new SkDrawRectCommand(rect, paint));
+}
+
+void SkDebugCanvas::onDrawEdgeAARect(const SkRect& rect, SkCanvas::QuadAAFlags aa, SkColor color,
+                                     SkBlendMode mode) {
+    this->addDrawCommand(new SkDrawEdgeAARectCommand(rect, aa, color, mode));
 }
 
 void SkDebugCanvas::onDrawRRect(const SkRRect& rrect, const SkPaint& paint) {
@@ -420,16 +414,6 @@ void SkDebugCanvas::onDrawRRect(const SkRRect& rrect, const SkPaint& paint) {
 void SkDebugCanvas::onDrawDRRect(const SkRRect& outer, const SkRRect& inner,
                                  const SkPaint& paint) {
     this->addDrawCommand(new SkDrawDRRectCommand(outer, inner, paint));
-}
-
-void SkDebugCanvas::onDrawText(const void* text, size_t byteLength, SkScalar x, SkScalar y,
-                               const SkPaint& paint) {
-    this->addDrawCommand(new SkDrawTextCommand(text, byteLength, x, y, paint));
-}
-
-void SkDebugCanvas::onDrawTextRSXform(const void* text, size_t byteLength, const SkRSXform xform[],
-                                      const SkRect* cull, const SkPaint& paint) {
-    this->addDrawCommand(new SkDrawTextRSXformCommand(text, byteLength, xform, cull, paint));
 }
 
 void SkDebugCanvas::onDrawTextBlob(const SkTextBlob* blob, SkScalar x, SkScalar y,
@@ -481,6 +465,11 @@ SkCanvas::SaveLayerStrategy SkDebugCanvas::getSaveLayerStrategy(const SaveLayerR
     (void)this->INHERITED::getSaveLayerStrategy(rec);
     // No need for a full layer.
     return kNoLayer_SaveLayerStrategy;
+}
+
+bool SkDebugCanvas::onDoSaveBehind(const SkRect* subset) {
+    // TODO
+    return false;
 }
 
 void SkDebugCanvas::didSetMatrix(const SkMatrix& matrix) {

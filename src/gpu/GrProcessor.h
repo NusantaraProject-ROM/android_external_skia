@@ -8,7 +8,6 @@
 #ifndef GrProcessor_DEFINED
 #define GrProcessor_DEFINED
 
-#include "../private/SkAtomics.h"
 #include "GrBuffer.h"
 #include "GrColor.h"
 #include "GrProcessorUnitTest.h"
@@ -84,6 +83,7 @@ public:
         kEllipticalRRectEffect_ClassID,
         kGP_ClassID,
         kVertexColorSpaceBenchGP_ClassID,
+        kGrAAFillRRectOp_Processor_ClassID,
         kGrAARectEffect_ClassID,
         kGrAlphaThresholdFragmentProcessor_ClassID,
         kGrArithmeticFP_ClassID,
@@ -154,6 +154,7 @@ public:
         kPorterDuffXferProcessor_ClassID,
         kPremulFragmentProcessor_ClassID,
         kQuadEdgeEffect_ClassID,
+        kQuadPerEdgeAAGeometryProcessor_ClassID,
         kReplaceInputFragmentProcessor_ClassID,
         kRRectsGaussianEdgeFP_ClassID,
         kSeriesFragmentProcessor_ClassID,

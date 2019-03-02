@@ -293,7 +293,7 @@ static inline void bits_to_runs(SkBlitter* blitter, int x, int y,
 
 // maskBitCount is the number of 1's to place in the mask. It must be in the range between 1 and 8.
 static uint8_t generate_right_mask(int maskBitCount) {
-    return static_cast<uint8_t>(0xFF00U >> maskBitCount);
+    return static_cast<uint8_t>((0xFF00U >> maskBitCount) & 0xFF);
 }
 
 void SkBlitter::blitMask(const SkMask& mask, const SkIRect& clip) {
@@ -842,15 +842,13 @@ SkBlitter* SkBlitter::Choose(const SkPixmap& device,
         return blitter;
     }
 
-    // Everything but kN32_SkColorType and kRGB_565_SkColorType should already be handled.
+    // Everything but legacy kN32_SkColorType and kRGB_565_SkColorType should already be handled.
+    SkASSERT(!device.colorSpace());
     SkASSERT(device.colorType() == kN32_SkColorType ||
              device.colorType() == kRGB_565_SkColorType);
 
     // And we should either have a shader, be blending with SrcOver, or both.
     SkASSERT(paint->getShader() || paint->getBlendMode() == SkBlendMode::kSrcOver);
-
-    // TODO: remove SkColorSpace from makeContext() arguments.  It's always nullptr.
-    SkASSERT(!device.colorSpace());
 
     // Legacy blitters keep their shader state on a shader context.
     SkShaderBase::Context* shaderContext = nullptr;

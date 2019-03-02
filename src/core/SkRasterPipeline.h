@@ -12,10 +12,10 @@
 #include "SkColor.h"
 #include "SkImageInfo.h"
 #include "SkNx.h"
-#include "SkTArray.h"
+#include "SkTArray.h" // TODO: unused
 #include "SkTypes.h"
 #include <functional>
-#include <vector>
+#include <vector>  // TODO: unused
 
 /**
  * SkRasterPipeline provides a cheap way to chain together a pixel processing pipeline.
@@ -142,11 +142,6 @@ struct SkRasterPipeline_CallbackCtx {
     float* read_from = rgba;
 };
 
-// This should line up with the memory layout of SkColorSpaceTransferFn.
-struct SkRasterPipeline_ParametricTransferFunction {
-    float G, A,B,C,D,E,F;
-};
-
 struct SkRasterPipeline_GradientCtx {
     size_t stopCount;
     float* fs[4];
@@ -254,6 +249,7 @@ private:
 
     void unchecked_append(StockStage, void*);
 
+    // Used by old single-program void** style execution.
     SkArenaAlloc* fAlloc;
     StageList*    fStages;
     int           fNumStages;

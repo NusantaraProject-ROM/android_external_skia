@@ -221,7 +221,7 @@ config("default") {
     ldflags += [ "-Wl,-w" ]
   }
 
-  if (sanitize != "") {
+  if (sanitize != "" && sanitize != "MSVC") {
     # You can either pass the sanitizers directly, e.g. "address,undefined",
     # or pass one of the couple common aliases used by the bots.
     sanitizers = sanitize
@@ -427,10 +427,14 @@ config("debug_symbols") {
     ]
   } else if (is_win) {
     cflags = [ "/Z7" ]
-    ldflags = [ "/DEBUG:FASTLINK" ]
     if (is_clang) {
-      # /DEBUG:FASTLINK requires every object file to have standalone debug information.
-      cflags += [ "-fstandalone-debug" ]
+      cflags += [
+        "-mllvm",
+        "-emit-codeview-ghash-section",
+      ]
+      ldflags = [ "/DEBUG:GHASH" ]
+    } else {
+      ldflags = [ "/DEBUG:FASTLINK" ]
     }
   } else {
     cflags = [ "-g" ]
@@ -480,6 +484,15 @@ config("optimize") {
 
 config("NDEBUG") {
   defines = [ "NDEBUG" ]
+}
+
+config("msvc_rtc") {
+  defines = [ "_ALLOW_RTCc_IN_STL" ]
+  cflags = [
+    "/RTCcsu",
+    "/guard:cf",
+  ]
+  ldflags = [ "/guard:cf" ]
 }
 
 config("executable") {

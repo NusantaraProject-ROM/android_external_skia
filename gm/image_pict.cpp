@@ -184,7 +184,8 @@ protected:
         GrMipMapped mipMapped = willBeMipped ? GrMipMapped::kYes : GrMipMapped::kNo;
 
         sk_sp<GrSurfaceContext> dstContext(fCtx->contextPriv().makeDeferredSurfaceContext(
-                desc, fProxy->origin(), mipMapped, SkBackingFit::kExact, SkBudgeted::kYes));
+                fProxy->backendFormat(), desc, fProxy->origin(), mipMapped, SkBackingFit::kExact,
+                SkBudgeted::kYes));
         if (!dstContext) {
             return nullptr;
         }
@@ -279,9 +280,9 @@ protected:
         }
 
         // No API to draw a GrTexture directly, so we cheat and create a private image subclass
-        sk_sp<SkImage> texImage(new SkImage_Gpu(
-                sk_ref_sp(canvas->getGrContext()), image->uniqueID(), kPremul_SkAlphaType,
-                std::move(proxy), image->refColorSpace(), SkBudgeted::kNo));
+        sk_sp<SkImage> texImage(new SkImage_Gpu(sk_ref_sp(canvas->getGrContext()),
+                                                image->uniqueID(), kPremul_SkAlphaType,
+                                                std::move(proxy), image->refColorSpace()));
         canvas->drawImage(texImage.get(), x, y);
     }
 

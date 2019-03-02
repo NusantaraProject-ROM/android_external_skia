@@ -131,18 +131,17 @@ private:
 
     const char* name() const override { return "GrPipelineDynamicStateTestOp"; }
     FixedFunctionFlags fixedFunctionFlags() const override { return FixedFunctionFlags::kNone; }
-    RequiresDstTexture finalize(const GrCaps&, const GrAppliedClip*) override {
-        return RequiresDstTexture::kNo;
+    GrProcessorSet::Analysis finalize(const GrCaps&, const GrAppliedClip*) override {
+        return GrProcessorSet::EmptySetAnalysis();
     }
     void onPrepare(GrOpFlushState*) override {}
     void onExecute(GrOpFlushState* state, const SkRect& chainBounds) override {
-        GrRenderTargetProxy* proxy = state->drawOpArgs().fProxy;
-        GrPipeline pipeline(proxy, fScissorTest, SkBlendMode::kSrc);
+        GrPipeline pipeline(fScissorTest, SkBlendMode::kSrc);
         SkSTArray<kNumMeshes, GrMesh> meshes;
         for (int i = 0; i < kNumMeshes; ++i) {
             GrMesh& mesh = meshes.emplace_back(GrPrimitiveType::kTriangleStrip);
             mesh.setNonIndexedNonInstanced(4);
-            mesh.setVertexData(fVertexBuffer.get(), 4 * i);
+            mesh.setVertexData(fVertexBuffer, 4 * i);
         }
         GrPipeline::DynamicStateArrays dynamicState;
         dynamicState.fScissorRects = kDynamicScissors;
@@ -161,9 +160,12 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrPipelineDynamicStateTest, reporter, ctxInfo
     GrContext* context = ctxInfo.grContext();
     GrResourceProvider* rp = context->contextPriv().resourceProvider();
 
+    const GrBackendFormat format =
+            context->contextPriv().caps()->getBackendFormatFromColorType(kRGBA_8888_SkColorType);
+
     sk_sp<GrRenderTargetContext> rtc(context->contextPriv().makeDeferredRenderTargetContext(
-                                                 SkBackingFit::kExact, kScreenSize, kScreenSize,
-                                                 kRGBA_8888_GrPixelConfig, nullptr));
+                                                 format, SkBackingFit::kExact, kScreenSize,
+                                                 kScreenSize, kRGBA_8888_GrPixelConfig, nullptr));
     if (!rtc) {
         ERRORF(reporter, "could not create render target context.");
         return;
@@ -194,7 +196,6 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrPipelineDynamicStateTest, reporter, ctxInfo
 
     sk_sp<const GrBuffer> vbuff(rp->createBuffer(sizeof(vdata), kVertex_GrBufferType,
                                                  kDynamic_GrAccessPattern,
-                                                 GrResourceProvider::Flags::kNoPendingIO |
                                                  GrResourceProvider::Flags::kRequireGpuMemory,
                                                  vdata));
     if (!vbuff) {

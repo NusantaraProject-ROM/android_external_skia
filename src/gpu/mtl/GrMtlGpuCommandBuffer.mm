@@ -119,26 +119,29 @@ GrMtlPipelineState* GrMtlGpuRTCommandBuffer::prepareDrawState(
         }
     }
     GrProgramDesc desc;
-    if (!GrProgramDesc::Build(&desc, primProc, hasPoints, pipeline, *fGpu->caps()->shaderCaps())) {
+    if (!GrProgramDesc::Build(&desc, fRenderTarget->config(), primProc, hasPoints,
+                              pipeline, fGpu)) {
         return nullptr;
     }
-    desc.finalize();
 
-    // TODO: use resource provider for pipeline
-    GrMtlPipelineState* pipelineState =
-            GrMtlPipelineStateBuilder::CreatePipelineState(primProc, pipeline, &desc, fGpu);
-    if (!pipelineState) {
-        return nullptr;
-    }
     const GrTextureProxy* const* primProcProxies = nullptr;
     if (fixedDynamicState) {
         primProcProxies = fixedDynamicState->fPrimitiveProcessorTextures;
     }
+    SkASSERT(SkToBool(primProcProxies) == SkToBool(primProc.numTextureSamplers()));
 
+    // TODO: use resource provider for pipeline
+    GrMtlPipelineState* pipelineState =
+            GrMtlPipelineStateBuilder::CreatePipelineState(fRenderTarget, fOrigin, primProc,
+                                                           primProcProxies, pipeline,
+                                                           &desc, fGpu);
+    if (!pipelineState) {
+        return nullptr;
+    }
     // We cannot have an active encoder when we set the pipeline data since it requires its own
     // command encoder.
     SkASSERT(fActiveRenderCmdEncoder == nil);
-    pipelineState->setData(primProc, pipeline, primProcProxies);
+    pipelineState->setData(fRenderTarget, fOrigin, primProc, pipeline, primProcProxies);
 
     return pipelineState;
 }
@@ -150,7 +153,6 @@ void GrMtlGpuRTCommandBuffer::onDraw(const GrPrimitiveProcessor& primProc,
                                      const GrMesh meshes[],
                                      int meshCount,
                                      const SkRect& bounds) {
-    SkASSERT(pipeline.renderTarget() == fRenderTarget);
     if (!meshCount) {
         return;
     }

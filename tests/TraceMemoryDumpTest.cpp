@@ -75,8 +75,8 @@ DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(SkTraceMemoryDump_ownedGLBuffer, reporter,
     GrContext* context = ctxInfo.grContext();
     GrGLGpu* gpu = static_cast<GrGLGpu*>(context->contextPriv().getGpu());
     const size_t kMemorySize = 1024;
-    sk_sp<GrGLBuffer> buffer(
-            GrGLBuffer::Create(gpu, kMemorySize, kVertex_GrBufferType, kDynamic_GrAccessPattern));
+    sk_sp<GrGLBuffer> buffer =
+            GrGLBuffer::Make(gpu, kMemorySize, kVertex_GrBufferType, kDynamic_GrAccessPattern);
 
     ValidateMemoryDumps(reporter, context, kMemorySize, true /* isOwned */);
 }
@@ -128,7 +128,7 @@ DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(SkTraceMemoryDump_unownedGLTexture, report
     idDesc.fOwnership = GrBackendObjectOwnership::kBorrowed;
 
     auto texture = GrGLTexture::MakeWrapped(gpu, desc, GrMipMapsStatus::kNotAllocated, idDesc,
-                                            false);
+                                            GrWrapCacheable::kNo, kRead_GrIOType);
 
     ValidateMemoryDumps(reporter, context, texture->gpuMemorySize(), false /* isOwned */);
 }
@@ -150,7 +150,7 @@ DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(SkTraceMemoryDump_ownedGLRenderTarget, rep
     iddesc.fMSColorRenderbufferID = 22;
     iddesc.fIsMixedSampled = false;
 
-    sk_sp<GrGLRenderTarget> rt = GrGLRenderTarget::MakeWrapped(gpu, sd, iddesc, 0);
+    sk_sp<GrGLRenderTarget> rt = GrGLRenderTarget::MakeWrapped(gpu, sd, GR_GL_RGBA8, iddesc, 0);
 
     ValidateMemoryDumps(reporter, context, rt->gpuMemorySize(), true /* isOwned */);
 }
@@ -172,7 +172,7 @@ DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(SkTraceMemoryDump_unownedGLRenderTarget, r
     iddesc.fMSColorRenderbufferID = 22;
     iddesc.fIsMixedSampled = false;
 
-    sk_sp<GrGLRenderTarget> rt = GrGLRenderTarget::MakeWrapped(gpu, sd, iddesc, 0);
+    sk_sp<GrGLRenderTarget> rt = GrGLRenderTarget::MakeWrapped(gpu, sd, GR_GL_RGBA8, iddesc, 0);
 
     ValidateMemoryDumps(reporter, context, rt->gpuMemorySize(), false /* isOwned */);
 }

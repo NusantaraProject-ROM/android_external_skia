@@ -12,7 +12,8 @@
 #include "GrAppliedClip.h"
 #include "GrBufferAllocPool.h"
 #include "GrDeferredUpload.h"
-#include "GrUninstantiateProxyTracker.h"
+#include "GrDeinstantiateProxyTracker.h"
+#include "GrRenderTargetProxy.h"
 #include "SkArenaAlloc.h"
 #include "SkArenaAllocList.h"
 #include "ops/GrMeshDrawOp.h"
@@ -40,7 +41,7 @@ public:
     void doUpload(GrDeferredTextureUploadFn&);
 
     /** Called as ops are executed. Must be called in the same order as the ops were prepared. */
-    void executeDrawsAndUploadsForMeshDrawOp(uint32_t opID, const SkRect& opBounds);
+    void executeDrawsAndUploadsForMeshDrawOp(const GrOp* op, const SkRect& opBounds);
 
     GrGpuCommandBuffer* commandBuffer() { return fCommandBuffer; }
     // Helper function used by Ops that are only called via RenderTargetOpLists
@@ -53,6 +54,7 @@ public:
 
     /** Additional data required on a per-op basis when executing GrOps. */
     struct OpArgs {
+        GrSurfaceOrigin origin() const { return fProxy->origin(); }
         GrRenderTarget* renderTarget() const { return fProxy->peekRenderTarget(); }
 
         GrOp* fOp;
@@ -83,13 +85,15 @@ public:
               const GrPipeline::DynamicStateArrays*,
               const GrMesh[],
               int meshCnt) final;
-    void* makeVertexSpace(size_t vertexSize, int vertexCount, const GrBuffer**,
+    void* makeVertexSpace(size_t vertexSize, int vertexCount, sk_sp<const GrBuffer>*,
                           int* startVertex) final;
-    uint16_t* makeIndexSpace(int indexCount, const GrBuffer**, int* startIndex) final;
+    uint16_t* makeIndexSpace(int indexCount, sk_sp<const GrBuffer>*, int* startIndex) final;
     void* makeVertexSpaceAtLeast(size_t vertexSize, int minVertexCount, int fallbackVertexCount,
-                                 const GrBuffer**, int* startVertex, int* actualVertexCount) final;
-    uint16_t* makeIndexSpaceAtLeast(int minIndexCount, int fallbackIndexCount, const GrBuffer**,
-                                    int* startIndex, int* actualIndexCount) final;
+                                 sk_sp<const GrBuffer>*, int* startVertex,
+                                 int* actualVertexCount) final;
+    uint16_t* makeIndexSpaceAtLeast(int minIndexCount, int fallbackIndexCount,
+                                    sk_sp<const GrBuffer>*, int* startIndex,
+                                    int* actualIndexCount) final;
     void putBackIndices(int indexCount) final;
     void putBackVertices(int vertices, size_t vertexStride) final;
     GrRenderTargetProxy* proxy() const final { return fOpArgs->fProxy; }
@@ -99,15 +103,13 @@ public:
     const GrCaps& caps() const final;
     GrResourceProvider* resourceProvider() const final { return fResourceProvider; }
 
-    GrGlyphCache* glyphCache() const final;
+    GrStrikeCache* glyphCache() const final;
 
     // At this point we know we're flushing so full access to the GrAtlasManager is required (and
     // permissible).
     GrAtlasManager* atlasManager() const final;
 
-    GrUninstantiateProxyTracker* uninstantiateProxyTracker() {
-        return &fUninstantiateProxyTracker;
-    }
+    GrDeinstantiateProxyTracker* deinstantiateProxyTracker() { return &fDeinstantiateProxyTracker; }
 
 private:
     /** GrMeshDrawOp::Target override. */
@@ -131,8 +133,8 @@ private:
         const GrPipeline::FixedDynamicState* fFixedDynamicState;
         const GrPipeline::DynamicStateArrays* fDynamicStateArrays;
         const GrMesh* fMeshes = nullptr;
+        const GrOp* fOp = nullptr;
         int fMeshCnt = 0;
-        uint32_t fOpID = SK_InvalidUniqueID;
     };
 
     // Storage for ops' pipelines, draws, and inline uploads.
@@ -164,8 +166,8 @@ private:
     SkArenaAllocList<Draw>::Iter fCurrDraw;
     SkArenaAllocList<InlineUpload>::Iter fCurrUpload;
 
-    // Used to track the proxies that need to be uninstantiated after we finish a flush
-    GrUninstantiateProxyTracker fUninstantiateProxyTracker;
+    // Used to track the proxies that need to be deinstantiated after we finish a flush
+    GrDeinstantiateProxyTracker fDeinstantiateProxyTracker;
 };
 
 #endif

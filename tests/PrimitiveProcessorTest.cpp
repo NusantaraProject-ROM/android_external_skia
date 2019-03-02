@@ -42,8 +42,8 @@ public:
         return FixedFunctionFlags::kNone;
     }
 
-    RequiresDstTexture finalize(const GrCaps&, const GrAppliedClip*) override {
-        return RequiresDstTexture::kNo;
+    GrProcessorSet::Analysis finalize(const GrCaps&, const GrAppliedClip*) override {
+        return GrProcessorSet::EmptySetAnalysis();
     }
 
 private:
@@ -121,8 +121,11 @@ DEF_GPUTEST_FOR_ALL_CONTEXTS(VertexAttributeCount, reporter, ctxInfo) {
     GrGpu* gpu = context->contextPriv().getGpu();
 #endif
 
+    const GrBackendFormat format =
+            context->contextPriv().caps()->getBackendFormatFromColorType(kRGBA_8888_SkColorType);
+
     sk_sp<GrRenderTargetContext> renderTargetContext(
-            context->contextPriv().makeDeferredRenderTargetContext(SkBackingFit::kApprox,
+            context->contextPriv().makeDeferredRenderTargetContext(format, SkBackingFit::kApprox,
                                                                    1, 1, kRGBA_8888_GrPixelConfig,
                                                                    nullptr));
     if (!renderTargetContext) {

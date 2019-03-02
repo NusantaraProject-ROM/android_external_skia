@@ -63,6 +63,7 @@ protected:
 
     void onDraw(SkCanvas* canvas) override {
         if (!fAnimation) {
+            DrawFailureMessage(canvas, "No animation");
             return;
         }
 
@@ -90,6 +91,8 @@ private:
 
 DEF_GM(return new SkottieWebFontGM;)
 
+using namespace skottie_utils;
+
 class SkottieColorizeGM : public skiagm::GM {
 protected:
     SkString onShortName() override {
@@ -102,15 +105,17 @@ protected:
 
     void onOnceBeforeDraw() override {
         if (auto stream = GetResourceAsStream("skottie/skottie_sample_search.json")) {
-            fColorizer = sk_make_sp<Colorizer>();
-            fAnimation = Animation::Builder()
-                            .setPropertyObserver(fColorizer)
-                            .make(stream.get());
+            fPropManager = skstd::make_unique<CustomPropertyManager>();
+            fAnimation   = Animation::Builder()
+                              .setPropertyObserver(fPropManager->getPropertyObserver())
+                              .make(stream.get());
+            fColors      = fPropManager->getColorProps();
         }
     }
 
     void onDraw(SkCanvas* canvas) override {
         if (!fAnimation) {
+            DrawFailureMessage(canvas, "No animation");
             return;
         }
 
@@ -139,7 +144,9 @@ protected:
 
         if (uni == 'c') {
             fColorIndex = (fColorIndex + 1) % SK_ARRAY_COUNT(kColors);
-            fColorizer->colorize(kColors[fColorIndex]);
+            for (const auto& prop : fColors) {
+                fPropManager->setColor(prop, kColors[fColorIndex]);
+            }
             return true;
         }
 
@@ -147,28 +154,12 @@ protected:
     }
 
 private:
-    class Colorizer final : public PropertyObserver {
-    public:
-        void onColorProperty(const char node_name[],
-                             const PropertyObserver::LazyHandle<ColorPropertyHandle>& lh) override {
-            fColorHandles.push_back(lh());
-        }
-
-        void colorize(SkColor c) {
-            for (const auto& handle : fColorHandles) {
-                handle->setColor(c);
-            }
-        }
-
-    private:
-        std::vector<std::unique_ptr<skottie::ColorPropertyHandle>> fColorHandles;
-    };
-
     static constexpr SkScalar kSize = 800;
 
-    sk_sp<Animation> fAnimation;
-    sk_sp<Colorizer> fColorizer;
-    size_t           fColorIndex = 0;
+    sk_sp<Animation>                            fAnimation;
+    std::unique_ptr<CustomPropertyManager>      fPropManager;
+    std::vector<CustomPropertyManager::PropKey> fColors;
+    size_t                                      fColorIndex = 0;
 
     using INHERITED = skiagm::GM;
 };
@@ -196,6 +187,7 @@ protected:
 
     void onDraw(SkCanvas* canvas) override {
         if (!fAnimation) {
+            DrawFailureMessage(canvas, "No animation");
             return;
         }
 

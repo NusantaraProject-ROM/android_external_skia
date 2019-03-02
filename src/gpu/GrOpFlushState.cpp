@@ -31,16 +31,15 @@ GrGpuRTCommandBuffer* GrOpFlushState::rtCommandBuffer() {
     return fCommandBuffer->asRTCommandBuffer();
 }
 
-void GrOpFlushState::executeDrawsAndUploadsForMeshDrawOp(uint32_t opID, const SkRect& opBounds) {
+void GrOpFlushState::executeDrawsAndUploadsForMeshDrawOp(const GrOp* op, const SkRect& opBounds) {
     SkASSERT(this->rtCommandBuffer());
-    while (fCurrDraw != fDraws.end() && fCurrDraw->fOpID == opID) {
+    while (fCurrDraw != fDraws.end() && fCurrDraw->fOp == op) {
         GrDeferredUploadToken drawToken = fTokenTracker->nextTokenToFlush();
         while (fCurrUpload != fInlineUploads.end() &&
                fCurrUpload->fUploadBeforeToken == drawToken) {
             this->rtCommandBuffer()->inlineUpload(this, fCurrUpload->fUpload);
             ++fCurrUpload;
         }
-        SkASSERT(fCurrDraw->fPipeline->proxy() == this->drawOpArgs().fProxy);
         this->rtCommandBuffer()->draw(*fCurrDraw->fGeometryProcessor, *fCurrDraw->fPipeline,
                                       fCurrDraw->fFixedDynamicState, fCurrDraw->fDynamicStateArrays,
                                       fCurrDraw->fMeshes, fCurrDraw->fMeshCnt, opBounds);
@@ -124,30 +123,31 @@ void GrOpFlushState::draw(sk_sp<const GrGeometryProcessor> gp, const GrPipeline*
     draw.fDynamicStateArrays = dynamicStateArrays;
     draw.fMeshes = meshes;
     draw.fMeshCnt = meshCnt;
-    draw.fOpID = fOpArgs->fOp->uniqueID();
+    draw.fOp = fOpArgs->fOp;
     if (firstDraw) {
         fBaseDrawToken = token;
     }
 }
 
-void* GrOpFlushState::makeVertexSpace(size_t vertexSize, int vertexCount, const GrBuffer** buffer,
-                                      int* startVertex) {
+void* GrOpFlushState::makeVertexSpace(size_t vertexSize, int vertexCount,
+                                      sk_sp<const GrBuffer>* buffer, int* startVertex) {
     return fVertexPool.makeSpace(vertexSize, vertexCount, buffer, startVertex);
 }
 
-uint16_t* GrOpFlushState::makeIndexSpace(int indexCount, const GrBuffer** buffer, int* startIndex) {
+uint16_t* GrOpFlushState::makeIndexSpace(int indexCount, sk_sp<const GrBuffer>* buffer,
+                                         int* startIndex) {
     return reinterpret_cast<uint16_t*>(fIndexPool.makeSpace(indexCount, buffer, startIndex));
 }
 
 void* GrOpFlushState::makeVertexSpaceAtLeast(size_t vertexSize, int minVertexCount,
-                                             int fallbackVertexCount, const GrBuffer** buffer,
+                                             int fallbackVertexCount, sk_sp<const GrBuffer>* buffer,
                                              int* startVertex, int* actualVertexCount) {
     return fVertexPool.makeSpaceAtLeast(vertexSize, minVertexCount, fallbackVertexCount, buffer,
                                         startVertex, actualVertexCount);
 }
 
 uint16_t* GrOpFlushState::makeIndexSpaceAtLeast(int minIndexCount, int fallbackIndexCount,
-                                                const GrBuffer** buffer, int* startIndex,
+                                                sk_sp<const GrBuffer>* buffer, int* startIndex,
                                                 int* actualIndexCount) {
     return reinterpret_cast<uint16_t*>(fIndexPool.makeSpaceAtLeast(
             minIndexCount, fallbackIndexCount, buffer, startIndex, actualIndexCount));
@@ -165,7 +165,7 @@ GrAppliedClip GrOpFlushState::detachAppliedClip() {
     return fOpArgs->fAppliedClip ? std::move(*fOpArgs->fAppliedClip) : GrAppliedClip();
 }
 
-GrGlyphCache* GrOpFlushState::glyphCache() const {
+GrStrikeCache* GrOpFlushState::glyphCache() const {
     return fGpu->getContext()->contextPriv().getGlyphCache();
 }
 

@@ -111,9 +111,10 @@ static void draw_texture(const SkPaint& paint, const SkMatrix& ctm, const SkRect
         SkAssertResult(srcRect.intersect(SkRect::MakeIWH(proxy->width(), proxy->height())));
         srcToDst.mapRect(&dstRect, srcRect);
     }
+    const GrColorSpaceInfo& dstInfo(rtc->colorSpaceInfo());
     auto textureXform =
-        GrColorSpaceXform::Make(colorSpace                        , alphaType,
-                                rtc->colorSpaceInfo().colorSpace(), kPremul_SkAlphaType);
+        GrColorSpaceXform::Make(colorSpace          , alphaType,
+                                dstInfo.colorSpace(), kPremul_SkAlphaType);
     GrSamplerState::Filter filter;
     switch (paint.getFilterQuality()) {
         case kNone_SkFilterQuality:
@@ -126,19 +127,16 @@ static void draw_texture(const SkPaint& paint, const SkMatrix& ctm, const SkRect
         case kHigh_SkFilterQuality:
             SK_ABORT("Quality level not allowed.");
     }
-    GrColor color;
-    sk_sp<GrColorSpaceXform> paintColorXform = nullptr;
+    SkPMColor4f color;
     if (GrPixelConfigIsAlphaOnly(proxy->config())) {
-        // Leave the color unpremul if we're going to transform it in the vertex shader
-        paintColorXform = rtc->colorSpaceInfo().refColorSpaceXformFromSRGB();
-        color = paintColorXform ? SkColorToUnpremulGrColor(paint.getColor())
-                                : SkColorToPremulGrColor(paint.getColor());
+        color = SkColor4fPrepForDst(paint.getColor4f(), dstInfo, *rtc->caps()).premul();
     } else {
-        color = GrColorPackA4(paint.getAlpha());
+        float paintAlpha = paint.getColor4f().fA;
+        color = { paintAlpha, paintAlpha, paintAlpha, paintAlpha };
     }
     GrQuadAAFlags aaFlags = aa == GrAA::kYes ? GrQuadAAFlags::kAll : GrQuadAAFlags::kNone;
     rtc->drawTexture(clip, std::move(proxy), filter, color, srcRect, dstRect, aaFlags, constraint,
-                     ctm, std::move(textureXform), std::move(paintColorXform));
+                     ctm, std::move(textureXform));
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -253,7 +251,7 @@ void SkGpuDevice::drawTextureProducerImpl(GrTextureProducer* producer,
     bool doBicubic;
     GrSamplerState::Filter fm = GrSkFilterQualityToGrFilterMode(
             paint.getFilterQuality(), viewMatrix, srcToDstMatrix,
-            fContext->contextPriv().sharpenMipmappedTextures(), &doBicubic);
+            fContext->contextPriv().options().fSharpenMipmappedTextures, &doBicubic);
     const GrSamplerState::Filter* filterMode = doBicubic ? nullptr : &fm;
 
     GrTextureProducer::FilterConstraint constraintMode;
@@ -291,8 +289,11 @@ void SkGpuDevice::drawTextureProducerImpl(GrTextureProducer* producer,
     }
     auto fp = producer->createFragmentProcessor(*textureMatrix, clippedSrcRect, constraintMode,
                                                 coordsAllInsideSrcRect, filterMode);
+    SkColorSpace* rtColorSpace = fRenderTargetContext->colorSpaceInfo().colorSpace();
+    SkColorSpace* targetColorSpace = producer->targetColorSpace();
+    SkColorSpace* dstColorSpace = SkToBool(rtColorSpace) ? rtColorSpace : targetColorSpace;
     fp = GrColorSpaceXformEffect::Make(std::move(fp), producer->colorSpace(), producer->alphaType(),
-                                       fRenderTargetContext->colorSpaceInfo().colorSpace());
+                                       dstColorSpace);
     if (!fp) {
         return;
     }

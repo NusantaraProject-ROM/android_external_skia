@@ -20,7 +20,7 @@ GrGLTextureRenderTarget::GrGLTextureRenderTarget(GrGLGpu* gpu,
                                                  GrMipMapsStatus mipMapsStatus)
         : GrSurface(gpu, desc)
         , GrGLTexture(gpu, desc, texIDDesc, mipMapsStatus)
-        , GrGLRenderTarget(gpu, desc, rtIDDesc) {
+        , GrGLRenderTarget(gpu, desc, texIDDesc.fInfo.fFormat, rtIDDesc) {
     this->registerWithCache(budgeted);
 }
 
@@ -28,11 +28,12 @@ GrGLTextureRenderTarget::GrGLTextureRenderTarget(GrGLGpu* gpu,
                                                  const GrSurfaceDesc& desc,
                                                  const GrGLTexture::IDDesc& texIDDesc,
                                                  const GrGLRenderTarget::IDDesc& rtIDDesc,
+                                                 GrWrapCacheable cacheable,
                                                  GrMipMapsStatus mipMapsStatus)
         : GrSurface(gpu, desc)
         , GrGLTexture(gpu, desc, texIDDesc, mipMapsStatus)
-        , GrGLRenderTarget(gpu, desc, rtIDDesc) {
-    this->registerWithCacheWrapped();
+        , GrGLRenderTarget(gpu, desc, texIDDesc.fInfo.fFormat, rtIDDesc) {
+    this->registerWithCacheWrapped(cacheable);
 }
 
 void GrGLTextureRenderTarget::dumpMemoryStatistics(
@@ -56,11 +57,11 @@ bool GrGLTextureRenderTarget::canAttemptStencilAttachment() const {
 }
 
 sk_sp<GrGLTextureRenderTarget> GrGLTextureRenderTarget::MakeWrapped(
-    GrGLGpu* gpu, const GrSurfaceDesc& desc, const GrGLTexture::IDDesc& texIDDesc,
-    const GrGLRenderTarget::IDDesc& rtIDDesc, GrMipMapsStatus mipMapsStatus)
-{
+        GrGLGpu* gpu, const GrSurfaceDesc& desc, const GrGLTexture::IDDesc& texIDDesc,
+        const GrGLRenderTarget::IDDesc& rtIDDesc, GrWrapCacheable cacheable,
+        GrMipMapsStatus mipMapsStatus) {
     return sk_sp<GrGLTextureRenderTarget>(
-        new GrGLTextureRenderTarget(gpu, desc, texIDDesc, rtIDDesc, mipMapsStatus));
+            new GrGLTextureRenderTarget(gpu, desc, texIDDesc, rtIDDesc, cacheable, mipMapsStatus));
 }
 
 size_t GrGLTextureRenderTarget::onGpuMemorySize() const {

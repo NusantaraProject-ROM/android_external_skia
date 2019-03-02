@@ -83,9 +83,12 @@ static void run_test(GrContext* context, const char* testName, skiatest::Reporte
 DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrMeshTest, reporter, ctxInfo) {
     GrContext* context = ctxInfo.grContext();
 
+    const GrBackendFormat format =
+            context->contextPriv().caps()->getBackendFormatFromColorType(kRGBA_8888_SkColorType);
+
     sk_sp<GrRenderTargetContext> rtc(context->contextPriv().makeDeferredRenderTargetContext(
-                                                 SkBackingFit::kExact, kImageWidth, kImageHeight,
-                                                 kRGBA_8888_GrPixelConfig, nullptr));
+            format, SkBackingFit::kExact, kImageWidth, kImageHeight, kRGBA_8888_GrPixelConfig,
+            nullptr));
     if (!rtc) {
         ERRORF(reporter, "could not create render target context.");
         return;
@@ -109,17 +112,17 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrMeshTest, reporter, ctxInfo) {
             int rgb[3] = {-(c & 1) & 0xff, -((c >> 1) & 1) & 0xff, -((c >> 2) & 1) & 0xff};
 
             const Box box = boxes.push_back() = {
-                float(x * kBoxSize),
-                float(y * kBoxSize),
-                GrColorPackRGBA(rgb[0], rgb[1], rgb[2], 255)
+                    float(x * kBoxSize),
+                    float(y * kBoxSize),
+                    GrColorPackRGBA(rgb[0], rgb[1], rgb[2], 255)
             };
 
             std::array<Box, 4>& boxVertices = vertexData.push_back();
             for (int i = 0; i < 4; ++i) {
                 boxVertices[i] = {
-                    box.fX + (i/2) * kBoxSize,
-                    box.fY + (i%2) * kBoxSize,
-                    box.fColor
+                        box.fX + (i / 2) * kBoxSize,
+                        box.fY + (i % 2) * kBoxSize,
+                        box.fColor
                 };
             }
 
@@ -132,11 +135,13 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrMeshTest, reporter, ctxInfo) {
 
     // ---- tests ----------
 
-#define VALIDATE(buff) \
-    if (!buff) { \
-        ERRORF(reporter, #buff " is null."); \
-        return; \
-    }
+#define VALIDATE(buff)                           \
+    do {                                         \
+        if (!buff) {                             \
+            ERRORF(reporter, #buff " is null."); \
+            return;                              \
+        }                                        \
+    } while (0)
 
     run_test(context, "setNonIndexedNonInstanced", reporter, rtc, gold,
              [&](DrawMeshHelper* helper) {
@@ -153,7 +158,7 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrMeshTest, reporter, ctxInfo) {
                  for (int y = 0; y < kBoxCountY; ++y) {
                      GrMesh mesh(GrPrimitiveType::kTriangles);
                      mesh.setNonIndexedNonInstanced(kBoxCountX * 6);
-                     mesh.setVertexData(vbuff.get(), y * kBoxCountX * 6);
+                     mesh.setVertexData(vbuff, y * kBoxCountX * 6);
                      helper->drawMesh(mesh);
                  }
              });
@@ -172,10 +177,9 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrMeshTest, reporter, ctxInfo) {
             int repetitionCount = SkTMin(3 - baseRepetition, kBoxCount - i);
 
             GrMesh mesh(GrPrimitiveType::kTriangles);
-            mesh.setIndexed(ibuff.get(), repetitionCount * 6, baseRepetition * 6,
-                            baseRepetition * 4, (baseRepetition + repetitionCount) * 4 - 1,
-                            GrPrimitiveRestart::kNo);
-            mesh.setVertexData(vbuff.get(), (i - baseRepetition) * 4);
+            mesh.setIndexed(ibuff, repetitionCount * 6, baseRepetition * 6, baseRepetition * 4,
+                            (baseRepetition + repetitionCount) * 4 - 1, GrPrimitiveRestart::kNo);
+            mesh.setVertexData(vbuff, (i - baseRepetition) * 4);
             helper->drawMesh(mesh);
 
             baseRepetition = (baseRepetition + 1) % 3;
@@ -193,8 +197,8 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrMeshTest, reporter, ctxInfo) {
         // support a base index.
         for (int y = 0; y < kBoxCountY; ++y) {
             GrMesh mesh(GrPrimitiveType::kTriangles);
-            mesh.setIndexedPatterned(ibuff.get(), 6, 4, kBoxCountX, kIndexPatternRepeatCount);
-            mesh.setVertexData(vbuff.get(), y * kBoxCountX * 4);
+            mesh.setIndexedPatterned(ibuff, 6, 4, kBoxCountX, kIndexPatternRepeatCount);
+            mesh.setVertexData(vbuff, y * kBoxCountX * 4);
             helper->drawMesh(mesh);
         }
     });
@@ -222,10 +226,10 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrMeshTest, reporter, ctxInfo) {
                                     : GrPrimitiveType::kTriangleStrip);
                 if (indexed) {
                     VALIDATE(idxbuff);
-                    mesh.setIndexedInstanced(idxbuff.get(), 6, instbuff.get(), kBoxCountX,
-                                             y * kBoxCountX, GrPrimitiveRestart::kNo);
+                    mesh.setIndexedInstanced(idxbuff, 6, instbuff, kBoxCountX, y * kBoxCountX,
+                                             GrPrimitiveRestart::kNo);
                 } else {
-                    mesh.setInstanced(instbuff.get(), kBoxCountX, y * kBoxCountX, 4);
+                    mesh.setInstanced(instbuff, kBoxCountX, y * kBoxCountX, 4);
                 }
                 switch (y % 3) {
                     case 0:
@@ -238,10 +242,10 @@ DEF_GPUTEST_FOR_RENDERING_CONTEXTS(GrMeshTest, reporter, ctxInfo) {
                         }
                         // Fallthru.
                     case 1:
-                        mesh.setVertexData(vbuff.get());
+                        mesh.setVertexData(vbuff);
                         break;
                     case 2:
-                        mesh.setVertexData(vbuff2.get(), 2);
+                        mesh.setVertexData(vbuff2, 2);
                         break;
                 }
                 helper->drawMesh(mesh);
@@ -275,8 +279,8 @@ private:
 
     const char* name() const override { return "GrMeshTestOp"; }
     FixedFunctionFlags fixedFunctionFlags() const override { return FixedFunctionFlags::kNone; }
-    RequiresDstTexture finalize(const GrCaps&, const GrAppliedClip*) override {
-        return RequiresDstTexture::kNo;
+    GrProcessorSet::Analysis finalize(const GrCaps&, const GrAppliedClip*) override {
+        return GrProcessorSet::EmptySetAnalysis();
     }
     void onPrepare(GrOpFlushState*) override {}
     void onExecute(GrOpFlushState* state, const SkRect& chainBounds) override {
@@ -373,7 +377,6 @@ sk_sp<const GrBuffer> DrawMeshHelper::makeVertexBuffer(const T* data, int count)
     return sk_sp<const GrBuffer>(
         fState->resourceProvider()->createBuffer(
             count * sizeof(T), kVertex_GrBufferType, kDynamic_GrAccessPattern,
-            GrResourceProvider::Flags::kNoPendingIO |
             GrResourceProvider::Flags::kRequireGpuMemory, data));
 }
 
@@ -384,8 +387,7 @@ sk_sp<const GrBuffer> DrawMeshHelper::getIndexBuffer() {
 }
 
 void DrawMeshHelper::drawMesh(const GrMesh& mesh) {
-    GrRenderTargetProxy* proxy = fState->drawOpArgs().fProxy;
-    GrPipeline pipeline(proxy, GrScissorTest::kDisabled, SkBlendMode::kSrc);
+    GrPipeline pipeline(GrScissorTest::kDisabled, SkBlendMode::kSrc);
     GrMeshTestProcessor mtp(mesh.isInstanced(), mesh.hasVertexData());
     fState->rtCommandBuffer()->draw(mtp, pipeline, nullptr, nullptr, &mesh, 1,
                                     SkRect::MakeIWH(kImageWidth, kImageHeight));

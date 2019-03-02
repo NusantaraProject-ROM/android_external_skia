@@ -16,7 +16,6 @@ GrSimpleMeshDrawOpHelper::GrSimpleMeshDrawOpHelper(const MakeArgs& args, GrAATyp
         : fProcessors(args.fProcessorSet)
         , fPipelineFlags(0)
         , fAAType((int)aaType)
-        , fRequiresDstTexture(false)
         , fUsesLocalCoords(false)
         , fCompatibleWithAlphaAsCoveage(false) {
     SkDEBUGCODE(fDidAnalysis = false);
@@ -40,9 +39,14 @@ GrDrawOp::FixedFunctionFlags GrSimpleMeshDrawOpHelper::fixedFunctionFlags() cons
                                           : GrDrawOp::FixedFunctionFlags::kNone;
 }
 
+static bool none_as_coverage_aa_compatible(GrAAType aa1, GrAAType aa2) {
+    return (aa1 == GrAAType::kNone && aa2 == GrAAType::kCoverage) ||
+           (aa1 == GrAAType::kCoverage && aa2 == GrAAType::kNone);
+}
+
 bool GrSimpleMeshDrawOpHelper::isCompatible(const GrSimpleMeshDrawOpHelper& that,
                                             const GrCaps& caps, const SkRect& thisBounds,
-                                            const SkRect& thatBounds) const {
+                                            const SkRect& thatBounds, bool noneAsCoverageAA) const {
     if (SkToBool(fProcessors) != SkToBool(that.fProcessors)) {
         return false;
     }
@@ -50,20 +54,15 @@ bool GrSimpleMeshDrawOpHelper::isCompatible(const GrSimpleMeshDrawOpHelper& that
         if (*fProcessors != *that.fProcessors) {
             return false;
         }
-        if (fRequiresDstTexture ||
-            (fProcessors->xferProcessor() && fProcessors->xferProcessor()->xferBarrierType(caps))) {
-            if (GrRectsTouchOrOverlap(thisBounds, thatBounds)) {
-                return false;
-            }
-        }
     }
-    bool result = fPipelineFlags == that.fPipelineFlags && fAAType == that.fAAType;
+    bool result = fPipelineFlags == that.fPipelineFlags && (fAAType == that.fAAType ||
+            (noneAsCoverageAA && none_as_coverage_aa_compatible(this->aaType(), that.aaType())));
     SkASSERT(!result || fCompatibleWithAlphaAsCoveage == that.fCompatibleWithAlphaAsCoveage);
     SkASSERT(!result || fUsesLocalCoords == that.fUsesLocalCoords);
     return result;
 }
 
-GrDrawOp::RequiresDstTexture GrSimpleMeshDrawOpHelper::xpRequiresDstTexture(
+GrProcessorSet::Analysis GrSimpleMeshDrawOpHelper::finalizeProcessors(
         const GrCaps& caps, const GrAppliedClip* clip, GrProcessorAnalysisCoverage geometryCoverage,
         GrProcessorAnalysisColor* geometryColor) {
     SkDEBUGCODE(fDidAnalysis = true);
@@ -85,18 +84,16 @@ GrDrawOp::RequiresDstTexture GrSimpleMeshDrawOpHelper::xpRequiresDstTexture(
     } else {
         analysis = GrProcessorSet::EmptySetAnalysis();
     }
-    fRequiresDstTexture = analysis.requiresDstTexture();
     fUsesLocalCoords = analysis.usesLocalCoords();
     fCompatibleWithAlphaAsCoveage = analysis.isCompatibleWithCoverageAsAlpha();
-    return analysis.requiresDstTexture() ? GrDrawOp::RequiresDstTexture::kYes
-                                         : GrDrawOp::RequiresDstTexture::kNo;
+    return analysis;
 }
 
-GrDrawOp::RequiresDstTexture GrSimpleMeshDrawOpHelper::xpRequiresDstTexture(
+GrProcessorSet::Analysis GrSimpleMeshDrawOpHelper::finalizeProcessors(
         const GrCaps& caps, const GrAppliedClip* clip, GrProcessorAnalysisCoverage geometryCoverage,
         SkPMColor4f* geometryColor) {
     GrProcessorAnalysisColor color = *geometryColor;
-    auto result = this->xpRequiresDstTexture(caps, clip, geometryCoverage, &color);
+    auto result = this->finalizeProcessors(caps, clip, geometryCoverage, &color);
     color.isConstant(geometryColor);
     return result;
 }
@@ -129,7 +126,6 @@ GrPipeline::InitArgs GrSimpleMeshDrawOpHelper::pipelineInitArgs(
         GrMeshDrawOp::Target* target) const {
     GrPipeline::InitArgs args;
     args.fFlags = this->pipelineFlags();
-    args.fProxy = target->proxy();
     args.fDstProxy = target->dstProxy();
     args.fCaps = &target->caps();
     args.fResourceProvider = target->resourceProvider();
@@ -178,8 +174,8 @@ GrDrawOp::FixedFunctionFlags GrSimpleMeshDrawOpHelperWithStencil::fixedFunctionF
 
 bool GrSimpleMeshDrawOpHelperWithStencil::isCompatible(
         const GrSimpleMeshDrawOpHelperWithStencil& that, const GrCaps& caps,
-        const SkRect& thisBounds, const SkRect& thatBounds) const {
-    return INHERITED::isCompatible(that, caps, thisBounds, thatBounds) &&
+        const SkRect& thisBounds, const SkRect& thatBounds, bool noneAsCoverageAA) const {
+    return INHERITED::isCompatible(that, caps, thisBounds, thatBounds, noneAsCoverageAA) &&
            fStencilSettings == that.fStencilSettings;
 }
 

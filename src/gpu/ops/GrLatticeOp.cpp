@@ -8,9 +8,11 @@
 #include "GrLatticeOp.h"
 #include "GrDefaultGeoProcFactory.h"
 #include "GrDrawOpTest.h"
+#include "GrGpu.h"
 #include "GrMeshDrawOp.h"
 #include "GrOpFlushState.h"
 #include "GrResourceProvider.h"
+#include "GrResourceProviderPriv.h"
 #include "GrSimpleMeshDrawOpHelper.h"
 #include "GrVertexWriter.h"
 #include "SkBitmap.h"
@@ -25,10 +27,13 @@ namespace {
 
 class LatticeGP : public GrGeometryProcessor {
 public:
-    static sk_sp<GrGeometryProcessor> Make(const GrTextureProxy* proxy,
+    static sk_sp<GrGeometryProcessor> Make(GrGpu* gpu,
+                                           const GrTextureProxy* proxy,
                                            sk_sp<GrColorSpaceXform> csxf,
-                                           GrSamplerState::Filter filter) {
-        return sk_sp<GrGeometryProcessor>(new LatticeGP(proxy, std::move(csxf), filter));
+                                           GrSamplerState::Filter filter,
+                                           bool wideColor) {
+        return sk_sp<GrGeometryProcessor>(
+                new LatticeGP(gpu, proxy, std::move(csxf), filter, wideColor));
     }
 
     const char* name() const override { return "LatticeGP"; }
@@ -86,15 +91,22 @@ public:
     }
 
 private:
-    LatticeGP(const GrTextureProxy* proxy, sk_sp<GrColorSpaceXform> csxf,
-              GrSamplerState::Filter filter)
+    LatticeGP(GrGpu* gpu, const GrTextureProxy* proxy, sk_sp<GrColorSpaceXform> csxf,
+              GrSamplerState::Filter filter, bool wideColor)
             : INHERITED(kLatticeGP_ClassID), fColorSpaceXform(std::move(csxf)) {
-        fSampler.reset(proxy->textureType(), proxy->config(), filter);
+
+        GrSamplerState samplerState = GrSamplerState(GrSamplerState::WrapMode::kClamp,
+                                                     filter);
+        uint32_t extraSamplerKey = gpu->getExtraSamplerKeyForProgram(samplerState,
+                                                                     proxy->backendFormat());
+
+        fSampler.reset(proxy->textureType(), proxy->config(), samplerState,
+                       extraSamplerKey);
         this->setTextureSamplerCnt(1);
         fInPosition = {"position", kFloat2_GrVertexAttribType, kFloat2_GrSLType};
         fInTextureCoords = {"textureCoords", kFloat2_GrVertexAttribType, kFloat2_GrSLType};
         fInTextureDomain = {"textureDomain", kFloat4_GrVertexAttribType, kFloat4_GrSLType};
-        fInColor = {"color", kUByte4_norm_GrVertexAttribType, kHalf4_GrSLType};
+        fInColor = MakeColorAttribute("color", wideColor);
         this->setVertexAttributes(&fInPosition, 4);
     }
 
@@ -153,6 +165,7 @@ public:
 
         // setup bounds
         this->setTransformedBounds(patch.fDst, viewMatrix, HasAABloat::kNo, IsZeroArea::kNo);
+        fWideColor = !SkPMColor4fFitsInBytes(color);
     }
 
     const char* name() const override { return "NonAALatticeOp"; }
@@ -180,12 +193,12 @@ public:
 
     FixedFunctionFlags fixedFunctionFlags() const override { return fHelper.fixedFunctionFlags(); }
 
-    RequiresDstTexture finalize(const GrCaps& caps, const GrAppliedClip* clip) override {
+    GrProcessorSet::Analysis finalize(const GrCaps& caps, const GrAppliedClip* clip) override {
         auto opaque = fPatches[0].fColor.isOpaque() && GrPixelConfigIsOpaque(fProxy->config())
                               ? GrProcessorAnalysisColor::Opaque::kYes
                               : GrProcessorAnalysisColor::Opaque::kNo;
         auto analysisColor = GrProcessorAnalysisColor(opaque);
-        auto result = fHelper.xpRequiresDstTexture(
+        auto result = fHelper.finalizeProcessors(
                 caps, clip, GrProcessorAnalysisCoverage::kNone, &analysisColor);
         analysisColor.isConstant(&fPatches[0].fColor);
         return result;
@@ -193,7 +206,8 @@ public:
 
 private:
     void onPrepareDraws(Target* target) override {
-        auto gp = LatticeGP::Make(fProxy.get(), fColorSpaceXform, fFilter);
+        GrGpu* gpu = target->resourceProvider()->priv().gpu();
+        auto gp = LatticeGP::Make(gpu, fProxy.get(), fColorSpaceXform, fFilter, fWideColor);
         if (!gp) {
             SkDebugf("Couldn't create GrGeometryProcessor\n");
             return;
@@ -211,10 +225,14 @@ private:
 
         const size_t kVertexStride = gp->vertexStride();
         sk_sp<const GrBuffer> indexBuffer = target->resourceProvider()->refQuadIndexBuffer();
-        PatternHelper helper(target, GrPrimitiveType::kTriangles, kVertexStride, indexBuffer.get(),
-                             kVertsPerRect, kIndicesPerRect, numRects);
+        if (!indexBuffer) {
+            SkDebugf("Could not allocate indices\n");
+            return;
+        }
+        PatternHelper helper(target, GrPrimitiveType::kTriangles, kVertexStride,
+                             std::move(indexBuffer), kVertsPerRect, kIndicesPerRect, numRects);
         GrVertexWriter vertices{helper.vertices()};
-        if (!vertices.fPtr || !indexBuffer) {
+        if (!vertices.fPtr) {
             SkDebugf("Could not allocate vertices\n");
             return;
         }
@@ -222,8 +240,7 @@ private:
         for (int i = 0; i < patchCnt; i++) {
             const Patch& patch = fPatches[i];
 
-            // TODO4F: Preserve float colors
-            GrColor patchColor = patch.fColor.toBytes_RGBA();
+            GrVertexColor patchColor(patch.fColor, fWideColor);
 
             // Apply the view matrix here if it is scale-translate.  Otherwise, we need to
             // wait until we've created the dst rects.
@@ -288,6 +305,7 @@ private:
         }
 
         fPatches.move_back_n(that->fPatches.count(), that->fPatches.begin());
+        fWideColor |= that->fWideColor;
         return CombineResult::kMerged;
     }
 
@@ -303,6 +321,7 @@ private:
     sk_sp<GrTextureProxy> fProxy;
     sk_sp<GrColorSpaceXform> fColorSpaceXform;
     GrSamplerState::Filter fFilter;
+    bool fWideColor;
 
     typedef GrMeshDrawOp INHERITED;
 };
@@ -378,8 +397,10 @@ GR_DRAW_OP_TEST_DEFINE(NonAALatticeOp) {
     desc.fHeight = random->nextRangeU(1, 1000);
     GrSurfaceOrigin origin =
             random->nextBool() ? kTopLeft_GrSurfaceOrigin : kBottomLeft_GrSurfaceOrigin;
+    const GrBackendFormat format =
+            context->contextPriv().caps()->getBackendFormatFromColorType(kRGBA_8888_SkColorType);
     auto proxy = context->contextPriv().proxyProvider()->createProxy(
-            desc, origin, SkBackingFit::kExact, SkBudgeted::kYes);
+            format, desc, origin, SkBackingFit::kExact, SkBudgeted::kYes);
 
     do {
         if (random->nextBool()) {

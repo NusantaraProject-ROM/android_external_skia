@@ -360,7 +360,7 @@ void GrCCCoverageProcessor::VSImpl::onEmitCode(EmitArgs& args, GrGPArgs* gpArgs)
                            // fallthru.
     v->codeAppend ("}");
 
-    v->codeAppend ("float2 vertex = corner + bloatdir * bloat;");
+    v->codeAppend ("float2 vertex = fma(bloatdir, float2(bloat), corner);");
     gpArgs->fPositionVar.set(kFloat2_GrSLType, "vertex");
 
     // Hulls have a coverage of +1 all around.
@@ -527,14 +527,14 @@ void GrCCCoverageProcessor::initVS(GrResourceProvider* rp) {
     }
 }
 
-void GrCCCoverageProcessor::appendVSMesh(GrBuffer* instanceBuffer, int instanceCount,
+void GrCCCoverageProcessor::appendVSMesh(sk_sp<const GrBuffer> instanceBuffer, int instanceCount,
                                          int baseInstance, SkTArray<GrMesh>* out) const {
     SkASSERT(Impl::kVertexShader == fImpl);
     GrMesh& mesh = out->emplace_back(fVSTriangleType);
     auto primitiveRestart = GrPrimitiveRestart(GrPrimitiveType::kTriangleStrip == fVSTriangleType);
-    mesh.setIndexedInstanced(fVSIndexBuffer.get(), fVSNumIndicesPerInstance, instanceBuffer,
+    mesh.setIndexedInstanced(fVSIndexBuffer, fVSNumIndicesPerInstance, std::move(instanceBuffer),
                              instanceCount, baseInstance, primitiveRestart);
-    mesh.setVertexData(fVSVertexBuffer.get(), 0);
+    mesh.setVertexData(fVSVertexBuffer, 0);
 }
 
 GrGLSLPrimitiveProcessor* GrCCCoverageProcessor::createVSImpl(std::unique_ptr<Shader> shadr) const {

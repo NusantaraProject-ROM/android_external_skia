@@ -9,121 +9,226 @@
 #include "GrQuad.h"
 #include "GrVertexWriter.h"
 #include "glsl/GrGLSLColorSpaceXformHelper.h"
+#include "glsl/GrGLSLGeometryProcessor.h"
 #include "glsl/GrGLSLPrimitiveProcessor.h"
 #include "glsl/GrGLSLFragmentShaderBuilder.h"
 #include "glsl/GrGLSLVarying.h"
 #include "glsl/GrGLSLVertexGeoBuilder.h"
 #include "SkNx.h"
 
+#define AI SK_ALWAYS_INLINE
+
 namespace {
 
-// This computes the four edge equations for a quad, then outsets them and optionally computes a new
-// quad as the intersection points of the outset edges. 'x' and 'y' contain the original points as
-// input and the outset points as output. 'a', 'b', and 'c' are the edge equation coefficients on
-// output. The values in x, y, u, v, and r are possibly updated if outsetting is needed.
-// r is the local position's w component if it exists.
-static void compute_quad_edges_and_outset_vertices(GrQuadAAFlags aaFlags, Sk4f* x, Sk4f* y, Sk4f* a,
-                                                   Sk4f* b, Sk4f* c, Sk4f* u, Sk4f* v, Sk4f* r,
-                                                   int uvrChannelCount, bool outsetCorners) {
-    SkASSERT(uvrChannelCount == 0 || uvrChannelCount == 2 || uvrChannelCount == 3);
+static AI Sk4f fma(const Sk4f& f, const Sk4f& m, const Sk4f& a) {
+    return SkNx_fma<4, float>(f, m, a);
+}
 
-    static constexpr auto fma = SkNx_fma<4, float>;
-    // These rotate the points/edge values either clockwise or counterclockwise assuming tri strip
-    // order.
-    auto nextCW  = [](const Sk4f& v) { return SkNx_shuffle<2, 0, 3, 1>(v); };
-    auto nextCCW = [](const Sk4f& v) { return SkNx_shuffle<1, 3, 0, 2>(v); };
+// These rotate the points/edge values either clockwise or counterclockwise assuming tri strip
+// order.
+static AI Sk4f nextCW(const Sk4f& v) {
+    return SkNx_shuffle<2, 0, 3, 1>(v);
+}
 
-    // Compute edge equations for the quad.
-    auto xnext = nextCCW(*x);
-    auto ynext = nextCCW(*y);
-    // xdiff and ydiff will comprise the normalized vectors pointing along each quad edge.
-    auto xdiff = xnext - *x;
-    auto ydiff = ynext - *y;
-    auto invLengths = fma(xdiff, xdiff, ydiff * ydiff).rsqrt();
-    xdiff *= invLengths;
-    ydiff *= invLengths;
+static AI Sk4f nextCCW(const Sk4f& v) {
+    return SkNx_shuffle<1, 3, 0, 2>(v);
+}
 
-    // Use above vectors to compute edge equations.
-    *c = fma(xnext, *y,  -ynext * *x) * invLengths;
-    // Make sure the edge equations have their normals facing into the quad in device space.
-    auto test = fma(ydiff, nextCW(*x), fma(-xdiff, nextCW(*y), *c));
-    if ((test < Sk4f(0)).anyTrue()) {
-        *a = -ydiff;
-        *b = xdiff;
-        *c = -*c;
-    } else {
-        *a = ydiff;
-        *b = -xdiff;
-    }
-    // Outset the edge equations so aa coverage evaluates to zero half a pixel away from the
-    // original quad edge.
-    *c += 0.5f;
+// Fills Sk4f with 1f if edge bit is set, 0f otherwise. Edges are ordered LBTR to match CCW ordering
+// of vertices in the quad.
+static AI Sk4f compute_edge_mask(GrQuadAAFlags aaFlags) {
+    return Sk4f((GrQuadAAFlags::kLeft & aaFlags) ? 1.f : 0.f,
+                (GrQuadAAFlags::kBottom & aaFlags) ? 1.f : 0.f,
+                (GrQuadAAFlags::kTop & aaFlags) ? 1.f : 0.f,
+                (GrQuadAAFlags::kRight & aaFlags) ? 1.f : 0.f);
+}
 
-    if (aaFlags != GrQuadAAFlags::kAll) {
-        // This order is the same order the edges appear in xdiff/ydiff and therefore as the
-        // edges in a/b/c.
-        auto mask = Sk4f(GrQuadAAFlags::kLeft & aaFlags ? 1.f : 0.f,
-                         GrQuadAAFlags::kBottom & aaFlags ? 1.f : 0.f,
-                         GrQuadAAFlags::kTop & aaFlags ? 1.f : 0.f,
-                         GrQuadAAFlags::kRight & aaFlags ? 1.f : 0.f);
-        // Outset edge equations for masked out edges another pixel so that they always evaluate
-        // >= 1.
-        *c += (1.f - mask);
-        if (outsetCorners) {
-            // Do the vertex outset.
-            mask *= 0.5f;
-            auto maskCW = nextCW(mask);
-            *x += maskCW * -xdiff + mask * nextCW(xdiff);
-            *y += maskCW * -ydiff + mask * nextCW(ydiff);
-            if (uvrChannelCount > 0) {
-                // We want to extend the texture coords by the same proportion as the positions.
-                maskCW *= invLengths;
-                mask *= nextCW(invLengths);
-                Sk4f udiff = nextCCW(*u) - *u;
-                Sk4f vdiff = nextCCW(*v) - *v;
-                *u += maskCW * -udiff + mask * nextCW(udiff);
-                *v += maskCW * -vdiff + mask * nextCW(vdiff);
-                if (uvrChannelCount == 3) {
-                    Sk4f rdiff = nextCCW(*r) - *r;
-                    *r += maskCW * -rdiff + mask * nextCW(rdiff);
-                }
-            }
-        }
-    } else if (outsetCorners) {
-        *x += 0.5f * (-xdiff + nextCW(xdiff));
-        *y += 0.5f * (-ydiff + nextCW(ydiff));
-        if (uvrChannelCount > 0) {
-            Sk4f t = 0.5f * invLengths;
-            Sk4f udiff = nextCCW(*u) - *u;
-            Sk4f vdiff = nextCCW(*v) - *v;
-            *u += t * -udiff + nextCW(t) * nextCW(udiff);
-            *v += t * -vdiff + nextCW(t) * nextCW(vdiff);
-            if (uvrChannelCount == 3) {
-                Sk4f rdiff = nextCCW(*r) - *r;
-                *r += t * -rdiff + nextCW(t) * nextCW(rdiff);
-            }
+// Outputs normalized edge vectors in xdiff and ydiff, as well as the reciprocal of the original
+// edge lengths in invLengths
+static AI void compute_edge_vectors(const Sk4f& x, const Sk4f& y, const Sk4f& xnext,
+                                    const Sk4f& ynext, Sk4f* xdiff, Sk4f* ydiff, Sk4f* invLengths) {
+    *xdiff = xnext - x;
+    *ydiff = ynext - y;
+    *invLengths = fma(*xdiff, *xdiff, *ydiff * *ydiff).rsqrt();
+    *xdiff *= *invLengths;
+    *ydiff *= *invLengths;
+}
+
+// outset and outsetCW are provided separately to allow for different magnitude outsets for
+// with-edge and "perpendicular" edge shifts. This is needed when one axis cannot be inset the full
+// half pixel without crossing over the other side.
+static AI void outset_masked_vertices(const Sk4f& outset, const Sk4f& outsetCW, const Sk4f& xdiff,
+                                      const Sk4f& ydiff, const Sk4f& invLengths, const Sk4f& mask,
+                                      Sk4f* x, Sk4f* y, Sk4f* u, Sk4f* v, Sk4f* r, int uvrCount) {
+    // The mask is rotated compared to the outsets and edge vectors, since if the edge is "on"
+    // both its points need to be moved along their other edge vectors.
+    auto maskedOutset = -outset * nextCW(mask);
+    auto maskedOutsetCW = outsetCW * mask;
+    // x = x + outsetCW * mask * nextCW(xdiff) - outset * nextCW(mask) * xdiff
+    *x += fma(maskedOutsetCW, nextCW(xdiff), maskedOutset * xdiff);
+    *y += fma(maskedOutsetCW, nextCW(ydiff), maskedOutset * ydiff);
+    if (uvrCount > 0) {
+        // We want to extend the texture coords by the same proportion as the positions.
+        maskedOutset *= invLengths;
+        maskedOutsetCW *= nextCW(invLengths);
+        Sk4f udiff = nextCCW(*u) - *u;
+        Sk4f vdiff = nextCCW(*v) - *v;
+        *u += fma(maskedOutsetCW, nextCW(udiff), maskedOutset * udiff);
+        *v += fma(maskedOutsetCW, nextCW(vdiff), maskedOutset * vdiff);
+        if (uvrCount == 3) {
+            Sk4f rdiff = nextCCW(*r) - *r;
+            *r += fma(maskedOutsetCW, nextCW(rdiff), maskedOutset * rdiff);
         }
     }
 }
 
-// Generalizes the above function to extrapolate local coords such that after perspective division
-// of the device coordinate, the original local coordinate value is at the original un-outset
-// device position. r is the local coordinate's w component.
-static void compute_quad_edges_and_outset_persp_vertices(GrQuadAAFlags aaFlags, Sk4f* x, Sk4f* y,
-                                                         Sk4f* w, Sk4f* a, Sk4f* b, Sk4f* c,
-                                                         Sk4f* u, Sk4f* v, Sk4f* r,
-                                                         int uvrChannelCount) {
-    SkASSERT(uvrChannelCount == 0 || uvrChannelCount == 2 || uvrChannelCount == 3);
+static AI void outset_vertices(const Sk4f& outset, const Sk4f& outsetCW, const Sk4f& xdiff,
+                               const Sk4f& ydiff, const Sk4f& invLengths,
+                               Sk4f* x, Sk4f* y, Sk4f* u, Sk4f* v, Sk4f* r, int uvrCount) {
+    // x = x + outsetCW * nextCW(xdiff) - outset * xdiff (as above, but where mask = (1,1,1,1))
+    *x += fma(outsetCW, nextCW(xdiff), -outset * xdiff);
+    *y += fma(outsetCW, nextCW(ydiff), -outset * ydiff);
+    if (uvrCount > 0) {
+        Sk4f t = -outset * invLengths; // Bake minus sign in here
+        Sk4f tCW = outsetCW * nextCW(invLengths);
+        Sk4f udiff = nextCCW(*u) - *u;
+        Sk4f vdiff = nextCCW(*v) - *v;
+        *u += fma(tCW, nextCW(udiff), t * udiff);
+        *v += fma(tCW, nextCW(vdiff), t * vdiff);
+        if (uvrCount == 3) {
+            Sk4f rdiff = nextCCW(*r) - *r;
+            *r += fma(tCW, nextCW(rdiff), t * rdiff);
+        }
+    }
+}
+
+// Updates outset in place to account for non-90 degree angles of the quad edges stored in
+// xdiff, ydiff (which are assumed to be normalized).
+static void adjust_non_rectilinear_outset(const Sk4f& xdiff, const Sk4f& ydiff, Sk4f* outset) {
+    // The distance the point needs to move is outset/sqrt(1-cos^2(theta)), where theta is the angle
+    // between the two edges at that point. cos(theta) is equal to dot(xydiff, nextCW(xydiff)),
+    Sk4f cosTheta = fma(xdiff, nextCW(xdiff), ydiff * nextCW(ydiff));
+    *outset *= (1.f - cosTheta * cosTheta).rsqrt();
+    // But clamp to make sure we don't expand by a giant amount if the sheer is really high
+    *outset = Sk4f::Max(-3.f, Sk4f::Min(*outset, 3.f));
+}
+
+// Computes the vertices for the two nested quads used to create AA edges. The original single quad
+// should be duplicated as input in x1 and x2, y1 and y2, and possibly u1|u2, v1|v2, [r1|r2]
+// (controlled by uvrChannelCount).  While the values should be duplicated, they should be separate
+// pointers. The outset quad is written in-place back to x1, y1, etc. and the inset inner quad is
+// written to x2, y2, etc.
+static float compute_nested_quad_vertices(GrQuadAAFlags aaFlags, Sk4f* x1, Sk4f* y1,
+        Sk4f* u1, Sk4f* v1, Sk4f* r1, Sk4f* x2, Sk4f* y2, Sk4f* u2, Sk4f* v2, Sk4f* r2,
+        int uvrCount, bool rectilinear) {
+    SkASSERT(uvrCount == 0 || uvrCount == 2 || uvrCount == 3);
+
+    // Compute edge vectors for the quad.
+    auto xnext = nextCCW(*x1);
+    auto ynext = nextCCW(*y1);
+    // xdiff and ydiff will comprise the normalized vectors pointing along each quad edge.
+    Sk4f xdiff, ydiff, invLengths;
+    compute_edge_vectors(*x1, *y1, xnext, ynext, &xdiff, &ydiff, &invLengths);
+
+    // When outsetting, we want the new edge to be .5px away from the old line, which means the
+    // corners may need to be adjusted by more than .5px if the matrix had sheer.
+    Sk4f outset = 0.5f;
+    if (!rectilinear) {
+        adjust_non_rectilinear_outset(xdiff, ydiff, &outset);
+    }
+
+    // When insetting, cap the inset amount to be half of the edge length, except that each edge
+    // has to remain parallel, so we separately limit LR and TB to half of the smallest of the
+    // opposing edges.
+    Sk4f lengths = invLengths.invert();
+    Sk2f sides(SkMinScalar(lengths[0], lengths[3]), SkMinScalar(lengths[1], lengths[2]));
+    Sk4f edgeLimits = 0.5f * SkNx_shuffle<0, 1, 1, 0>(sides);
+
+    if ((edgeLimits < 0.5f).anyTrue()) {
+        // Dealing with a subpixel rectangle, so must calculate clamped insets and padded outsets.
+        // The outsets are padded to ensure that the quad spans 2 pixels for improved interpolation.
+        Sk4f inset = -Sk4f::Min(outset, edgeLimits);
+        Sk4f insetCW = -Sk4f::Min(outset, nextCW(edgeLimits));
+
+        // The parallel distance shift caused by outset is currently 0.5, but need to scale it up to
+        // 0.5*(2 - side) so that (side + 2*shift) = 2px. Thus scale outsets for thin edges by
+        // (2 - side) since it already has the 1/2.
+        Sk4f outsetScale = 2.f - 2.f * Sk4f::Min(edgeLimits, 0.5f); // == 1 for non-thin edges
+        Sk4f outsetCW = outset * nextCW(outsetScale);
+        outset *= outsetScale;
+
+        if (aaFlags != GrQuadAAFlags::kAll) {
+            Sk4f mask = compute_edge_mask(aaFlags);
+            outset_masked_vertices(outset, outsetCW, xdiff, ydiff, invLengths, mask, x1, y1,
+                                   u1, v1, r1, uvrCount);
+            outset_masked_vertices(inset, insetCW, xdiff, ydiff, invLengths, mask, x2, y2,
+                                   u2, v2, r2, uvrCount);
+        } else {
+            outset_vertices(outset, outsetCW, xdiff, ydiff, invLengths, x1, y1, u1, v1, r1, uvrCount);
+            outset_vertices(inset, insetCW, xdiff, ydiff, invLengths, x2, y2, u2, v2, r2, uvrCount);
+        }
+    } else {
+        // Since it's not subpixel, the inset is just the opposite of the outset and there's no
+        // difference between CCW and CW behavior.
+        Sk4f inset = -outset;
+        if (aaFlags != GrQuadAAFlags::kAll) {
+            Sk4f mask = compute_edge_mask(aaFlags);
+            outset_masked_vertices(outset, outset, xdiff, ydiff, invLengths, mask, x1, y1,
+                                   u1, v1, r1, uvrCount);
+            outset_masked_vertices(inset, inset, xdiff, ydiff, invLengths, mask, x2, y2,
+                                   u2, v2, r2, uvrCount);
+        } else {
+            outset_vertices(outset, outset, xdiff, ydiff, invLengths, x1, y1, u1, v1, r1, uvrCount);
+            outset_vertices(inset, inset, xdiff, ydiff, invLengths, x2, y2, u2, v2, r2, uvrCount);
+        }
+    }
+
+    // An approximation of the pixel area covered by the quad
+    sides = Sk2f::Min(1.f, sides);
+    return sides[0] * sides[1];
+}
+
+// For each device space corner, devP, label its left/right or top/bottom opposite device space
+// point opDevPt. The new device space point is opDevPt + s (devPt - opDevPt) where s is
+// (length(devPt - opDevPt) + outset) / length(devPt - opDevPt); This returns the interpolant s,
+// adjusted for any subpixel corrections. If subpixel, it also updates the max coverage.
+static Sk4f get_projected_interpolant(const Sk4f& len, const Sk4f& outsets, float* maxCoverage) {
+    if ((len < 1.f).anyTrue()) {
+        *maxCoverage *= len.min();
+
+        // When insetting, the amount is clamped to be half the minimum edge length to prevent
+        // overlap. When outsetting, the amount is padded to cover 2 pixels.
+        if ((outsets < 0.f).anyTrue()) {
+            return (len - 0.5f * len.min()) / len;
+        } else {
+            return (len + outsets * (2.f - len.min())) / len;
+        }
+    } else {
+        return (len + outsets) / len;
+    }
+}
+
+// Generalizes compute_nested_quad_vertices to extrapolate local coords such that
+// after perspective division of the device coordinate, the original local coordinate value is at
+// the original un-outset device position. r is the local coordinate's w component. However, since
+// the projected edges will be different for inner and outer quads, there isn't much reuse between
+// the calculations, so it's easier to just have this operate on one quad a time.
+static float compute_quad_persp_vertices(GrQuadAAFlags aaFlags, Sk4f* x, Sk4f* y,
+        Sk4f* w, Sk4f* u, Sk4f* v, Sk4f* r, int uvrCount, bool inset) {
+    SkASSERT(uvrCount == 0 || uvrCount == 2 || uvrCount == 3);
 
     auto iw = (*w).invert();
     auto x2d = (*x) * iw;
     auto y2d = (*y) * iw;
-    // Don't compute outset corners in the normalized space, which means u, v, and r don't need
-    // to be provided here (outset separately below).
-    compute_quad_edges_and_outset_vertices(aaFlags, &x2d, &y2d, a, b, c, nullptr, nullptr, nullptr,
-                                           /* uvr ct */ 0, /* outsetCorners */ false);
 
-    static const float kOutset = 0.5f;
+    // Must compute non-rectilinear outset quantity using the projected 2d edge vectors
+    Sk4f xdiff, ydiff, invLengths;
+    compute_edge_vectors(x2d, y2d, nextCCW(x2d), nextCCW(y2d), &xdiff, &ydiff, &invLengths);
+    Sk4f outset = inset ? -0.5f : 0.5f;
+    adjust_non_rectilinear_outset(xdiff, ydiff, &outset);
+
+    float maxProjectedCoverage = 1.f;
+
     if ((GrQuadAAFlags::kLeft | GrQuadAAFlags::kRight) & aaFlags) {
         // For each entry in x the equivalent entry in opX is the left/right opposite and so on.
         Sk4f opX = SkNx_shuffle<2, 3, 0, 1>(*x);
@@ -132,13 +237,11 @@ static void compute_quad_edges_and_outset_persp_vertices(GrQuadAAFlags aaFlags, 
         // vx/vy holds the device space left-to-right vectors along top and bottom of the quad.
         Sk2f vx = SkNx_shuffle<2, 3>(x2d) - SkNx_shuffle<0, 1>(x2d);
         Sk2f vy = SkNx_shuffle<2, 3>(y2d) - SkNx_shuffle<0, 1>(y2d);
-        Sk2f len = SkNx_fma(vx, vx, vy * vy).sqrt();
-        // For each device space corner, devP, label its left/right opposite device space point
-        // opDevPt. The new device space point is opDevPt + s (devPt - opDevPt) where s is
-        // (length(devPt - opDevPt) + 0.5) / length(devPt - opDevPt);
-        Sk4f s = SkNx_shuffle<0, 1, 0, 1>((len + kOutset) / len);
+        Sk4f len = SkNx_shuffle<0, 1, 0, 1>(SkNx_fma(vx, vx, vy * vy).sqrt());
+
         // Compute t in homogeneous space from s using similar triangles so that we can produce
         // homogeneous outset vertices for perspective-correct interpolation.
+        Sk4f s = get_projected_interpolant(len, outset, &maxProjectedCoverage);
         Sk4f sOpW = s * opW;
         Sk4f t = sOpW / (sOpW + (1.f - s) * (*w));
         // mask is used to make the t values be 1 when the left/right side is not antialiased.
@@ -151,12 +254,12 @@ static void compute_quad_edges_and_outset_persp_vertices(GrQuadAAFlags aaFlags, 
         *y = opY + t * (*y - opY);
         *w = opW + t * (*w - opW);
 
-        if (uvrChannelCount > 0) {
+        if (uvrCount > 0) {
             Sk4f opU = SkNx_shuffle<2, 3, 0, 1>(*u);
             Sk4f opV = SkNx_shuffle<2, 3, 0, 1>(*v);
             *u = opU + t * (*u - opU);
             *v = opV + t * (*v - opV);
-            if (uvrChannelCount == 3) {
+            if (uvrCount == 3) {
                 Sk4f opR = SkNx_shuffle<2, 3, 0, 1>(*r);
                 *r = opR + t * (*r - opR);
             }
@@ -178,10 +281,9 @@ static void compute_quad_edges_and_outset_persp_vertices(GrQuadAAFlags aaFlags, 
 
         Sk2f vx = SkNx_shuffle<1, 3>(x2d) - SkNx_shuffle<0, 2>(x2d);
         Sk2f vy = SkNx_shuffle<1, 3>(y2d) - SkNx_shuffle<0, 2>(y2d);
-        Sk2f len = SkNx_fma(vx, vx, vy * vy).sqrt();
+        Sk4f len = SkNx_shuffle<0, 0, 1, 1>(SkNx_fma(vx, vx, vy * vy).sqrt());
 
-        Sk4f s = SkNx_shuffle<0, 0, 1, 1>((len + kOutset) / len);
-
+        Sk4f s = get_projected_interpolant(len, outset, &maxProjectedCoverage);
         Sk4f sOpW = s * opW;
         Sk4f t = sOpW / (sOpW + (1.f - s) * (*w));
 
@@ -194,46 +296,102 @@ static void compute_quad_edges_and_outset_persp_vertices(GrQuadAAFlags aaFlags, 
         *y = opY + t * (*y - opY);
         *w = opW + t * (*w - opW);
 
-        if (uvrChannelCount > 0) {
+        if (uvrCount > 0) {
             Sk4f opU = SkNx_shuffle<1, 0, 3, 2>(*u);
             Sk4f opV = SkNx_shuffle<1, 0, 3, 2>(*v);
             *u = opU + t * (*u - opU);
             *v = opV + t * (*v - opV);
-            if (uvrChannelCount == 3) {
+            if (uvrCount == 3) {
                 Sk4f opR = SkNx_shuffle<1, 0, 3, 2>(*r);
                 *r = opR + t * (*r - opR);
             }
         }
     }
+
+    return maxProjectedCoverage;
 }
 
-// Fast path for non-AA quads batched into an AA op. Since they are part of the AA op, the vertices
-// need to have valid edge equations that ensure coverage is set to 1. To get perspective
-// interpolation of the edge distance, the vertex shader outputs d*w and then multiplies by 1/w in
-// the fragment shader. For non-AA edges, the edge equation can be simplified to 0*x/w + y/w + c >=
-// 1, so the vertex shader outputs c*w. The quad is sent as two triangles, so a fragment is the
-// interpolation between 3 of the 4 vertices. If iX are the weights for the 3 involved quad
-// vertices, then the fragment shader's state is:
-//   f_cw = c * (iA*wA + iB*wB + iC*wC) and f_1/w = iA/wA + iB/wB + iC/wC
-//   (where A,B,C are chosen from {1,2,3, 4})
-// When there's no perspective, then f_cw*f_1/w = c and setting c = 1 guarantees a proper non-AA
-// edge. Unfortunately when there is perspective, f_cw*f_1/w != c unless the fragment is at a
-// vertex. We must pick a c such that f_cw*f_1/w >= 1 across the whole primitive.
-// Let n = min(w1,w2,w3,w4) and m = max(w1,w2,w3,w4) and rewrite
-//   f_1/w=(iA*wB*wC + iB*wA*wC + iC*wA*wB) / (wA*wB*wC)
-// Since the iXs are weights for the interior of the primitive, then we have:
-//   n <= (iA*wA + iB*wB + iC*wC) <= m and
-//   n^2 <= (iA*wB*wC + iB*wA*wC + iC*wA*wB) <= m^2 and
-//   n^3 <= wA*wB*wC <= m^3 regardless of the choice of A,B, and C
-// Thus if we set c = m^3/n^3, it guarantees f_cw*f_1/w >= 1 for any perspective.
-static SkPoint3 compute_non_aa_persp_edge_coeffs(const Sk4f& w) {
-    float n = w.min();
-    float m = w.max();
-    return {0.f, 0.f, (m * m * m) / (n * n * n)};
+enum class CoverageMode {
+    kNone,
+    kWithPosition,
+    kWithColor
+};
+
+static CoverageMode get_mode_for_spec(const GrQuadPerEdgeAA::VertexSpec& spec) {
+    if (spec.usesCoverageAA()) {
+        if (spec.compatibleWithAlphaAsCoverage() && spec.hasVertexColors()) {
+            return CoverageMode::kWithColor;
+        } else {
+            return CoverageMode::kWithPosition;
+        }
+    } else {
+        return CoverageMode::kNone;
+    }
 }
 
-// When there's guaranteed no perspective, the edge coefficients for non-AA quads is constant
-static constexpr SkPoint3 kNonAANoPerspEdgeCoeffs = {0, 0, 1};
+// Writes four vertices in triangle strip order, including the additional data for local
+// coordinates, domain, color, and coverage as needed to satisfy the vertex spec.
+static void write_quad(GrVertexWriter* vb, const GrQuadPerEdgeAA::VertexSpec& spec,
+                       CoverageMode mode, float coverage,
+                       SkPMColor4f color4f, bool wideColor,
+                       const SkRect& domain,
+                       const Sk4f& x, const Sk4f& y, const Sk4f& w,
+                       const Sk4f& u, const Sk4f& v, const Sk4f& r) {
+    static constexpr auto If = GrVertexWriter::If<float>;
+
+    if (mode == CoverageMode::kWithColor) {
+        // Multiply the color by the coverage up front
+        SkASSERT(spec.hasVertexColors());
+        color4f = color4f * coverage;
+    }
+    GrVertexColor color(color4f, wideColor);
+
+    for (int i = 0; i < 4; ++i) {
+        // save position, this is a float2 or float3 or float4 depending on the combination of
+        // perspective and coverage mode.
+        vb->write(x[i], y[i], If(spec.deviceQuadType() == GrQuadType::kPerspective, w[i]),
+                  If(mode == CoverageMode::kWithPosition, coverage));
+
+        // save color
+        if (spec.hasVertexColors()) {
+            vb->write(color);
+        }
+
+        // save local position
+        if (spec.hasLocalCoords()) {
+            vb->write(u[i], v[i], If(spec.localQuadType() == GrQuadType::kPerspective, r[i]));
+        }
+
+        // save the domain
+        if (spec.hasDomain()) {
+            vb->write(domain);
+        }
+    }
+}
+
+GR_DECLARE_STATIC_UNIQUE_KEY(gAAFillRectIndexBufferKey);
+
+static const int kVertsPerAAFillRect = 8;
+static const int kIndicesPerAAFillRect = 30;
+
+static sk_sp<const GrBuffer> get_index_buffer(GrResourceProvider* resourceProvider) {
+    GR_DEFINE_STATIC_UNIQUE_KEY(gAAFillRectIndexBufferKey);
+
+    // clang-format off
+    static const uint16_t gFillAARectIdx[] = {
+        0, 1, 2, 1, 3, 2,
+        0, 4, 1, 4, 5, 1,
+        0, 6, 4, 0, 2, 6,
+        2, 3, 6, 3, 7, 6,
+        1, 5, 3, 3, 5, 7,
+    };
+    // clang-format on
+
+    GR_STATIC_ASSERT(SK_ARRAY_COUNT(gFillAARectIdx) == kIndicesPerAAFillRect);
+    return resourceProvider->findOrCreatePatternedIndexBuffer(
+            gFillAARectIdx, kIndicesPerAAFillRect, GrQuadPerEdgeAA::kNumAAQuadsInIndexBuffer,
+            kVertsPerAAFillRect, gAAFillRectIndexBufferKey);
+}
 
 } // anonymous namespace
 
@@ -242,97 +400,99 @@ namespace GrQuadPerEdgeAA {
 ////////////////// Tessellate Implementation
 
 void* Tessellate(void* vertices, const VertexSpec& spec, const GrPerspQuad& deviceQuad,
-                 const GrColor& color, const GrPerspQuad& localQuad, const SkRect& domain,
+                 const SkPMColor4f& color4f, const GrPerspQuad& localQuad, const SkRect& domain,
                  GrQuadAAFlags aaFlags) {
-    bool deviceHasPerspective = spec.deviceQuadType() == GrQuadType::kPerspective;
-    bool localHasPerspective = spec.localQuadType() == GrQuadType::kPerspective;
+    bool wideColor = GrQuadPerEdgeAA::ColorType::kHalf == spec.colorType();
+    CoverageMode mode = get_mode_for_spec(spec);
 
-    // Load position data into Sk4fs (always x, y and maybe w)
-    Sk4f x = deviceQuad.x4f();
-    Sk4f y = deviceQuad.y4f();
-    Sk4f w;
-    if (deviceHasPerspective) {
-        w = deviceQuad.w4f();
-    }
+    // Load position data into Sk4fs (always x, y, and load w to avoid branching down the road)
+    Sk4f oX = deviceQuad.x4f();
+    Sk4f oY = deviceQuad.y4f();
+    Sk4f oW = deviceQuad.w4f(); // Guaranteed to be 1f if it's not perspective
 
     // Load local position data into Sk4fs (either none, just u,v or all three)
-    Sk4f u, v, r;
+    Sk4f oU, oV, oR;
     if (spec.hasLocalCoords()) {
-        u = localQuad.x4f();
-        v = localQuad.y4f();
-
-        if (localHasPerspective) {
-            r = localQuad.w4f();
-        }
+        oU = localQuad.x4f();
+        oV = localQuad.y4f();
+        oR = localQuad.w4f(); // Will be ignored if the local quad type isn't perspective
     }
 
-    Sk4f a, b, c;
-    if (spec.usesCoverageAA()) {
-        // Must calculate edges and possibly outside the positions
-        if (aaFlags == GrQuadAAFlags::kNone) {
-            // A non-AA quad that got batched into an AA group, so its edges will be the same for
-            // all four vertices and it does not need to be outset
-            SkPoint3 edgeCoeffs;
-            if (deviceHasPerspective) {
-                edgeCoeffs = compute_non_aa_persp_edge_coeffs(w);
-            } else {
-                edgeCoeffs = kNonAANoPerspEdgeCoeffs;
-            }
-
-            // Copy the coefficients into all four equations
-            a = edgeCoeffs.fX;
-            b = edgeCoeffs.fY;
-            c = edgeCoeffs.fZ;
-        } else if (deviceHasPerspective) {
-            // For simplicity, pointers to u, v, and r are always provided, but the local dim param
-            // ensures that only loaded Sk4fs are modified in the compute functions.
-            compute_quad_edges_and_outset_persp_vertices(aaFlags, &x, &y, &w, &a, &b, &c,
-                                                         &u, &v, &r, spec.localDimensionality());
-        } else {
-            compute_quad_edges_and_outset_vertices(aaFlags, &x, &y, &a, &b, &c, &u, &v, &r,
-                                                   spec.localDimensionality(), /* outset */ true);
-        }
-    }
-
-    // Now rearrange the Sk4fs into the interleaved vertex layout:
-    //  i.e. x1x2x3x4 y1y2y3y4 -> x1y1 x2y2 x3y3 x4y
     GrVertexWriter vb{vertices};
-    for (int i = 0; i < 4; ++i) {
-        // save position
-        if (deviceHasPerspective) {
-            vb.write<SkPoint3>({x[i], y[i], w[i]});
-        } else {
-            vb.write<SkPoint>({x[i], y[i]});
-        }
+    if (spec.usesCoverageAA()) {
+        SkASSERT(mode == CoverageMode::kWithPosition || mode == CoverageMode::kWithColor);
 
-        // save color
-        if (spec.hasVertexColors()) {
-            vb.write<GrColor>(color);
-        }
+        // Must calculate two new quads, an outset and inset by .5 in projected device space, so
+        // duplicate the original quad into new Sk4fs for the inset.
+        Sk4f iX = oX, iY = oY, iW = oW;
+        Sk4f iU = oU, iV = oV, iR = oR;
 
-        // save local position
-        if (spec.hasLocalCoords()) {
-            if (localHasPerspective) {
-                vb.write<SkPoint3>({u[i], v[i], r[i]});
+        float maxCoverage = 1.f;
+        if (aaFlags != GrQuadAAFlags::kNone) {
+            if (spec.deviceQuadType() == GrQuadType::kPerspective) {
+                // Outset and inset the quads independently because perspective makes each shift
+                // unique. Since iX copied pre-outset oX, this will compute the proper inset too.
+                compute_quad_persp_vertices(aaFlags, &oX, &oY, &oW, &oU, &oV, &oW,
+                                            spec.localDimensionality(), /* inset */ false);
+                // Save coverage limit when computing inset quad
+                maxCoverage = compute_quad_persp_vertices(aaFlags, &iX, &iY, &iW, &iU, &iV, &iW,
+                                                          spec.localDimensionality(), true);
             } else {
-                vb.write<SkPoint>({u[i], v[i]});
+                // In the 2D case, insetting and outsetting can reuse the edge vectors, so the
+                // nested quads are computed together
+                maxCoverage = compute_nested_quad_vertices(aaFlags, &oX, &oY, &oU, &oV, &oR,
+                        &iX, &iY, &iU, &iV, &iR, spec.localDimensionality(),
+                        spec.deviceQuadType() <= GrQuadType::kRectilinear);
             }
-        }
+            // NOTE: could provide an even more optimized tessellation function for axis-aligned
+            // rects since the positions can be outset by constants without doing vector math,
+            // except it must handle identifying the winding of the quad vertices if the transform
+            // applied a mirror, etc. The current 2D case is already adequately fast.
+        } // else don't adjust any positions, let the outer quad form degenerate triangles
 
-        // save the domain
-        if (spec.hasDomain()) {
-            vb.write<SkRect>(domain);
-        }
-
-        // save the edges
-        if (spec.usesCoverageAA()) {
-            for (int j = 0; j < 4; j++) {
-                vb.write<SkPoint3>({a[j], b[j], c[j]});
-            }
-        }
+        // Write two quads for inner and outer, inner will use the
+        write_quad(&vb, spec, mode, maxCoverage, color4f, wideColor, domain,
+                   iX, iY, iW, iU, iV, iR);
+        write_quad(&vb, spec, mode, 0.f, color4f, wideColor, domain, oX, oY, oW, oU, oV, oR);
+    } else {
+        // No outsetting needed, just write a single quad with full coverage
+        SkASSERT(mode == CoverageMode::kNone);
+        write_quad(&vb, spec, mode, 1.f, color4f, wideColor, domain, oX, oY, oW, oU, oV, oR);
     }
 
     return vb.fPtr;
+}
+
+bool ConfigureMeshIndices(GrMeshDrawOp::Target* target, GrMesh* mesh, const VertexSpec& spec,
+                          int quadCount) {
+    if (spec.usesCoverageAA()) {
+        // AA quads use 8 vertices, basically nested rectangles
+        sk_sp<const GrBuffer> ibuffer = get_index_buffer(target->resourceProvider());
+        if (!ibuffer) {
+            return false;
+        }
+
+        mesh->setPrimitiveType(GrPrimitiveType::kTriangles);
+        mesh->setIndexedPatterned(std::move(ibuffer), kIndicesPerAAFillRect, kVertsPerAAFillRect,
+                                  quadCount, kNumAAQuadsInIndexBuffer);
+    } else {
+        // Non-AA quads use 4 vertices, and regular triangle strip layout
+        if (quadCount > 1) {
+            sk_sp<const GrBuffer> ibuffer = target->resourceProvider()->refQuadIndexBuffer();
+            if (!ibuffer) {
+                return false;
+            }
+
+            mesh->setPrimitiveType(GrPrimitiveType::kTriangles);
+            mesh->setIndexedPatterned(std::move(ibuffer), 6, 4, quadCount,
+                                      GrResourceProvider::QuadCountOfQuadBuffer());
+        } else {
+            mesh->setPrimitiveType(GrPrimitiveType::kTriangleStrip);
+            mesh->setNonIndexedNonInstanced(4);
+        }
+    }
+
+    return true;
 }
 
 ////////////////// VertexSpec Implementation
@@ -345,159 +505,264 @@ int VertexSpec::localDimensionality() const {
     return fHasLocalCoords ? (this->localQuadType() == GrQuadType::kPerspective ? 3 : 2) : 0;
 }
 
-////////////////// GPAttributes Implementation
+////////////////// Geometry Processor Implementation
 
-GPAttributes::GPAttributes(const VertexSpec& spec) {
-    if (spec.deviceDimensionality() == 3) {
-        fPositions = {"position", kFloat3_GrVertexAttribType, kFloat3_GrSLType};
-    } else {
-        fPositions = {"position", kFloat2_GrVertexAttribType, kFloat2_GrSLType};
+class QuadPerEdgeAAGeometryProcessor : public GrGeometryProcessor {
+public:
+
+    static sk_sp<GrGeometryProcessor> Make(const VertexSpec& spec) {
+        return sk_sp<QuadPerEdgeAAGeometryProcessor>(new QuadPerEdgeAAGeometryProcessor(spec));
     }
 
-    int localDim = spec.localDimensionality();
-    if (localDim == 3) {
-        fLocalCoords = {"localCoord", kFloat3_GrVertexAttribType, kFloat3_GrSLType};
-    } else if (localDim == 2) {
-        fLocalCoords = {"localCoord", kFloat2_GrVertexAttribType, kFloat2_GrSLType};
-    } // else localDim == 0 and attribute remains uninitialized
-
-    if (spec.hasVertexColors()) {
-        fColors = {"color", kUByte4_norm_GrVertexAttribType, kHalf4_GrSLType};
+    static sk_sp<GrGeometryProcessor> Make(const VertexSpec& vertexSpec, const GrShaderCaps& caps,
+                                           GrTextureType textureType, GrPixelConfig textureConfig,
+                                           const GrSamplerState& samplerState,
+                                           uint32_t extraSamplerKey,
+                                           sk_sp<GrColorSpaceXform> textureColorSpaceXform) {
+        return sk_sp<QuadPerEdgeAAGeometryProcessor>(new QuadPerEdgeAAGeometryProcessor(
+                vertexSpec, caps, textureType, textureConfig, samplerState, extraSamplerKey,
+                std::move(textureColorSpaceXform)));
     }
 
-    if (spec.hasDomain()) {
-        fDomain = {"domain", kFloat4_GrVertexAttribType, kFloat4_GrSLType};
+    const char* name() const override { return "QuadPerEdgeAAGeometryProcessor"; }
+
+    void getGLSLProcessorKey(const GrShaderCaps&, GrProcessorKeyBuilder* b) const override {
+        // domain, texturing, device-dimensions are single bit flags
+        uint32_t x = fDomain.isInitialized() ? 0 : 1;
+        x |= fSampler.isInitialized() ? 0 : 2;
+        x |= fNeedsPerspective ? 0 : 4;
+        // local coords require 2 bits (3 choices), 00 for none, 01 for 2d, 10 for 3d
+        if (fLocalCoord.isInitialized()) {
+            x |= kFloat3_GrVertexAttribType == fLocalCoord.cpuType() ? 8 : 16;
+        }
+        // similar for colors, 00 for none, 01 for bytes, 10 for half-floats
+        if (fColor.isInitialized()) {
+            x |= kUByte4_norm_GrVertexAttribType == fColor.cpuType() ? 32 : 64;
+        }
+        // and coverage mode, 00 for none, 01 for withposition, 10 for withcolor
+        if (fCoverageMode != CoverageMode::kNone) {
+            x |= CoverageMode::kWithPosition == fCoverageMode ? 128 : 256;
+        }
+
+        b->add32(GrColorSpaceXform::XformKey(fTextureColorSpaceXform.get()));
+        b->add32(x);
     }
 
-    if (spec.usesCoverageAA()) {
-        fAAEdges[0] = {"aaEdge0", kFloat3_GrVertexAttribType, kFloat3_GrSLType};
-        fAAEdges[1] = {"aaEdge1", kFloat3_GrVertexAttribType, kFloat3_GrSLType};
-        fAAEdges[2] = {"aaEdge2", kFloat3_GrVertexAttribType, kFloat3_GrSLType};
-        fAAEdges[3] = {"aaEdge3", kFloat3_GrVertexAttribType, kFloat3_GrSLType};
+    GrGLSLPrimitiveProcessor* createGLSLInstance(const GrShaderCaps& caps) const override {
+        class GLSLProcessor : public GrGLSLGeometryProcessor {
+        public:
+            void setData(const GrGLSLProgramDataManager& pdman, const GrPrimitiveProcessor& proc,
+                         FPCoordTransformIter&& transformIter) override {
+                const auto& gp = proc.cast<QuadPerEdgeAAGeometryProcessor>();
+                if (gp.fLocalCoord.isInitialized()) {
+                    this->setTransformDataHelper(SkMatrix::I(), pdman, &transformIter);
+                }
+                fTextureColorSpaceXformHelper.setData(pdman, gp.fTextureColorSpaceXform.get());
+            }
+
+        private:
+            void onEmitCode(EmitArgs& args, GrGPArgs* gpArgs) override {
+                using Interpolation = GrGLSLVaryingHandler::Interpolation;
+
+                const auto& gp = args.fGP.cast<QuadPerEdgeAAGeometryProcessor>();
+                fTextureColorSpaceXformHelper.emitCode(args.fUniformHandler,
+                                                       gp.fTextureColorSpaceXform.get());
+
+                args.fVaryingHandler->emitAttributes(gp);
+
+                if (gp.fCoverageMode == CoverageMode::kWithPosition) {
+                    // Strip last channel from the vertex attribute to remove coverage and get the
+                    // actual position
+                    if (gp.fNeedsPerspective) {
+                        args.fVertBuilder->codeAppendf("float3 position = %s.xyz;",
+                                                       gp.fPosition.name());
+                    } else {
+                        args.fVertBuilder->codeAppendf("float2 position = %s.xy;",
+                                                       gp.fPosition.name());
+                    }
+                    gpArgs->fPositionVar = {"position",
+                                            gp.fNeedsPerspective ? kFloat3_GrSLType
+                                                                 : kFloat2_GrSLType,
+                                            GrShaderVar::kNone_TypeModifier};
+                } else {
+                    // No coverage to eliminate
+                    gpArgs->fPositionVar = gp.fPosition.asShaderVar();
+                }
+
+                // Handle local coordinates if they exist
+                if (gp.fLocalCoord.isInitialized()) {
+                    // NOTE: If the only usage of local coordinates is for the inline texture fetch
+                    // before FPs, then there are no registered FPCoordTransforms and this ends up
+                    // emitting nothing, so there isn't a duplication of local coordinates
+                    this->emitTransforms(args.fVertBuilder,
+                                         args.fVaryingHandler,
+                                         args.fUniformHandler,
+                                         gp.fLocalCoord.asShaderVar(),
+                                         args.fFPCoordTransformHandler);
+                }
+
+                // Solid color before any texturing gets modulated in
+                if (gp.fColor.isInitialized()) {
+                    // The color cannot be flat if the varying coverage has been modulated into it
+                    args.fVaryingHandler->addPassThroughAttribute(gp.fColor, args.fOutputColor,
+                            gp.fCoverageMode == CoverageMode::kWithColor ?
+                            Interpolation::kInterpolated : Interpolation::kCanBeFlat);
+                } else {
+                    // Output color must be initialized to something
+                    args.fFragBuilder->codeAppendf("%s = half4(1);", args.fOutputColor);
+                }
+
+                // If there is a texture, must also handle texture coordinates and reading from
+                // the texture in the fragment shader before continuing to fragment processors.
+                if (gp.fSampler.isInitialized()) {
+                    // Texture coordinates clamped by the domain on the fragment shader; if the GP
+                    // has a texture, it's guaranteed to have local coordinates
+                    args.fFragBuilder->codeAppend("float2 texCoord;");
+                    if (gp.fLocalCoord.cpuType() == kFloat3_GrVertexAttribType) {
+                        // Can't do a pass through since we need to perform perspective division
+                        GrGLSLVarying v(gp.fLocalCoord.gpuType());
+                        args.fVaryingHandler->addVarying(gp.fLocalCoord.name(), &v);
+                        args.fVertBuilder->codeAppendf("%s = %s;",
+                                                       v.vsOut(), gp.fLocalCoord.name());
+                        args.fFragBuilder->codeAppendf("texCoord = %s.xy / %s.z;",
+                                                       v.fsIn(), v.fsIn());
+                    } else {
+                        args.fVaryingHandler->addPassThroughAttribute(gp.fLocalCoord, "texCoord");
+                    }
+
+                    // Clamp the now 2D localCoordName variable by the domain if it is provided
+                    if (gp.fDomain.isInitialized()) {
+                        args.fFragBuilder->codeAppend("float4 domain;");
+                        args.fVaryingHandler->addPassThroughAttribute(gp.fDomain, "domain",
+                                                                      Interpolation::kCanBeFlat);
+                        args.fFragBuilder->codeAppend(
+                                "texCoord = clamp(texCoord, domain.xy, domain.zw);");
+                    }
+
+                    // Now modulate the starting output color by the texture lookup
+                    args.fFragBuilder->codeAppendf("%s = ", args.fOutputColor);
+                    args.fFragBuilder->appendTextureLookupAndModulate(
+                        args.fOutputColor, args.fTexSamplers[0], "texCoord", kFloat2_GrSLType,
+                        &fTextureColorSpaceXformHelper);
+                    args.fFragBuilder->codeAppend(";");
+                }
+
+                // And lastly, output the coverage calculation code
+                if (gp.fCoverageMode == CoverageMode::kWithPosition) {
+                    GrGLSLVarying coverage(kFloat_GrSLType);
+                    args.fVaryingHandler->addVarying("coverage", &coverage);
+                    if (gp.fNeedsPerspective) {
+                        args.fVertBuilder->codeAppendf("%s = %s.w;",
+                                                       coverage.vsOut(), gp.fPosition.name());
+                    } else {
+                        args.fVertBuilder->codeAppendf("%s = %s.z;",
+                                                       coverage.vsOut(), gp.fPosition.name());
+                    }
+
+                    args.fFragBuilder->codeAppendf("%s = float4(%s);",
+                                                   args.fOutputCoverage, coverage.fsIn());
+                } else {
+                    // Set coverage to 1, since it's either non-AA or the coverage was already
+                    // folded into the output color
+                    args.fFragBuilder->codeAppendf("%s = float4(1);", args.fOutputCoverage);
+                }
+            }
+            GrGLSLColorSpaceXformHelper fTextureColorSpaceXformHelper;
+        };
+        return new GLSLProcessor;
     }
-}
 
-bool GPAttributes::needsPerspectiveInterpolation() const {
-    // This only needs to check the position; local position having perspective does not change
-    // how the varyings are interpolated
-    return fPositions.cpuType() == kFloat3_GrVertexAttribType;
-}
-
-uint32_t GPAttributes::getKey() const {
-    // aa, color, domain are single bit flags
-    uint32_t x = this->usesCoverageAA() ? 0 : 1;
-    x |= this->hasVertexColors() ? 0 : 2;
-    x |= this->hasDomain() ? 0 : 4;
-    // regular position has two options as well
-    x |= kFloat3_GrVertexAttribType == fPositions.cpuType() ? 0 : 8;
-    // local coords require 2 bits (3 choices), 00 for none, 01 for 2d, 10 for 3d
-    if (this->hasLocalCoords()) {
-        x |= kFloat3_GrVertexAttribType == fLocalCoords.cpuType() ? 16 : 32;
-    }
-    return x;
-}
-
-void GPAttributes::emitColor(GrGLSLPrimitiveProcessor::EmitArgs& args,
-                             GrGLSLColorSpaceXformHelper* csXformHelper,
-                             const char* colorVarName) const {
-    using Interpolation = GrGLSLVaryingHandler::Interpolation;
-
-    if (!fColors.isInitialized()) {
-        return;
+private:
+    QuadPerEdgeAAGeometryProcessor(const VertexSpec& spec)
+            : INHERITED(kQuadPerEdgeAAGeometryProcessor_ClassID)
+            , fTextureColorSpaceXform(nullptr) {
+        SkASSERT(!spec.hasDomain());
+        this->initializeAttrs(spec);
+        this->setTextureSamplerCnt(0);
     }
 
-    if (csXformHelper == nullptr || csXformHelper->isNoop()) {
-        args.fVaryingHandler->addPassThroughAttribute(
-                fColors, args.fOutputColor, Interpolation::kCanBeFlat);
-    } else {
-        GrGLSLVarying varying(kHalf4_GrSLType);
-        args.fVaryingHandler->addVarying(colorVarName, &varying);
-        args.fVertBuilder->codeAppendf("half4 %s = ", colorVarName);
-        args.fVertBuilder->appendColorGamutXform(fColors.name(), csXformHelper);
-        args.fVertBuilder->codeAppend(";");
-        args.fVertBuilder->codeAppendf("%s = half4(%s.rgb * %s.a, %s.a);",
-                                       varying.vsOut(), colorVarName, colorVarName, colorVarName);
-        args.fFragBuilder->codeAppendf("%s = %s;", args.fOutputColor, varying.fsIn());
-    }
-}
-
-void GPAttributes::emitExplicitLocalCoords(
-        GrGLSLPrimitiveProcessor::EmitArgs& args, const char* localCoordName,
-        const char* domainName) const {
-    using Interpolation = GrGLSLVaryingHandler::Interpolation;
-    if (!this->hasLocalCoords()) {
-        return;
+    QuadPerEdgeAAGeometryProcessor(const VertexSpec& spec, const GrShaderCaps& caps,
+                                   GrTextureType textureType, GrPixelConfig textureConfig,
+                                   const GrSamplerState& samplerState,
+                                   uint32_t extraSamplerKey,
+                                   sk_sp<GrColorSpaceXform> textureColorSpaceXform)
+            : INHERITED(kQuadPerEdgeAAGeometryProcessor_ClassID)
+            , fTextureColorSpaceXform(std::move(textureColorSpaceXform))
+            , fSampler(textureType, textureConfig, samplerState, extraSamplerKey) {
+        SkASSERT(spec.hasLocalCoords());
+        this->initializeAttrs(spec);
+        this->setTextureSamplerCnt(1);
     }
 
-    args.fFragBuilder->codeAppendf("float2 %s;", localCoordName);
-    bool localHasPerspective = fLocalCoords.cpuType() == kFloat3_GrVertexAttribType;
-    if (localHasPerspective) {
-        // Can't do a pass through since we need to perform perspective division
-        GrGLSLVarying v(fLocalCoords.gpuType());
-        args.fVaryingHandler->addVarying(fLocalCoords.name(), &v);
-        args.fVertBuilder->codeAppendf("%s = %s;", v.vsOut(), fLocalCoords.name());
-        args.fFragBuilder->codeAppendf("%s = %s.xy / %s.z;", localCoordName, v.fsIn(), v.fsIn());
-    } else {
-        args.fVaryingHandler->addPassThroughAttribute(fLocalCoords, localCoordName);
-    }
+    void initializeAttrs(const VertexSpec& spec) {
+        fNeedsPerspective = spec.deviceDimensionality() == 3;
+        fCoverageMode = get_mode_for_spec(spec);
 
-    // Clamp the now 2D localCoordName variable by the domain if it is provided
-    if (this->hasDomain()) {
-        args.fFragBuilder->codeAppendf("float4 %s;", domainName);
-        args.fVaryingHandler->addPassThroughAttribute(fDomain, domainName,
-                                                      Interpolation::kCanBeFlat);
-        args.fFragBuilder->codeAppendf("%s = clamp(%s, %s.xy, %s.zw);",
-                                       localCoordName, localCoordName, domainName, domainName);
-    }
-}
-
-void GPAttributes::emitCoverage(GrGLSLPrimitiveProcessor::EmitArgs& args,
-                                const char* edgeDistName) const {
-    if (this->usesCoverageAA()) {
-        bool mulByFragCoordW = false;
-        GrGLSLVarying aaDistVarying(kFloat4_GrSLType,
-                                    GrGLSLVarying::Scope::kVertToFrag);
-        args.fVaryingHandler->addVarying(edgeDistName, &aaDistVarying);
-
-        if (kFloat3_GrVertexAttribType == fPositions.cpuType()) {
-            // The distance from edge equation e to homogeneous point p=sk_Position
-            // is e.x*p.x/p.w + e.y*p.y/p.w + e.z. However, we want screen space
-            // interpolation of this distance. We can do this by multiplying the
-            // varying in the VS by p.w and then multiplying by sk_FragCoord.w in
-            // the FS. So we output e.x*p.x + e.y*p.y + e.z * p.w
-            args.fVertBuilder->codeAppendf(
-                    R"(%s = float4(dot(%s, %s), dot(%s, %s),
-                                   dot(%s, %s), dot(%s, %s));)",
-                    aaDistVarying.vsOut(), fAAEdges[0].name(), fPositions.name(),
-                    fAAEdges[1].name(), fPositions.name(), fAAEdges[2].name(), fPositions.name(),
-                    fAAEdges[3].name(), fPositions.name());
-            mulByFragCoordW = true;
+        if (fCoverageMode == CoverageMode::kWithPosition) {
+            if (fNeedsPerspective) {
+                fPosition = {"positionWithCoverage", kFloat4_GrVertexAttribType, kFloat4_GrSLType};
+            } else {
+                fPosition = {"positionWithCoverage", kFloat3_GrVertexAttribType, kFloat3_GrSLType};
+            }
         } else {
-            args.fVertBuilder->codeAppendf(
-                    R"(%s = float4(dot(%s.xy, %s.xy) + %s.z,
-                                   dot(%s.xy, %s.xy) + %s.z,
-                                   dot(%s.xy, %s.xy) + %s.z,
-                                   dot(%s.xy, %s.xy) + %s.z);)",
-                    aaDistVarying.vsOut(),
-                    fAAEdges[0].name(), fPositions.name(), fAAEdges[0].name(),
-                    fAAEdges[1].name(), fPositions.name(), fAAEdges[1].name(),
-                    fAAEdges[2].name(), fPositions.name(), fAAEdges[2].name(),
-                    fAAEdges[3].name(), fPositions.name(), fAAEdges[3].name());
+            if (fNeedsPerspective) {
+                fPosition = {"position", kFloat3_GrVertexAttribType, kFloat3_GrSLType};
+            } else {
+                fPosition = {"position", kFloat2_GrVertexAttribType, kFloat2_GrSLType};
+            }
         }
 
-        args.fFragBuilder->codeAppendf(
-                "float min%s = min(min(%s.x, %s.y), min(%s.z, %s.w));",
-                edgeDistName, aaDistVarying.fsIn(), aaDistVarying.fsIn(), aaDistVarying.fsIn(),
-                aaDistVarying.fsIn());
-        if (mulByFragCoordW) {
-            args.fFragBuilder->codeAppendf("min%s *= sk_FragCoord.w;", edgeDistName);
+        int localDim = spec.localDimensionality();
+        if (localDim == 3) {
+            fLocalCoord = {"localCoord", kFloat3_GrVertexAttribType, kFloat3_GrSLType};
+        } else if (localDim == 2) {
+            fLocalCoord = {"localCoord", kFloat2_GrVertexAttribType, kFloat2_GrSLType};
+        } // else localDim == 0 and attribute remains uninitialized
+
+        if (ColorType::kByte == spec.colorType()) {
+            fColor = {"color", kUByte4_norm_GrVertexAttribType, kHalf4_GrSLType};
+        } else if (ColorType::kHalf == spec.colorType()) {
+            fColor = {"color", kHalf4_GrVertexAttribType, kHalf4_GrSLType};
         }
-        args.fFragBuilder->codeAppendf("%s = float4(saturate(min%s));",
-                                       args.fOutputCoverage, edgeDistName);
-    } else {
-        // Set coverage to 1
-        args.fFragBuilder->codeAppendf("%s = float4(1);", args.fOutputCoverage);
+
+        if (spec.hasDomain()) {
+            fDomain = {"domain", kFloat4_GrVertexAttribType, kFloat4_GrSLType};
+        }
+
+        this->setVertexAttributes(&fPosition, 4);
     }
+
+    const TextureSampler& onTextureSampler(int) const override { return fSampler; }
+
+    Attribute fPosition; // May contain coverage as last channel
+    Attribute fColor; // May have coverage modulated in if the FPs support it
+    Attribute fLocalCoord;
+    Attribute fDomain;
+
+    // The positions attribute may have coverage built into it, so float3 is an ambiguous type
+    // and may mean 2d with coverage, or 3d with no coverage
+    bool fNeedsPerspective;
+    CoverageMode fCoverageMode;
+
+    // Color space will be null and fSampler.isInitialized() returns false when the GP is configured
+    // to skip texturing.
+    sk_sp<GrColorSpaceXform> fTextureColorSpaceXform;
+    TextureSampler fSampler;
+
+    typedef GrGeometryProcessor INHERITED;
+};
+
+sk_sp<GrGeometryProcessor> MakeProcessor(const VertexSpec& spec) {
+    return QuadPerEdgeAAGeometryProcessor::Make(spec);
+}
+
+sk_sp<GrGeometryProcessor> MakeTexturedProcessor(const VertexSpec& spec, const GrShaderCaps& caps,
+        GrTextureType textureType, GrPixelConfig textureConfig,
+        const GrSamplerState& samplerState, uint32_t extraSamplerKey,
+        sk_sp<GrColorSpaceXform> textureColorSpaceXform) {
+    return QuadPerEdgeAAGeometryProcessor::Make(spec, caps, textureType, textureConfig,
+                                                samplerState, extraSamplerKey,
+                                                std::move(textureColorSpaceXform));
 }
 
 } // namespace GrQuadPerEdgeAA

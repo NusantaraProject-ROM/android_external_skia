@@ -53,7 +53,7 @@ private:
 ///////////////////////////////////////////////////////////////////////////////
 
 SkImage_Lazy::Validator::Validator(sk_sp<SharedGenerator> gen, const SkIRect* subset,
-                                   sk_sp<SkColorSpace> colorSpace)
+                                   const SkColorType* colorType, sk_sp<SkColorSpace> colorSpace)
         : fSharedGenerator(std::move(gen)) {
     if (!fSharedGenerator) {
         return;
@@ -84,8 +84,13 @@ SkImage_Lazy::Validator::Validator(sk_sp<SharedGenerator> gen, const SkIRect* su
 
     fInfo   = info.makeWH(subset->width(), subset->height());
     fOrigin = SkIPoint::Make(subset->x(), subset->y());
-    if (colorSpace) {
-        fInfo = fInfo.makeColorSpace(colorSpace);
+    if (colorType || colorSpace) {
+        if (colorType) {
+            fInfo = fInfo.makeColorType(*colorType);
+        }
+        if (colorSpace) {
+            fInfo = fInfo.makeColorSpace(colorSpace);
+        }
         fUniqueID = SkNextID::ImageID();
     }
 }
@@ -249,30 +254,33 @@ sk_sp<SkImage> SkImage_Lazy::onMakeSubset(const SkIRect& subset) const {
     SkASSERT(fInfo.bounds() != subset);
 
     const SkIRect generatorSubset = subset.makeOffset(fOrigin.x(), fOrigin.y());
-    Validator validator(fSharedGenerator, &generatorSubset, fInfo.refColorSpace());
+    const SkColorType colorType = fInfo.colorType();
+    Validator validator(fSharedGenerator, &generatorSubset, &colorType, fInfo.refColorSpace());
     return validator ? sk_sp<SkImage>(new SkImage_Lazy(&validator)) : nullptr;
 }
 
-sk_sp<SkImage> SkImage_Lazy::onMakeColorSpace(sk_sp<SkColorSpace> target) const {
-    SkAutoExclusive autoAquire(fOnMakeColorSpaceMutex);
-    if (fOnMakeColorSpaceTarget &&
-        SkColorSpace::Equals(target.get(), fOnMakeColorSpaceTarget.get())) {
-        return fOnMakeColorSpaceResult;
+sk_sp<SkImage> SkImage_Lazy::onMakeColorTypeAndColorSpace(SkColorType targetCT,
+                                                          sk_sp<SkColorSpace> targetCS) const {
+    SkAutoExclusive autoAquire(fOnMakeColorTypeAndSpaceMutex);
+    if (fOnMakeColorTypeAndSpaceResult &&
+        targetCT == fOnMakeColorTypeAndSpaceResult->colorType() &&
+        SkColorSpace::Equals(targetCS.get(), fOnMakeColorTypeAndSpaceResult->colorSpace())) {
+        return fOnMakeColorTypeAndSpaceResult;
     }
     const SkIRect generatorSubset =
             SkIRect::MakeXYWH(fOrigin.x(), fOrigin.y(), fInfo.width(), fInfo.height());
-    Validator validator(fSharedGenerator, &generatorSubset, target);
+    Validator validator(fSharedGenerator, &generatorSubset, &targetCT, targetCS);
     sk_sp<SkImage> result = validator ? sk_sp<SkImage>(new SkImage_Lazy(&validator)) : nullptr;
     if (result) {
-        fOnMakeColorSpaceTarget = target;
-        fOnMakeColorSpaceResult = result;
+        fOnMakeColorTypeAndSpaceResult = result;
     }
     return result;
 }
 
 sk_sp<SkImage> SkImage::MakeFromGenerator(std::unique_ptr<SkImageGenerator> generator,
                                           const SkIRect* subset) {
-    SkImage_Lazy::Validator validator(SharedGenerator::Make(std::move(generator)), subset, nullptr);
+    SkImage_Lazy::Validator
+            validator(SharedGenerator::Make(std::move(generator)), subset, nullptr, nullptr);
 
     return validator ? sk_make_sp<SkImage_Lazy>(&validator) : nullptr;
 }
@@ -323,7 +331,8 @@ static void set_key_on_proxy(GrProxyProvider* proxyProvider,
             // If we had an originalProxy with a valid key, that means there already is a proxy in
             // the cache which matches the key, but it does not have mip levels and we require them.
             // Thus we must remove the unique key from that proxy.
-            proxyProvider->removeUniqueKeyFromProxy(key, originalProxy);
+            SkASSERT(originalProxy->getUniqueKey() == key);
+            proxyProvider->removeUniqueKeyFromProxy(originalProxy);
         }
         proxyProvider->assignUniqueKeyToProxy(key, proxy);
     }
@@ -408,7 +417,7 @@ sk_sp<GrTextureProxy> SkImage_Lazy::lockTextureProxy(
             set_key_on_proxy(proxyProvider, proxy.get(), nullptr, key);
             if (!willBeMipped || GrMipMapped::kYes == proxy->mipMapped()) {
                 *fUniqueKeyInvalidatedMessages.append() =
-                        new GrUniqueKeyInvalidatedMessage(key, ctx->uniqueID());
+                        new GrUniqueKeyInvalidatedMessage(key, ctx->contextPriv().contextID());
                 return proxy;
             }
         }
@@ -416,26 +425,32 @@ sk_sp<GrTextureProxy> SkImage_Lazy::lockTextureProxy(
 
     // 3. Ask the generator to return YUV planes, which the GPU can convert. If we will be mipping
     //    the texture we fall through here and have the CPU generate the mip maps for us.
-    if (!proxy && !willBeMipped && !ctx->contextPriv().disableGpuYUVConversion()) {
+    if (!proxy && !willBeMipped && !ctx->contextPriv().options().fDisableGpuYUVConversion) {
         const GrSurfaceDesc desc = GrImageInfoToSurfaceDesc(fInfo);
+
+        SkColorType colorType = fInfo.colorType();
+        GrBackendFormat format =
+                ctx->contextPriv().caps()->getBackendFormatFromColorType(colorType);
+
         ScopedGenerator generator(fSharedGenerator);
         Generator_GrYUVProvider provider(generator);
 
-        // The pixels in the texture will be in the generator's color space. If onMakeColorSpace
-        // has been called then this will not match this image's color space. To correct this, apply
-        // a color space conversion from the generator's color space to this image's color space.
+        // The pixels in the texture will be in the generator's color space.
+        // If onMakeColorTypeAndColorSpace has been called then this will not match this image's
+        // color space. To correct this, apply a color space conversion from the generator's color
+        // space to this image's color space.
         SkColorSpace* generatorColorSpace = fSharedGenerator->fGenerator->getInfo().colorSpace();
         SkColorSpace* thisColorSpace = fInfo.colorSpace();
 
         // TODO: Update to create the mipped surface in the YUV generator and draw the base
         // layer directly into the mipped surface.
-        proxy = provider.refAsTextureProxy(ctx, desc, generatorColorSpace, thisColorSpace);
+        proxy = provider.refAsTextureProxy(ctx, format, desc, generatorColorSpace, thisColorSpace);
         if (proxy) {
             SK_HISTOGRAM_ENUMERATION("LockTexturePath", kYUV_LockTexturePath,
                                      kLockTexturePathCount);
             set_key_on_proxy(proxyProvider, proxy.get(), nullptr, key);
             *fUniqueKeyInvalidatedMessages.append() =
-                    new GrUniqueKeyInvalidatedMessage(key, ctx->uniqueID());
+                    new GrUniqueKeyInvalidatedMessage(key, ctx->contextPriv().contextID());
             return proxy;
         }
     }
@@ -454,7 +469,7 @@ sk_sp<GrTextureProxy> SkImage_Lazy::lockTextureProxy(
                                      kLockTexturePathCount);
             set_key_on_proxy(proxyProvider, proxy.get(), nullptr, key);
             *fUniqueKeyInvalidatedMessages.append() =
-                    new GrUniqueKeyInvalidatedMessage(key, ctx->uniqueID());
+                    new GrUniqueKeyInvalidatedMessage(key, ctx->contextPriv().contextID());
             return proxy;
         }
     }
@@ -467,7 +482,7 @@ sk_sp<GrTextureProxy> SkImage_Lazy::lockTextureProxy(
         SkASSERT(willBeMipped);
         SkASSERT(GrMipMapped::kNo == proxy->mipMapped());
         *fUniqueKeyInvalidatedMessages.append() =
-                new GrUniqueKeyInvalidatedMessage(key, ctx->uniqueID());
+                new GrUniqueKeyInvalidatedMessage(key, ctx->contextPriv().contextID());
         if (auto mippedProxy = GrCopyBaseMipMapToTextureProxy(ctx, proxy.get())) {
             set_key_on_proxy(proxyProvider, mippedProxy.get(), proxy.get(), key);
             return mippedProxy;

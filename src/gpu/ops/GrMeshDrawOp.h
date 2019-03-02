@@ -16,7 +16,7 @@
 
 class GrAtlasManager;
 class GrCaps;
-class GrGlyphCache;
+class GrStrikeCache;
 class GrOpFlushState;
 
 /**
@@ -34,7 +34,7 @@ protected:
         space for the vertices and flushes the draws to the GrMeshDrawOp::Target. */
     class PatternHelper {
     public:
-        PatternHelper(Target*, GrPrimitiveType, size_t vertexStride, const GrBuffer*,
+        PatternHelper(Target*, GrPrimitiveType, size_t vertexStride, sk_sp<const GrBuffer>,
                       int verticesPerRepetition, int indicesPerRepetition, int repeatCount);
 
         /** Called to issue draws to the GrMeshDrawOp::Target.*/
@@ -45,7 +45,7 @@ protected:
 
     protected:
         PatternHelper() = default;
-        void init(Target*, GrPrimitiveType, size_t vertexStride, const GrBuffer*,
+        void init(Target*, GrPrimitiveType, size_t vertexStride, sk_sp<const GrBuffer>,
                   int verticesPerRepetition, int indicesPerRepetition, int repeatCount);
 
     private:
@@ -100,7 +100,7 @@ public:
      * should be written. On return the buffer that will hold the data as well as an offset into
      * the buffer (in 'vertexSize' units) where the data will be placed.
      */
-    virtual void* makeVertexSpace(size_t vertexSize, int vertexCount, const GrBuffer**,
+    virtual void* makeVertexSpace(size_t vertexSize, int vertexCount, sk_sp<const GrBuffer>*,
                                   int* startVertex) = 0;
 
     /**
@@ -108,7 +108,7 @@ public:
      * should be written. On return the buffer that will hold the data as well as an offset into
      * the buffer (in uint16_t units) where the data will be placed.
      */
-    virtual uint16_t* makeIndexSpace(int indexCount, const GrBuffer**, int* startIndex) = 0;
+    virtual uint16_t* makeIndexSpace(int indexCount, sk_sp<const GrBuffer>*, int* startIndex) = 0;
 
     /**
      * This is similar to makeVertexSpace. It allows the caller to use up to 'actualVertexCount'
@@ -117,7 +117,7 @@ public:
      * buffer is allocated on behalf of this request.
      */
     virtual void* makeVertexSpaceAtLeast(size_t vertexSize, int minVertexCount,
-                                         int fallbackVertexCount, const GrBuffer**,
+                                         int fallbackVertexCount, sk_sp<const GrBuffer>*,
                                          int* startVertex, int* actualVertexCount) = 0;
 
     /**
@@ -127,7 +127,7 @@ public:
      * buffer is allocated on behalf of this request.
      */
     virtual uint16_t* makeIndexSpaceAtLeast(int minIndexCount, int fallbackIndexCount,
-                                            const GrBuffer**, int* startIndex,
+                                            sk_sp<const GrBuffer>*, int* startIndex,
                                             int* actualIndexCount) = 0;
 
     /** Helpers for ops which over-allocate and then return excess data to the pool. */
@@ -190,7 +190,7 @@ public:
     virtual GrResourceProvider* resourceProvider() const = 0;
     uint32_t contextUniqueID() const { return this->resourceProvider()->contextUniqueID(); }
 
-    virtual GrGlyphCache* glyphCache() const = 0;
+    virtual GrStrikeCache* glyphCache() const = 0;
     virtual GrAtlasManager* atlasManager() const = 0;
 
     virtual const GrCaps& caps() const = 0;

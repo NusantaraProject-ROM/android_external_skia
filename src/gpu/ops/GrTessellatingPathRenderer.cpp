@@ -77,8 +77,9 @@ public:
     }
     void* lock(int vertexCount) override {
         size_t size = vertexCount * stride();
-        fVertexBuffer.reset(fResourceProvider->createBuffer(
-            size, kVertex_GrBufferType, kStatic_GrAccessPattern, GrResourceProvider::Flags::kNone));
+        fVertexBuffer =
+                fResourceProvider->createBuffer(size, kVertex_GrBufferType, kStatic_GrAccessPattern,
+                                                GrResourceProvider::Flags::kNone);
         if (!fVertexBuffer.get()) {
             return nullptr;
         }
@@ -98,7 +99,8 @@ public:
         }
         fVertices = nullptr;
     }
-    GrBuffer* vertexBuffer() { return fVertexBuffer.get(); }
+    sk_sp<GrBuffer> detachVertexBuffer() { return std::move(fVertexBuffer); }
+
 private:
     sk_sp<GrBuffer> fVertexBuffer;
     GrResourceProvider* fResourceProvider;
@@ -122,11 +124,12 @@ public:
         fTarget->putBackVertices(fVertexCount - actualCount, stride());
         fVertices = nullptr;
     }
-    const GrBuffer* vertexBuffer() const { return fVertexBuffer; }
+    sk_sp<const GrBuffer> detachVertexBuffer() const { return std::move(fVertexBuffer); }
     int firstVertex() const { return fFirstVertex; }
+
 private:
     GrMeshDrawOp::Target* fTarget;
-    const GrBuffer* fVertexBuffer;
+    sk_sp<const GrBuffer> fVertexBuffer;
     int fVertexCount;
     int fFirstVertex;
     void* fVertices;
@@ -224,11 +227,11 @@ public:
 
     FixedFunctionFlags fixedFunctionFlags() const override { return fHelper.fixedFunctionFlags(); }
 
-    RequiresDstTexture finalize(const GrCaps& caps, const GrAppliedClip* clip) override {
+    GrProcessorSet::Analysis finalize(const GrCaps& caps, const GrAppliedClip* clip) override {
         GrProcessorAnalysisCoverage coverage = fAntiAlias
                                                        ? GrProcessorAnalysisCoverage::kSingleChannel
                                                        : GrProcessorAnalysisCoverage::kNone;
-        return fHelper.xpRequiresDstTexture(caps, clip, coverage, &fColor);
+        return fHelper.finalizeProcessors(caps, clip, coverage, &fColor);
     }
 
 private:
@@ -263,7 +266,8 @@ private:
         SkScalar tol = GrPathUtils::kDefaultTolerance;
         tol = GrPathUtils::scaleToleranceToSrc(tol, fViewMatrix, fShape.bounds());
         if (cache_match(cachedVertexBuffer.get(), tol, &actualCount)) {
-            this->drawVertices(target, std::move(gp), cachedVertexBuffer.get(), 0, actualCount);
+            this->drawVertices(target, std::move(gp), std::move(cachedVertexBuffer), 0,
+                               actualCount);
             return;
         }
 
@@ -277,18 +281,20 @@ private:
         bool isLinear;
         bool canMapVB = GrCaps::kNone_MapFlags != target->caps().mapBufferFlags();
         StaticVertexAllocator allocator(vertexStride, rp, canMapVB);
-        int count = GrTessellator::PathToTriangles(getPath(), tol, clipBounds, &allocator,
-                                                   false, GrColor(), false, &isLinear);
+        int count = GrTessellator::PathToTriangles(getPath(), tol, clipBounds, &allocator, false,
+                                                   &isLinear);
         if (count == 0) {
             return;
         }
-        this->drawVertices(target, std::move(gp), allocator.vertexBuffer(), 0, count);
+        sk_sp<GrBuffer> vb = allocator.detachVertexBuffer();
         TessInfo info;
         info.fTolerance = isLinear ? 0 : tol;
         info.fCount = count;
-        key.setCustomData(SkData::MakeWithCopy(&info, sizeof(info)));
-        rp->assignUniqueKeyToResource(key, allocator.vertexBuffer());
         fShape.addGenIDChangeListener(sk_make_sp<PathInvalidator>(key, target->contextUniqueID()));
+        key.setCustomData(SkData::MakeWithCopy(&info, sizeof(info)));
+        rp->assignUniqueKeyToResource(key, vb.get());
+
+        this->drawVertices(target, std::move(gp), std::move(vb), 0, count);
     }
 
     void drawAA(Target* target, sk_sp<const GrGeometryProcessor> gp, size_t vertexStride) {
@@ -302,16 +308,13 @@ private:
         SkScalar tol = GrPathUtils::kDefaultTolerance;
         bool isLinear;
         DynamicVertexAllocator allocator(vertexStride, target);
-        // TODO4F: Preserve float colors
-        int count =
-                GrTessellator::PathToTriangles(path, tol, clipBounds, &allocator, true,
-                                               fColor.toBytes_RGBA(),
-                                               fHelper.compatibleWithAlphaAsCoverage(), &isLinear);
+        int count = GrTessellator::PathToTriangles(path, tol, clipBounds, &allocator, true,
+                                                   &isLinear);
         if (count == 0) {
             return;
         }
-        this->drawVertices(target, std::move(gp), allocator.vertexBuffer(), allocator.firstVertex(),
-                           count);
+        this->drawVertices(target, std::move(gp), allocator.detachVertexBuffer(),
+                           allocator.firstVertex(), count);
     }
 
     void onPrepareDraws(Target* target) override {
@@ -325,9 +328,8 @@ private:
                                                         : LocalCoords::kUnused_Type;
             Coverage::Type coverageType;
             if (fAntiAlias) {
-                color = Color(Color::kPremulGrColorAttribute_Type);
                 if (fHelper.compatibleWithAlphaAsCoverage()) {
-                    coverageType = Coverage::kSolid_Type;
+                    coverageType = Coverage::kAttributeTweakAlpha_Type;
                 } else {
                     coverageType = Coverage::kAttribute_Type;
                 }
@@ -355,12 +357,12 @@ private:
         }
     }
 
-    void drawVertices(Target* target, sk_sp<const GrGeometryProcessor> gp, const GrBuffer* vb,
+    void drawVertices(Target* target, sk_sp<const GrGeometryProcessor> gp, sk_sp<const GrBuffer> vb,
                       int firstVertex, int count) {
         GrMesh* mesh = target->allocMesh(TESSELLATOR_WIREFRAME ? GrPrimitiveType::kLines
                                                                : GrPrimitiveType::kTriangles);
         mesh->setNonIndexedNonInstanced(count);
-        mesh->setVertexData(vb, firstVertex);
+        mesh->setVertexData(std::move(vb), firstVertex);
         auto pipe = fHelper.makePipeline(target);
         target->draw(std::move(gp), pipe.fPipeline, pipe.fFixedDynamicState, mesh);
     }

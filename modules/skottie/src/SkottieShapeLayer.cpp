@@ -42,6 +42,10 @@ sk_sp<sksg::GeometryNode> AttachRRectGeometry(const skjson::ObjectValue& jrect,
                                               const AnimationBuilder* abuilder,
                                               AnimatorScope* ascope) {
     auto rect_node = sksg::RRect::Make();
+    rect_node->setDirection(ParseDefault(jrect["d"], -1) == 3 ? SkPath::kCCW_Direction
+                                                              : SkPath::kCW_Direction);
+    rect_node->setInitialPointIndex(2); // starting point: (Right, Top - radius.y)
+
     auto adapter = sk_make_sp<RRectAdapter>(rect_node);
 
     auto p_attached = abuilder->bindProperty<VectorValue>(jrect["p"], ascope,
@@ -68,6 +72,10 @@ sk_sp<sksg::GeometryNode> AttachEllipseGeometry(const skjson::ObjectValue& jelli
                                                 const AnimationBuilder* abuilder,
                                                 AnimatorScope* ascope) {
     auto rect_node = sksg::RRect::Make();
+    rect_node->setDirection(ParseDefault(jellipse["d"], -1) == 3 ? SkPath::kCCW_Direction
+                                                                 : SkPath::kCW_Direction);
+    rect_node->setInitialPointIndex(1); // starting point: (Center, Top)
+
     auto adapter = sk_make_sp<RRectAdapter>(rect_node);
 
     auto p_attached = abuilder->bindProperty<VectorValue>(jellipse["p"], ascope,
@@ -349,6 +357,71 @@ std::vector<sk_sp<sksg::GeometryNode>> AttachRoundGeometryEffect(
     return rounded;
 }
 
+std::vector<sk_sp<sksg::RenderNode>> AttachRepeaterDrawEffect(
+        const skjson::ObjectValue& jrepeater,
+        const AnimationBuilder* abuilder,
+        AnimatorScope* ascope,
+        std::vector<sk_sp<sksg::RenderNode>>&& draws) {
+
+    std::vector<sk_sp<sksg::RenderNode>> repeater_draws;
+
+    if (const skjson::ObjectValue* jtransform = jrepeater["tr"]) {
+        sk_sp<sksg::RenderNode> repeater_node;
+        if (draws.size() > 1) {
+            repeater_node = sksg::Group::Make(std::move(draws));
+        } else {
+            repeater_node = std::move(draws[0]);
+        }
+
+        const auto repeater_composite = (ParseDefault(jrepeater["m"], 1) == 1)
+                ? RepeaterAdapter::Composite::kAbove
+                : RepeaterAdapter::Composite::kBelow;
+
+        auto adapter = sk_make_sp<RepeaterAdapter>(std::move(repeater_node),
+                                                   repeater_composite);
+
+        abuilder->bindProperty<ScalarValue>(jrepeater["c"], ascope,
+            [adapter](const ScalarValue& c) {
+                adapter->setCount(c);
+            });
+        abuilder->bindProperty<ScalarValue>(jrepeater["o"], ascope,
+            [adapter](const ScalarValue& o) {
+                adapter->setOffset(o);
+            });
+        abuilder->bindProperty<VectorValue>((*jtransform)["a"], ascope,
+            [adapter](const VectorValue& a) {
+                adapter->setAnchorPoint(ValueTraits<VectorValue>::As<SkPoint>(a));
+            });
+        abuilder->bindProperty<VectorValue>((*jtransform)["p"], ascope,
+            [adapter](const VectorValue& p) {
+                adapter->setPosition(ValueTraits<VectorValue>::As<SkPoint>(p));
+            });
+        abuilder->bindProperty<VectorValue>((*jtransform)["s"], ascope,
+            [adapter](const VectorValue& s) {
+                adapter->setScale(ValueTraits<VectorValue>::As<SkVector>(s));
+            });
+        abuilder->bindProperty<ScalarValue>((*jtransform)["r"], ascope,
+            [adapter](const ScalarValue& r) {
+                adapter->setRotation(r);
+            });
+        abuilder->bindProperty<ScalarValue>((*jtransform)["so"], ascope,
+            [adapter](const ScalarValue& so) {
+                adapter->setStartOpacity(so);
+            });
+        abuilder->bindProperty<ScalarValue>((*jtransform)["eo"], ascope,
+            [adapter](const ScalarValue& eo) {
+                adapter->setEndOpacity(eo);
+            });
+
+        repeater_draws.reserve(1);
+        repeater_draws.push_back(adapter->root());
+    } else {
+        repeater_draws = std::move(draws);
+    }
+
+    return repeater_draws;
+}
+
 using GeometryAttacherT = sk_sp<sksg::GeometryNode> (*)(const skjson::ObjectValue&,
                                                         const AnimationBuilder*, AnimatorScope*);
 static constexpr GeometryAttacherT gGeometryAttachers[] = {
@@ -377,12 +450,22 @@ static constexpr GeometryEffectAttacherT gGeometryEffectAttachers[] = {
     AttachRoundGeometryEffect,
 };
 
+using DrawEffectAttacherT =
+    std::vector<sk_sp<sksg::RenderNode>> (*)(const skjson::ObjectValue&,
+                                             const AnimationBuilder*, AnimatorScope*,
+                                             std::vector<sk_sp<sksg::RenderNode>>&&);
+
+static constexpr DrawEffectAttacherT gDrawEffectAttachers[] = {
+    AttachRepeaterDrawEffect,
+};
+
 enum class ShapeType {
     kGeometry,
     kGeometryEffect,
     kPaint,
     kGroup,
     kTransform,
+    kDrawEffect,
 };
 
 struct ShapeInfo {
@@ -401,6 +484,7 @@ const ShapeInfo* FindShapeInfo(const skjson::ObjectValue& jshape) {
         { "mm", ShapeType::kGeometryEffect, 0 }, // merge     -> AttachMergeGeometryEffect
         { "rc", ShapeType::kGeometry      , 1 }, // rrect     -> AttachRRectGeometry
         { "rd", ShapeType::kGeometryEffect, 2 }, // round     -> AttachRoundGeometryEffect
+        { "rp", ShapeType::kDrawEffect    , 0 }, // repeater  -> AttachRepeaterDrawEffect
         { "sh", ShapeType::kGeometry      , 0 }, // shape     -> AttachPathGeometry
         { "sr", ShapeType::kGeometry      , 3 }, // polystar  -> AttachPolyStarGeometry
         { "st", ShapeType::kPaint         , 1 }, // stroke    -> AttachColorStroke
@@ -566,6 +650,16 @@ sk_sp<sksg::RenderNode> AnimationBuilder::attachShape(const skjson::ArrayValue* 
             draws.push_back(sksg::Draw::Make(std::move(geo), std::move(paint)));
             ctx->fCommittedAnimators = ctx->fScope->size();
         } break;
+        case ShapeType::kDrawEffect: {
+            SkASSERT(rec->fInfo.fAttacherIndex < SK_ARRAY_COUNT(gDrawEffectAttachers));
+            if (!draws.empty()) {
+                draws = gDrawEffectAttachers[rec->fInfo.fAttacherIndex](rec->fJson,
+                                                                        this,
+                                                                        ctx->fScope,
+                                                                        std::move(draws));
+                ctx->fCommittedAnimators = ctx->fScope->size();
+            }
+        } break;
         default:
             break;
         }
@@ -587,7 +681,7 @@ sk_sp<sksg::RenderNode> AnimationBuilder::attachShape(const skjson::ArrayValue* 
         shape_wrapper = sksg::Group::Make(std::move(draws));
     }
 
-    sk_sp<sksg::Matrix> shape_matrix;
+    sk_sp<sksg::Transform> shape_transform;
     if (jtransform) {
         const AutoPropertyTracker apt(this, *jtransform);
 
@@ -596,8 +690,8 @@ sk_sp<sksg::RenderNode> AnimationBuilder::attachShape(const skjson::ArrayValue* 
         // of the dangling/uncommitted ones.
         AnimatorScope local_scope;
 
-        if ((shape_matrix = this->attachMatrix(*jtransform, &local_scope, nullptr))) {
-            shape_wrapper = sksg::Transform::Make(std::move(shape_wrapper), shape_matrix);
+        if ((shape_transform = this->attachMatrix2D(*jtransform, &local_scope, nullptr))) {
+            shape_wrapper = sksg::TransformEffect::Make(std::move(shape_wrapper), shape_transform);
         }
         shape_wrapper = this->attachOpacity(*jtransform, &local_scope, std::move(shape_wrapper));
 
@@ -609,8 +703,8 @@ sk_sp<sksg::RenderNode> AnimationBuilder::attachShape(const skjson::ArrayValue* 
 
     // Push transformed local geometries to parent list, for subsequent paints.
     for (auto& geo : geos) {
-        ctx->fGeometryStack->push_back(shape_matrix
-            ? sksg::GeometryTransform::Make(std::move(geo), shape_matrix)
+        ctx->fGeometryStack->push_back(shape_transform
+            ? sksg::GeometryTransform::Make(std::move(geo), shape_transform)
             : std::move(geo));
     }
 

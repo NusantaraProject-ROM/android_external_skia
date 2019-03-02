@@ -25,8 +25,8 @@ public:
     friend class GrYUVAImageTextureMaker;
 
     SkImage_GpuYUVA(sk_sp<GrContext>, int width, int height, uint32_t uniqueID, SkYUVColorSpace,
-                    sk_sp<GrTextureProxy> proxies[], int numProxies, const SkYUVAIndex [4],
-                    GrSurfaceOrigin, sk_sp<SkColorSpace>, SkBudgeted);
+                    sk_sp<GrTextureProxy> proxies[], int numProxies, const SkYUVAIndex[4],
+                    GrSurfaceOrigin, sk_sp<SkColorSpace>);
     ~SkImage_GpuYUVA() override;
 
     SkImageInfo onImageInfo() const override;
@@ -35,6 +35,8 @@ public:
     sk_sp<GrTextureProxy> asTextureProxyRef() const override;
 
     virtual bool onIsTextureBacked() const override { return SkToBool(fProxies[0].get()); }
+
+    sk_sp<SkImage> onMakeColorTypeAndColorSpace(SkColorType, sk_sp<SkColorSpace>) const final;
 
     virtual bool isYUVA() const override { return true; }
     virtual bool asYUVATextureProxiesRef(sk_sp<GrTextureProxy> proxies[4],
@@ -53,46 +55,10 @@ public:
     // Returns a ref-ed texture proxy with miplevels
     sk_sp<GrTextureProxy> asMippedTextureProxyRef() const;
 
+    SkColorSpace* targetColorSpace() const { return fTargetColorSpace.get(); }
 
     /**
-        Create a new SkImage_GpuYUVA that's very similar to SkImage created by MakeFromYUVATextures.
-        The main difference is that the client doesn't have the backend textures on the gpu yet but
-        they know all the properties of the texture. So instead of passing in GrBackendTextures the
-        client supplies GrBackendFormats and the image size.
-
-        When we actually send the draw calls to the GPU, we will call the textureFulfillProc and
-        the client will return the GrBackendTextures to us. The properties of the GrBackendTextures
-        must match those set during the SkImage creation, and it must have valid backend gpu
-        textures. The gpu textures supplied by the client must stay valid until we call the
-        textureReleaseProc.
-
-        When we are done with the texture returned by the textureFulfillProc we will call the
-        textureReleaseProc passing in the textureContext. This is a signal to the client that they
-        are free to delete the underlying gpu textures. If future draws also use the same promise
-        image we will call the textureFulfillProc again if we've already called the
-        textureReleaseProc. We will always call textureFulfillProc and textureReleaseProc in pairs.
-        In other words we will never call textureFulfillProc or textureReleaseProc multiple times
-        for the same textureContext before calling the other.
-
-        We call the promiseDoneProc when we will no longer call the textureFulfillProc again. We
-        also guarantee that there will be no outstanding textureReleaseProcs that still need to be
-        called when we call the textureDoneProc. Thus when the textureDoneProc gets called the
-        client is able to cleanup all GPU objects and meta data needed for the textureFulfill call.
-
-        @param context             Gpu context
-        @param yuvColorSpace       color range of expected YUV pixels
-        @param yuvaFormats         formats of promised gpu textures for each YUVA plane
-        @param yuvaSizes           width and height of promised gpu textures
-        @param yuvaIndices         mapping from yuv plane index to texture representing that plane
-        @param width               width of promised gpu texture
-        @param height              height of promised gpu texture
-        @param imageOrigin         one of: kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin
-        @param imageColorSpace     range of colors; may be nullptr
-        @param textureFulfillProc  function called to get actual gpu texture
-        @param textureReleaseProc  function called when texture can be released
-        @param promiseDoneProc     function called when we will no longer call textureFulfillProc
-        @param textureContext      state passed to textureFulfillProc and textureReleaseProc
-        @return                    created SkImage, or nullptr
+     * This is the implementation of SkDeferredDisplayListRecorder::makeYUVAPromiseTexture.
      */
     static sk_sp<SkImage> MakePromiseYUVATexture(GrContext* context,
                                                  SkYUVColorSpace yuvColorSpace,
@@ -103,12 +69,15 @@ public:
                                                  int height,
                                                  GrSurfaceOrigin imageOrigin,
                                                  sk_sp<SkColorSpace> imageColorSpace,
-                                                 TextureFulfillProc textureFulfillProc,
-                                                 TextureReleaseProc textureReleaseProc,
-                                                 PromiseDoneProc promiseDoneProc,
-                                                 TextureContext textureContexts[]);
+                                                 PromiseImageTextureFulfillProc textureFulfillProc,
+                                                 PromiseImageTextureReleaseProc textureReleaseProc,
+                                                 PromiseImageTextureDoneProc textureDoneProc,
+                                                 PromiseImageTextureContext textureContexts[],
+                                                 DelayReleaseCallback delayReleaseCallback);
 
 private:
+    SkImage_GpuYUVA(const SkImage_GpuYUVA* image, sk_sp<SkColorSpace>);
+
     // This array will usually only be sparsely populated.
     // The actual non-null fields are dictated by the 'fYUVAIndices' indices
     mutable sk_sp<GrTextureProxy>    fProxies[4];
@@ -116,6 +85,12 @@ private:
     SkYUVAIndex                      fYUVAIndices[4];
     const SkYUVColorSpace            fYUVColorSpace;
     GrSurfaceOrigin                  fOrigin;
+    const sk_sp<SkColorSpace>        fTargetColorSpace;
+
+    // Repeated calls to onMakeColorSpace will result in a proliferation of unique IDs and
+    // SkImage_GpuYUVA instances. Cache the result of the last successful onMakeColorSpace call.
+    mutable sk_sp<SkColorSpace>      fOnMakeColorSpaceTarget;
+    mutable sk_sp<SkImage>           fOnMakeColorSpaceResult;
 
     // This is only allocated when the image needs to be flattened rather than
     // using the separate YUVA planes. From thence forth we will only use the

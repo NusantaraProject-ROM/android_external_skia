@@ -8,10 +8,10 @@
 #include "Sample.h"
 #include "SkAnimTimer.h"
 #include "SkCanvas.h"
-#include "SkGlyphCache.h"
 #include "SkPaint.h"
 #include "SkPath.h"
 #include "SkRandom.h"
+#include "SkStrike.h"
 #include "SkStrikeCache.h"
 #include "SkTaskGroup.h"
 #include "sk_tool_utils.h"
@@ -32,13 +32,13 @@ public:
     }
 
     void onOnceBeforeDraw() final {
-        SkPaint defaultPaint;
-        auto cache = SkStrikeCache::FindOrCreateStrikeWithNoDeviceExclusive(defaultPaint);
+        SkFont defaultFont;
+        auto cache = SkStrikeCache::FindOrCreateStrikeWithNoDeviceExclusive(defaultFont);
         SkPath glyphPaths[52];
         for (int i = 0; i < 52; ++i) {
             // I and l are rects on OS X ...
             char c = "aQCDEFGH7JKLMNOPBRZTUVWXYSAbcdefghijk1mnopqrstuvwxyz"[i];
-            SkPackedGlyphID id(cache->unicharToGlyph(c));
+            SkPackedGlyphID id(defaultFont.unicharToGlyph(c));
             sk_ignore_unused_variable(cache->getScalerContext()->getPath(id, &glyphPaths[i]));
         }
 
@@ -421,7 +421,7 @@ SkPoint WavyPathText::Waves::apply(float tsec, const Sk2f matrix[3], const SkPoi
 
     float offsetY[4], offsetX[4];
     (dy + SkNx_shuffle<2,3,0,1>(dy)).store(offsetY); // accumulate.
-    (dx + SkNx_shuffle<2,3,0,1>(dx)).store(offsetX);;
+    (dx + SkNx_shuffle<2,3,0,1>(dx)).store(offsetX);
 
     return {devicePt[0] + offsetY[0] + offsetY[1], devicePt[1] - offsetX[0] - offsetX[1]};
 }

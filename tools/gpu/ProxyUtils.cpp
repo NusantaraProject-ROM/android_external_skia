@@ -33,10 +33,10 @@ sk_sp<GrTextureProxy> MakeTextureProxyFromData(GrContext* context, bool isRT, in
         // Adopt ownership so our caller doesn't have to worry about deleting the backend texture.
         if (isRT) {
             proxy = context->contextPriv().proxyProvider()->wrapRenderableBackendTexture(
-                    backendTex, origin, 1, kAdopt_GrWrapOwnership);
+                    backendTex, origin, 1, kAdopt_GrWrapOwnership, GrWrapCacheable::kNo);
         } else {
             proxy = context->contextPriv().proxyProvider()->wrapBackendTexture(
-                    backendTex, origin, kAdopt_GrWrapOwnership);
+                    backendTex, origin, kAdopt_GrWrapOwnership, GrWrapCacheable::kNo, kRW_GrIOType);
         }
 
         if (!proxy) {
@@ -50,13 +50,20 @@ sk_sp<GrTextureProxy> MakeTextureProxyFromData(GrContext* context, bool isRT, in
             return nullptr;
         }
 
+        const GrBackendFormat format =
+                context->contextPriv().caps()->getBackendFormatFromGrColorType(colorType,
+                                                                               srgbEncoded);
+        if (!format.isValid()) {
+            return nullptr;
+        }
+
         GrSurfaceDesc desc;
         desc.fConfig = config;
         desc.fWidth = width;
         desc.fHeight = height;
         desc.fFlags = isRT ? kRenderTarget_GrSurfaceFlag : kNone_GrSurfaceFlags;
         proxy = context->contextPriv().proxyProvider()->createProxy(
-                desc, origin, SkBackingFit::kExact, SkBudgeted::kYes);
+                format, desc, origin, SkBackingFit::kExact, SkBudgeted::kYes);
         if (!proxy) {
             return nullptr;
         }

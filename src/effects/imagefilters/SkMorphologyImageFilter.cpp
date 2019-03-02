@@ -309,13 +309,17 @@ GrMorphologyEffect::GrMorphologyEffect(sk_sp<GrTextureProxy> proxy,
                                        int radius,
                                        Type type,
                                        const float range[2])
-        : INHERITED(kGrMorphologyEffect_ClassID, ModulateByConfigOptimizationFlags(proxy->config()))
+        : INHERITED(kGrMorphologyEffect_ClassID,
+                    ModulateForClampedSamplerOptFlags(proxy->config()))
         , fCoordTransform(proxy.get())
         , fTextureSampler(std::move(proxy))
         , fDirection(direction)
         , fRadius(radius)
         , fType(type)
         , fUseRange(SkToBool(range)) {
+    // Make sure the sampler's ctor uses the clamp wrap mode
+    SkASSERT(fTextureSampler.samplerState().wrapModeX() == GrSamplerState::WrapMode::kClamp &&
+             fTextureSampler.samplerState().wrapModeY() == GrSamplerState::WrapMode::kClamp);
     this->addCoordTransform(&fCoordTransform);
     this->setTextureSamplerCnt(1);
     if (fUseRange) {
@@ -466,7 +470,10 @@ static sk_sp<SkSpecialImage> apply_morphology(
     sk_sp<GrTextureProxy> srcTexture(input->asTextureProxyRef(context));
     SkASSERT(srcTexture);
     sk_sp<SkColorSpace> colorSpace = sk_ref_sp(outputProperties.colorSpace());
-    GrPixelConfig config = SkColorType2GrPixelConfig(outputProperties.colorType());
+    SkColorType colorType = outputProperties.colorType();
+    GrBackendFormat format =
+            context->contextPriv().caps()->getBackendFormatFromColorType(colorType);
+    GrPixelConfig config = SkColorType2GrPixelConfig(colorType);
 
     // setup new clip
     const GrFixedClip clip(SkIRect::MakeWH(srcTexture->width(), srcTexture->height()));
@@ -479,7 +486,7 @@ static sk_sp<SkSpecialImage> apply_morphology(
     if (radius.fWidth > 0) {
         sk_sp<GrRenderTargetContext> dstRTContext(
             context->contextPriv().makeDeferredRenderTargetContext(
-                SkBackingFit::kApprox, rect.width(), rect.height(), config, colorSpace));
+                format, SkBackingFit::kApprox, rect.width(), rect.height(), config, colorSpace));
         if (!dstRTContext) {
             return nullptr;
         }
@@ -498,7 +505,7 @@ static sk_sp<SkSpecialImage> apply_morphology(
     if (radius.fHeight > 0) {
         sk_sp<GrRenderTargetContext> dstRTContext(
             context->contextPriv().makeDeferredRenderTargetContext(
-                SkBackingFit::kApprox, rect.width(), rect.height(), config, colorSpace));
+                format, SkBackingFit::kApprox, rect.width(), rect.height(), config, colorSpace));
         if (!dstRTContext) {
             return nullptr;
         }

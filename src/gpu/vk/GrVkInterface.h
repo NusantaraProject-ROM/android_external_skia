@@ -12,7 +12,6 @@
 
 #include "vk/GrVkBackendContext.h"
 #include "vk/GrVkTypes.h"
-#include "vk/GrVkDefines.h"
 
 class GrVkExtensions;
 

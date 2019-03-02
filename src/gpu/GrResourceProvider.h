@@ -25,6 +25,7 @@ class GrSemaphore;
 class GrSingleOwner;
 class GrStencilAttachment;
 class GrTexture;
+struct GrVkDrawableInfo;
 
 class GrStyle;
 class SkDescriptor;
@@ -65,8 +66,7 @@ public:
      * must be sure that if a resource of exists in the cache with the given unique key then it is
      * of type T.
      */
-    template <typename T>
-    sk_sp<T> findByUniqueKey(const GrUniqueKey& key) {
+    template <typename T = GrGpuResource> sk_sp<T> findByUniqueKey(const GrUniqueKey& key) {
         return sk_sp<T>(static_cast<T*>(this->findResourceByUniqueKey(key).release()));
     }
 
@@ -98,14 +98,16 @@ public:
     /**
      * Wraps an existing texture with a GrTexture object.
      *
+     * GrIOType must either be kRead or kRW. kRead blocks any operations that would modify the
+     * pixels (e.g. dst for a copy, regenerating MIP levels, write pixels).
+     *
      * OpenGL: if the object is a texture Gr may change its GL texture params
      *         when it is drawn.
      *
      * @return GrTexture object or NULL on failure.
      */
-    sk_sp<GrTexture> wrapBackendTexture(const GrBackendTexture& tex,
-                                        GrWrapOwnership = kBorrow_GrWrapOwnership,
-                                        bool purgeImmediately = false);
+    sk_sp<GrTexture> wrapBackendTexture(const GrBackendTexture& tex, GrWrapOwnership,
+                                        GrWrapCacheable, GrIOType);
 
     /**
      * This makes the backend texture be renderable. If sampleCnt is > 1 and the underlying API
@@ -114,18 +116,22 @@ public:
      */
     sk_sp<GrTexture> wrapRenderableBackendTexture(const GrBackendTexture& tex,
                                                   int sampleCnt,
-                                                  GrWrapOwnership = kBorrow_GrWrapOwnership);
+                                                  GrWrapOwnership,
+                                                  GrWrapCacheable);
 
     /**
      * Wraps an existing render target with a GrRenderTarget object. It is
      * similar to wrapBackendTexture but can be used to draw into surfaces
      * that are not also textures (e.g. FBO 0 in OpenGL, or an MSAA buffer that
      * the client will resolve to a texture). Currently wrapped render targets
-     * always use the kBorrow_GrWrapOwnership semantics.
+     * always use the kBorrow_GrWrapOwnership and GrWrapCacheable::kNo semantics.
      *
      * @return GrRenderTarget object or NULL on failure.
      */
     sk_sp<GrRenderTarget> wrapBackendRenderTarget(const GrBackendRenderTarget&);
+
+    sk_sp<GrRenderTarget> wrapVulkanSecondaryCBAsRenderTarget(const SkImageInfo&,
+                                                              const GrVkDrawableInfo&);
 
     static const uint32_t kMinScratchTextureSize;
 
@@ -199,9 +205,8 @@ public:
      *
      * @return the buffer if successful, otherwise nullptr.
      */
-    GrBuffer* createBuffer(size_t size, GrBufferType intendedType, GrAccessPattern, Flags,
-                           const void* data = nullptr);
-
+    sk_sp<GrBuffer> createBuffer(size_t size, GrBufferType intendedType, GrAccessPattern, Flags,
+                                 const void* data = nullptr);
 
     /**
      * If passed in render target already has a stencil buffer, return true. Otherwise attempt to

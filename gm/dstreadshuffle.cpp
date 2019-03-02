@@ -82,10 +82,9 @@ protected:
                 break;
             case kText_ShapeType: {
                 const char* text = "N";
-                paint->setTextSize(100.f);
-                paint->setFakeBoldText(true);
-                sk_tool_utils::set_portable_typeface(paint);
-                canvas->drawString(text, 0.f, 100.f, *paint);
+                SkFont font(sk_tool_utils::create_portable_typeface(), 100);
+                font.setEmbolden(true);
+                canvas->drawString(text, 0.f, 100.f, font, *paint);
             }
             default:
                 break;
@@ -183,7 +182,6 @@ private:
 
 //////////////////////////////////////////////////////////////////////////////
 
-static GM* MyFactory(void*) { return new DstReadShuffle; }
-static GMRegistry reg(MyFactory);
+DEF_GM( return new DstReadShuffle; )
 
 }

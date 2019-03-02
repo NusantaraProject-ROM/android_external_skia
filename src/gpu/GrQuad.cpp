@@ -19,6 +19,19 @@
 // Allow some tolerance from floating point matrix transformations, but SkScalarNearlyEqual doesn't
 // support comparing infinity, and coords_form_rect should return true for infinite edges
 #define NEARLY_EQUAL(f1, f2) (f1 == f2 || SkScalarNearlyEqual(f1, f2, 1e-5f))
+// Similarly, support infinite rectangles by looking at the sign of infinities
+static bool dot_nearly_zero(const SkVector& e1, const SkVector& e2) {
+    static constexpr auto dot = SkPoint::DotProduct;
+    static constexpr auto sign = SkScalarSignAsScalar;
+
+    SkScalar dotValue = dot(e1, e2);
+    if (SkScalarIsNaN(dotValue)) {
+        // Form vectors from the signs of infinities, and check their dot product
+        dotValue = dot({sign(e1.fX), sign(e1.fY)}, {sign(e2.fX), sign(e2.fY)});
+    }
+
+    return SkScalarNearlyZero(dotValue, 1e-3f);
+}
 
 // This is not the most performance critical function; code using GrQuad should rely on the faster
 // quad type from matrix path, so this will only be called as part of SkASSERT.
@@ -29,10 +42,31 @@ static bool coords_form_rect(const float xs[4], const float ys[4]) {
             NEARLY_EQUAL(ys[0], ys[1]) && NEARLY_EQUAL(ys[2], ys[3]));
 }
 
+static bool coords_rectilinear(const float xs[4], const float ys[4]) {
+    SkVector e0{xs[1] - xs[0], ys[1] - ys[0]}; // connects to e1 and e2(repeat)
+    SkVector e1{xs[3] - xs[1], ys[3] - ys[1]}; // connects to e0(repeat) and e3
+    SkVector e2{xs[0] - xs[2], ys[0] - ys[2]}; // connects to e0 and e3(repeat)
+    SkVector e3{xs[2] - xs[3], ys[2] - ys[3]}; // connects to e1(repeat) and e2
+
+    e0.normalize();
+    e1.normalize();
+    e2.normalize();
+    e3.normalize();
+
+    return dot_nearly_zero(e0, e1) && dot_nearly_zero(e1, e3) &&
+           dot_nearly_zero(e2, e0) && dot_nearly_zero(e3, e2);
+}
+
 GrQuadType GrQuad::quadType() const {
     // Since GrQuad applies any perspective information at construction time, there's only two
     // types to choose from.
-    return coords_form_rect(fX, fY) ? GrQuadType::kRect : GrQuadType::kStandard;
+    if (coords_form_rect(fX, fY)) {
+        return GrQuadType::kRect;
+    } else if (coords_rectilinear(fX, fY)) {
+        return GrQuadType::kRectilinear;
+    } else {
+        return GrQuadType::kStandard;
+    }
 }
 
 GrQuadType GrPerspQuad::quadType() const {
@@ -40,7 +74,13 @@ GrQuadType GrPerspQuad::quadType() const {
         return GrQuadType::kPerspective;
     } else {
         // Rect or standard quad, can ignore w since they are all ones
-        return coords_form_rect(fX, fY) ? GrQuadType::kRect : GrQuadType::kStandard;
+        if (coords_form_rect(fX, fY)) {
+            return GrQuadType::kRect;
+        } else if (coords_rectilinear(fX, fY)) {
+            return GrQuadType::kRectilinear;
+        } else {
+            return GrQuadType::kStandard;
+        }
     }
 }
 #endif
@@ -97,6 +137,8 @@ template void GrResolveAATypeForQuad(GrAAType, GrQuadAAFlags, const GrPerspQuad&
 GrQuadType GrQuadTypeForTransformedRect(const SkMatrix& matrix) {
     if (matrix.rectStaysRect()) {
         return GrQuadType::kRect;
+    } else if (matrix.preservesRightAngles()) {
+        return GrQuadType::kRectilinear;
     } else if (matrix.hasPerspective()) {
         return GrQuadType::kPerspective;
     } else {
@@ -160,7 +202,6 @@ GrPerspQuad::GrPerspQuad(const SkRect& rect, const SkMatrix& m) {
         SkNx_shuffle<0, 0, 2, 2>(r).store(fX);
         SkNx_shuffle<1, 3, 1, 3>(r).store(fY);
         fW[0] = fW[1] = fW[2] = fW[3] = 1.f;
-        fIW[0] = fIW[1] = fIW[2] = fIW[3] = 1.f;
     } else {
         Sk4f rx(rect.fLeft, rect.fLeft, rect.fRight, rect.fRight);
         Sk4f ry(rect.fTop, rect.fBottom, rect.fTop, rect.fBottom);
@@ -178,12 +219,17 @@ GrPerspQuad::GrPerspQuad(const SkRect& rect, const SkMatrix& m) {
             Sk4f w2(m.get(SkMatrix::kMPersp2));
             auto w = SkNx_fma(w0, rx, SkNx_fma(w1, ry, w2));
             w.store(fW);
-            w.invert().store(fIW);
         } else {
             fW[0] = fW[1] = fW[2] = fW[3] = 1.f;
-            fIW[0] = fIW[1] = fIW[2] = fIW[3] = 1.f;
         }
     }
+}
+
+// Private constructor used by GrQuadList to quickly fill in a quad's values from the channel arrays
+GrPerspQuad::GrPerspQuad(const float* xs, const float* ys, const float* ws) {
+    memcpy(fX, xs, 4 * sizeof(float));
+    memcpy(fY, ys, 4 * sizeof(float));
+    memcpy(fW, ws, 4 * sizeof(float));
 }
 
 bool GrPerspQuad::aaHasEffectOnRect() const {

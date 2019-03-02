@@ -28,6 +28,7 @@
 #include "SkEndian.h"
 #include "SkFloatingPoint.h"
 #include "SkFontDescriptor.h"
+#include "SkFontMetrics.h"
 #include "SkFontMgr.h"
 #include "SkGlyph.h"
 #include "SkMakeUnique.h"
@@ -822,7 +823,7 @@ static SkUniqueCFRef<CTFontDescriptorRef> create_descriptor(const char familyNam
         CFDictionaryAddValue(cfTraits.get(), kCTFontWeightTrait, cfFontWeight.get());
     }
     // CTFontTraits (width)
-    CGFloat ctWidth = fontstyle_to_ct_width(style.weight());
+    CGFloat ctWidth = fontstyle_to_ct_width(style.width());
     SkUniqueCFRef<CFNumberRef> cfFontWidth(
             CFNumberCreate(kCFAllocatorDefault, kCFNumberCGFloatType, &ctWidth));
     if (cfFontWidth) {
@@ -1334,7 +1335,7 @@ void SkScalerContext_Mac::generateImage(const SkGlyph& glyph) {
     if ((glyph.fMaskFormat == SkMask::kLCD16_Format) ||
         (glyph.fMaskFormat == SkMask::kA8_Format
          && requestSmooth
-         && smooth_behavior() == SmoothBehavior::subpixel))
+         && smooth_behavior() != SmoothBehavior::none))
     {
         const uint8_t* linear = gLinearCoverageFromCGLCDValue.data();
 

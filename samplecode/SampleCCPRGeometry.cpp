@@ -90,8 +90,8 @@ public:
 
 private:
     FixedFunctionFlags fixedFunctionFlags() const override { return FixedFunctionFlags::kNone; }
-    RequiresDstTexture finalize(const GrCaps&, const GrAppliedClip*) override {
-        return RequiresDstTexture::kNo;
+    GrProcessorSet::Analysis finalize(const GrCaps&, const GrAppliedClip*) override {
+        return GrProcessorSet::EmptySetAnalysis();
     }
     void onPrepare(GrOpFlushState*) override {}
     void onExecute(GrOpFlushState*, const SkRect& chainBounds) override;
@@ -182,8 +182,11 @@ void CCPRGeometryView::onDrawContent(SkCanvas* canvas) {
 
         GrOpMemoryPool* pool = ctx->contextPriv().opMemoryPool();
 
+        const GrBackendFormat format =
+                ctx->contextPriv().caps()->getBackendFormatFromGrColorType(GrColorType::kAlpha_F16,
+                                                                           GrSRGBEncoded::kNo);
         sk_sp<GrRenderTargetContext> ccbuff =
-                ctx->contextPriv().makeDeferredRenderTargetContext(SkBackingFit::kApprox,
+                ctx->contextPriv().makeDeferredRenderTargetContext(format, SkBackingFit::kApprox,
                                                                    this->width(), this->height(),
                                                                    kAlpha_half_GrPixelConfig,
                                                                    nullptr);
@@ -235,11 +238,10 @@ void CCPRGeometryView::onDrawContent(SkCanvas* canvas) {
         canvas->drawPoints(SkCanvas::kPoints_PointMode, 1, fPoints + 3, pointsPaint);
     }
 
+    SkFont font(nullptr, 20);
     SkPaint captionPaint;
-    captionPaint.setTextSize(20);
     captionPaint.setColor(SK_ColorWHITE);
-    captionPaint.setAntiAlias(true);
-    canvas->drawText(caption.c_str(), caption.size(), 10, 30, captionPaint);
+    canvas->drawString(caption, 10, 30, font, captionPaint);
 }
 
 void CCPRGeometryView::updateGpuData() {
@@ -322,7 +324,7 @@ void CCPRGeometryView::DrawCoverageCountOp::onExecute(GrOpFlushState* state,
                                                       const SkRect& chainBounds) {
     GrResourceProvider* rp = state->resourceProvider();
     GrContext* context = state->gpu()->getContext();
-    GrGLGpu* glGpu = GrBackendApi::kOpenGL == context->contextPriv().getBackend()
+    GrGLGpu* glGpu = GrBackendApi::kOpenGL == context->backend()
                              ? static_cast<GrGLGpu*>(state->gpu())
                              : nullptr;
     if (glGpu) {
@@ -331,7 +333,7 @@ void CCPRGeometryView::DrawCoverageCountOp::onExecute(GrOpFlushState* state,
         GR_GL_CALL(glGpu->glInterface(), Enable(GR_GL_LINE_SMOOTH));
     }
 
-    GrPipeline pipeline(state->drawOpArgs().fProxy, GrScissorTest::kDisabled, SkBlendMode::kPlus);
+    GrPipeline pipeline(GrScissorTest::kDisabled, SkBlendMode::kPlus);
 
     if (!fView->fDoStroke) {
         GrCCCoverageProcessor proc(rp, fView->fPrimitiveType);
@@ -343,20 +345,18 @@ void CCPRGeometryView::DrawCoverageCountOp::onExecute(GrOpFlushState* state,
             sk_sp<GrBuffer> instBuff(rp->createBuffer(
                     fView->fQuadPointInstances.count() * sizeof(QuadPointInstance),
                     kVertex_GrBufferType, kDynamic_GrAccessPattern,
-                    GrResourceProvider::Flags::kNoPendingIO |
                     GrResourceProvider::Flags::kRequireGpuMemory,
                     fView->fQuadPointInstances.begin()));
             if (!fView->fQuadPointInstances.empty() && instBuff) {
-                proc.appendMesh(instBuff.get(), fView->fQuadPointInstances.count(), 0, &mesh);
+                proc.appendMesh(std::move(instBuff), fView->fQuadPointInstances.count(), 0, &mesh);
             }
         } else {
             sk_sp<GrBuffer> instBuff(rp->createBuffer(
                     fView->fTriPointInstances.count() * sizeof(TriPointInstance),
                     kVertex_GrBufferType, kDynamic_GrAccessPattern,
-                    GrResourceProvider::Flags::kNoPendingIO |
                     GrResourceProvider::Flags::kRequireGpuMemory, fView->fTriPointInstances.begin()));
             if (!fView->fTriPointInstances.empty() && instBuff) {
-                proc.appendMesh(instBuff.get(), fView->fTriPointInstances.count(), 0, &mesh);
+                proc.appendMesh(std::move(instBuff), fView->fTriPointInstances.count(), 0, &mesh);
             }
         }
 

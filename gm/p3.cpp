@@ -6,8 +6,11 @@
  */
 
 #include "gm.h"
+
 #include "SkColorSpace.h"
 #include "SkColorSpaceXformSteps.h"
+#include "SkDashPathEffect.h"
+#include "SkFont.h"
 #include "SkGradientShader.h"
 #include "SkString.h"
 
@@ -32,8 +35,8 @@ static SkColor4f transform(SkColor4f c, SkColorSpace* src, SkColorSpace* dst) {
 static void compare_pixel(const char* label,
                           SkCanvas* canvas, int x, int y,
                           SkColor4f color, SkColorSpace* cs) {
-    SkPaint text;
-    text.setAntiAlias(true);
+    SkPaint paint;
+    SkFont font;
     auto canvas_cs = canvas->imageInfo().refColorSpace();
 
     // I'm not really sure if this makes things easier or harder to follow,
@@ -49,7 +52,7 @@ static void compare_pixel(const char* label,
     bm.allocPixels(SkImageInfo::Make(1,1, kRGBA_F32_SkColorType, kUnpremul_SkAlphaType, canvas_cs));
     if (!canvas->readPixels(bm, x,y)) {
         MarkGMGood(canvas, 140,40);
-        canvas->drawString("can't readPixels() on this canvas :(", 100,20, text);
+        canvas->drawString("can't readPixels() on this canvas :(", 100,20, font, paint);
         return;
     }
 
@@ -84,17 +87,16 @@ static void compare_pixel(const char* label,
     };
 
     SkAutoCanvasRestore saveRestore(canvas, true);
-    canvas->drawString(label, 80,20, text);
+    canvas->drawString(label, 80,20, font, paint);
     for (auto l : lines) {
         canvas->translate(0,20);
-        canvas->drawString(l.label,               80,20, text);
-        canvas->drawString(fmt(l.color).c_str(), 140,20, text);
+        canvas->drawString(l.label,               80,20, font, paint);
+        canvas->drawString(fmt(l.color).c_str(), 140,20, font, paint);
     }
 }
 
 DEF_SIMPLE_GM(p3, canvas, 450, 1300) {
-    auto p3 = SkColorSpace::MakeRGB(SkColorSpace::kSRGB_RenderTargetGamma,
-                                    SkColorSpace::kDCIP3_D65_Gamut);
+    auto p3 = SkColorSpace::MakeRGB(SkNamedTransferFn::kSRGB, SkNamedGamut::kDCIP3);
     auto srgb = SkColorSpace::MakeSRGB();
 
     auto p3_to_srgb = [&](SkColor4f c) {
@@ -298,6 +300,34 @@ DEF_SIMPLE_GM(p3, canvas, 450, 1300) {
 
     canvas->translate(0,80);
 
+    // Leon's blue -> green -> red gradient, interpolating in premul.
+    {
+        SkPoint points[] = {{10.5,10.5}, {10.5,69.5}};
+        SkColor4f colors[] = { {0,0,1,1}, {0,1,0,1}, {1,0,0,1} };
+
+        SkPaint paint;
+        paint.setShader(
+                SkGradientShader::MakeLinear(points, colors, p3,
+                                             nullptr, SK_ARRAY_COUNT(colors),
+                                             SkShader::kClamp_TileMode,
+                                             SkGradientShader::kInterpolateColorsInPremul_Flag,
+                                             nullptr/*local matrix*/));
+        canvas->drawRect({10,10,70,70}, paint);
+        canvas->save();
+            compare_pixel("Leon's gradient, P3 blue",
+                          canvas, 10,10,
+                          {0,0,1,1}, p3.get());
+
+            canvas->translate(180, 0);
+
+            compare_pixel("Leon's gradient, P3 red",
+                          canvas, 10,69,
+                          {1,0,0,1}, p3.get());
+        canvas->restore();
+    }
+
+    canvas->translate(0,80);
+
     // Draw an A8 image with a P3 red, scaled and not, as a shader or bitmap.
     {
         uint8_t mask[256];
@@ -352,4 +382,74 @@ DEF_SIMPLE_GM(p3, canvas, 450, 1300) {
     }
 
     // TODO: draw P3 colors more ways
+}
+
+DEF_SIMPLE_GM(p3_ovals, canvas, 450, 320) {
+    auto p3 = SkColorSpace::MakeRGB(SkNamedTransferFn::kSRGB, SkNamedGamut::kDCIP3);
+
+    // Test cases that exercise each Op in GrOvalOpFactory.cpp
+
+    // Draw a circle and check the center (CircleOp)
+    {
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        paint.setColor4f({ 1,0,0,1 }, p3.get());
+
+        canvas->drawCircle(40, 40, 30, paint);
+        compare_pixel("drawCircle P3 red ",
+                      canvas, 40, 40,
+                      { 1,0,0,1 }, p3.get());
+    }
+
+    canvas->translate(0, 80);
+
+    // Draw an oval and check the center (EllipseOp)
+    {
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        paint.setColor4f({ 1,0,0,1 }, p3.get());
+
+        canvas->drawOval({ 20,10,60,70 }, paint);
+        compare_pixel("drawOval P3 red ",
+                      canvas, 40, 40,
+                      { 1,0,0,1 }, p3.get());
+    }
+
+    canvas->translate(0, 80);
+
+    // Draw a butt-capped dashed circle and check the top of the stroke (ButtCappedDashedCircleOp)
+    {
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        paint.setColor4f({ 1,0,0,1 }, p3.get());
+        paint.setStyle(SkPaint::kStroke_Style);
+        float intervals[] = { 70, 10 };
+        paint.setPathEffect(SkDashPathEffect::Make(intervals, 2, 0));
+        paint.setStrokeWidth(10);
+
+        canvas->drawCircle(40, 40, 30, paint);
+        compare_pixel("drawDashedCircle P3 red ",
+                      canvas, 40, 10,
+                      { 1,0,0,1 }, p3.get());
+    }
+
+    canvas->translate(0, 80);
+
+    // Draw an oval with rotation and check the center (DIEllipseOp)
+    {
+        SkPaint paint;
+        paint.setAntiAlias(true);
+        paint.setColor4f({ 1,0,0,1 }, p3.get());
+
+        canvas->save();
+            canvas->translate(40, 40);
+            canvas->rotate(45);
+            canvas->drawOval({ -20,-30,20,30 }, paint);
+        canvas->restore();
+        compare_pixel("drawRotatedOval P3 red ",
+                      canvas, 40, 40,
+                      { 1,0,0,1 }, p3.get());
+    }
+
+    canvas->translate(0, 80);
 }

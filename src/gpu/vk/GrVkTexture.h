@@ -10,6 +10,7 @@
 
 #include "GrTexture.h"
 #include "GrVkImage.h"
+#include "vk/GrVkTypes.h"
 
 class GrVkGpu;
 class GrVkImageView;
@@ -23,13 +24,15 @@ public:
                                              const GrVkImage::ImageDesc&,
                                              GrMipMapsStatus);
 
-    static sk_sp<GrVkTexture> MakeWrappedTexture(GrVkGpu*, const GrSurfaceDesc&,
-                                                 GrWrapOwnership, bool purgeImmediatley,
-                                                 const GrVkImageInfo&, sk_sp<GrVkImageLayout>);
+    static sk_sp<GrVkTexture> MakeWrappedTexture(GrVkGpu*, const GrSurfaceDesc&, GrWrapOwnership,
+                                                 GrWrapCacheable, GrIOType, const GrVkImageInfo&,
+                                                 sk_sp<GrVkImageLayout>);
 
     ~GrVkTexture() override;
 
     GrBackendTexture getBackendTexture() const override;
+
+    GrBackendFormat backendFormat() const override { return this->getBackendFormat(); }
 
     void textureParamsModified() override {}
 
@@ -41,6 +44,9 @@ public:
         // Forward the release proc on to GrVkImage
         this->setResourceRelease(std::move(releaseHelper));
     }
+
+    void setIdleProc(IdleProc, void* context) override;
+    void* idleContext() const override { return fIdleProcContext; }
 
 protected:
     GrVkTexture(GrVkGpu*, const GrSurfaceDesc&, const GrVkImageInfo&, sk_sp<GrVkImageLayout>,
@@ -56,15 +62,18 @@ protected:
     }
 
 private:
-    enum Wrapped { kWrapped };
     GrVkTexture(GrVkGpu*, SkBudgeted, const GrSurfaceDesc&, const GrVkImageInfo&,
                 sk_sp<GrVkImageLayout> layout, const GrVkImageView* imageView,
                 GrMipMapsStatus);
-    GrVkTexture(GrVkGpu*, Wrapped, const GrSurfaceDesc&, const GrVkImageInfo&,
-                sk_sp<GrVkImageLayout> layout, const GrVkImageView* imageView, GrMipMapsStatus,
-                GrBackendObjectOwnership, bool purgeImmediately);
+    GrVkTexture(GrVkGpu*, const GrSurfaceDesc&, const GrVkImageInfo&, sk_sp<GrVkImageLayout>,
+                const GrVkImageView*, GrMipMapsStatus, GrBackendObjectOwnership, GrWrapCacheable,
+                GrIOType);
 
-    const GrVkImageView*     fTextureView;
+    void removedLastRefOrPendingIO() override;
+
+    const GrVkImageView* fTextureView;
+    GrTexture::IdleProc* fIdleProc = nullptr;
+    void* fIdleProcContext = nullptr;
 
     typedef GrTexture INHERITED;
 };

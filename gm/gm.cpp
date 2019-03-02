@@ -32,6 +32,7 @@ void GM::drawContent(SkCanvas* canvas) {
         fHaveCalledOnceBeforeDraw = true;
         this->onOnceBeforeDraw();
     }
+    SkAutoCanvasRestore acr(canvas, true);
     this->onDraw(canvas);
 }
 
@@ -41,7 +42,8 @@ void GM::drawBackground(SkCanvas* canvas) {
         fHaveCalledOnceBeforeDraw = true;
         this->onOnceBeforeDraw();
     }
-    this->onDrawBackground(canvas);
+    SkAutoCanvasRestore acr(canvas, true);
+    canvas->drawColor(fBGColor, SkBlendMode::kSrc);
 }
 
 const char* GM::getName() {
@@ -61,10 +63,6 @@ bool GM::animate(const SkAnimTimer& timer) {
 
 /////////////////////////////////////////////////////////////////////////////////////////////
 
-void GM::onDrawBackground(SkCanvas* canvas) {
-    canvas->drawColor(fBGColor, SkBlendMode::kSrc);
-}
-
 void GM::drawSizeBounds(SkCanvas* canvas, SkColor color) {
     SkISize size = this->getISize();
     SkRect r = SkRect::MakeWH(SkIntToScalar(size.width()),
@@ -79,13 +77,10 @@ void GM::DrawGpuOnlyMessage(SkCanvas* canvas) {
     bmp.allocN32Pixels(128, 64);
     SkCanvas bmpCanvas(bmp);
     bmpCanvas.drawColor(SK_ColorWHITE);
+    SkFont font(sk_tool_utils::create_portable_typeface(), 20);
     SkPaint paint;
-    paint.setAntiAlias(true);
-    paint.setTextSize(20);
     paint.setColor(SK_ColorRED);
-    sk_tool_utils::set_portable_typeface(&paint);
-    constexpr char kTxt[] = "GPU Only";
-    bmpCanvas.drawString(kTxt, 20, 40, paint);
+    bmpCanvas.drawString("GPU Only", 20, 40, font, paint);
     SkMatrix localM;
     localM.setRotate(35.f);
     localM.postTranslate(10.f, 0.f);
@@ -95,6 +90,24 @@ void GM::DrawGpuOnlyMessage(SkCanvas* canvas) {
     paint.setFilterQuality(kMedium_SkFilterQuality);
     canvas->drawPaint(paint);
     return;
+}
+
+void GM::DrawFailureMessage(SkCanvas* canvas, const char format[], ...)  {
+    SkString failureMsg;
+
+    va_list argp;
+    va_start(argp, format);
+    failureMsg.appendVAList(format, argp);
+    va_end(argp);
+
+    constexpr SkScalar kOffset = 5.0f;
+    canvas->drawColor(SkColorSetRGB(200,0,0));
+    SkFont font;
+    SkRect bounds;
+    font.measureText(failureMsg.c_str(), failureMsg.size(), kUTF8_SkTextEncoding, &bounds);
+    SkPaint textPaint;
+    textPaint.setColor(SK_ColorWHITE);
+    canvas->drawString(failureMsg, kOffset, bounds.height() + kOffset, font, textPaint);
 }
 
 // need to explicitly declare this, or we get some weird infinite loop llist

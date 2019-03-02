@@ -12,6 +12,7 @@
 #include "GrSurfaceContext.h"
 #include "text/GrAtlasManager.h"
 
+class GrBackendFormat;
 class GrBackendRenderTarget;
 class GrOpMemoryPool;
 class GrOnFlushCallbackObject;
@@ -27,6 +28,16 @@ class SkDeferredDisplayList;
     data members or virtual methods. */
 class GrContextPriv {
 public:
+
+    // from GrContext_Base
+    uint32_t contextID() const { return fContext->contextID(); }
+
+    const GrContextOptions& options() const { return fContext->options(); }
+
+    // from GrImageContext
+
+    // from GrRecordingContext
+
     /**
      * Create a GrContext without a resource cache
      */
@@ -43,7 +54,8 @@ public:
                                                       sk_sp<SkColorSpace> = nullptr,
                                                       const SkSurfaceProps* = nullptr);
 
-    sk_sp<GrSurfaceContext> makeDeferredSurfaceContext(const GrSurfaceDesc&,
+    sk_sp<GrSurfaceContext> makeDeferredSurfaceContext(const GrBackendFormat&,
+                                                       const GrSurfaceDesc&,
                                                        GrSurfaceOrigin,
                                                        GrMipMapped,
                                                        SkBackingFit,
@@ -75,8 +87,8 @@ public:
                                                                  sk_sp<SkColorSpace> colorSpace,
                                                                  const SkSurfaceProps* = nullptr);
 
-    bool disableGpuYUVConversion() const { return fContext->fDisableGpuYUVConversion; }
-    bool sharpenMipmappedTextures() const { return fContext->fSharpenMipmappedTextures; }
+    sk_sp<GrRenderTargetContext> makeVulkanSecondaryCBRenderTargetContext(
+            const SkImageInfo&, const GrVkDrawableInfo&, const SkSurfaceProps* = nullptr);
 
     /**
      * Call to ensure all drawing to the context has been issued to the
@@ -177,8 +189,6 @@ public:
                             GrColorType srcColorType, SkColorSpace* srcColorSpace,
                             const void* buffer, size_t rowBytes, uint32_t pixelOpsFlags = 0);
 
-    GrBackendApi getBackend() const { return fContext->fBackend; }
-
     SkTaskGroup* getTaskGroup() { return fContext->fTaskGroup.get(); }
 
     GrProxyProvider* proxyProvider() { return fContext->fProxyProvider; }
@@ -192,7 +202,7 @@ public:
     GrGpu* getGpu() { return fContext->fGpu.get(); }
     const GrGpu* getGpu() const { return fContext->fGpu.get(); }
 
-    GrGlyphCache* getGlyphCache() { return fContext->fGlyphCache; }
+    GrStrikeCache* getGlyphCache() { return fContext->fGlyphCache; }
     GrTextBlobCache* getTextBlobCache() { return fContext->fTextBlobCache.get(); }
 
     // This accessor should only ever be called by the GrOpFlushState.
@@ -217,6 +227,7 @@ public:
      * renderTargetContexts created via this entry point.
      */
     sk_sp<GrRenderTargetContext> makeDeferredRenderTargetContext(
+                                                 const GrBackendFormat& format,
                                                  SkBackingFit fit,
                                                  int width, int height,
                                                  GrPixelConfig config,
@@ -233,6 +244,7 @@ public:
      * SRGB-ness will be preserved.
      */
     sk_sp<GrRenderTargetContext> makeDeferredRenderTargetContextWithFallback(
+                                                 const GrBackendFormat& format,
                                                  SkBackingFit fit,
                                                  int width, int height,
                                                  GrPixelConfig config,
@@ -272,9 +284,7 @@ public:
 
     GrContextOptions::PersistentCache* getPersistentCache() { return fContext->fPersistentCache; }
 
-    sk_sp<GrSkSLFPFactoryCache> getFPFactoryCache() {
-        return fContext->fFPFactoryCache;
-    }
+    sk_sp<GrSkSLFPFactoryCache> getFPFactoryCache();
 
     /** This is only useful for debug purposes */
     SkDEBUGCODE(GrSingleOwner* debugSingleOwner() const { return &fContext->fSingleOwner; } )
