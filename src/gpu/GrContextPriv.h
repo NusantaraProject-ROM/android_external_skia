@@ -18,10 +18,12 @@ class GrOpMemoryPool;
 class GrOnFlushCallbackObject;
 class GrSemaphore;
 class GrSkSLFPFactory;
+class GrSkSLFPFactoryCache;
 class GrSurfaceProxy;
 class GrTextureContext;
 
 class SkDeferredDisplayList;
+class SkTaskGroup;
 
 /** Class that adds methods to GrContext that are only intended for use internal to Skia.
     This class is purely a privileged window into GrContext. It should never have additional
@@ -59,12 +61,13 @@ public:
     SkDEBUGCODE(GrSingleOwner* singleOwner() const { return fContext->singleOwner(); } )
 
     // from GrRecordingContext
-
-    // CONTEXT TODO: move GrDrawingManager to GrRecordingContext for real
     GrDrawingManager* drawingManager() { return fContext->drawingManager(); }
 
     sk_sp<GrOpMemoryPool> refOpMemoryPool();
     GrOpMemoryPool* opMemoryPool() { return fContext->opMemoryPool(); }
+
+    GrStrikeCache* getGlyphCache() { return fContext->getGlyphCache(); }
+    GrTextBlobCache* getTextBlobCache() { return fContext->getTextBlobCache(); }
 
     /**
      * Registers an object for flush-related callbacks. (See GrOnFlushCallbackObject.)
@@ -262,9 +265,6 @@ public:
 
     GrGpu* getGpu() { return fContext->fGpu.get(); }
     const GrGpu* getGpu() const { return fContext->fGpu.get(); }
-
-    GrStrikeCache* getGlyphCache() { return fContext->fGlyphCache; }
-    GrTextBlobCache* getTextBlobCache() { return fContext->fTextBlobCache.get(); }
 
     // This accessor should only ever be called by the GrOpFlushState.
     GrAtlasManager* getAtlasManager() {

@@ -61,13 +61,14 @@ public:
         int fMaxTextureSize = 0;
         size_t fMaxTextureBytes = 0u;
     };
+
     SkTextBlobCacheDiffCanvas(int width, int height, const SkSurfaceProps& props,
                               SkStrikeServer* strikeServer, Settings settings = Settings());
 
-    // TODO(khushalsagar): Remove once removed from chromium.
-    SkTextBlobCacheDiffCanvas(int width, int height, const SkMatrix& deviceMatrix,
-                              const SkSurfaceProps& props, SkStrikeServer* strikeserver,
+    SkTextBlobCacheDiffCanvas(int width, int height, const SkSurfaceProps& props,
+                              SkStrikeServer* strikeServer, sk_sp<SkColorSpace> colorSpace,
                               Settings settings = Settings());
+
     ~SkTextBlobCacheDiffCanvas() override;
 
 protected:
