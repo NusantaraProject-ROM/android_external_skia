@@ -636,8 +636,8 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 				return dockerGceDimensions()
 			}
 			if parts["role"] == "BuildStats" {
-				// Doesn't require a lot of resources
-				return linuxGceDimensions(MACHINE_TYPE_MEDIUM)
+				// Doesn't require a lot of resources, but some steps require docker
+				return dockerGceDimensions()
 			}
 			// Use many-core machines for Build tasks.
 			return linuxGceDimensions(MACHINE_TYPE_LARGE)
@@ -998,6 +998,8 @@ func infra(b *specs.TasksCfgBuilder, name string) string {
 	return name
 }
 
+var BUILD_STATS_NO_UPLOAD = []string{"BuildStats-Debian9-Clang-x86_64-Release"}
+
 func buildstats(b *specs.TasksCfgBuilder, name string, parts map[string]string, compileTaskName string) string {
 	task := kitchenTask(name, "compute_buildstats", "swarm_recipe.isolate", "", swarmDimensions(parts), nil, OUTPUT_PERF)
 	task.Dependencies = append(task.Dependencies, compileTaskName)
@@ -1005,8 +1007,8 @@ func buildstats(b *specs.TasksCfgBuilder, name string, parts map[string]string, 
 	b.MustAddTask(name, task)
 
 	// Upload release results (for tracking in perf)
-	// We have some jobs that are FYI (e.g. Debug-CanvasKit)
-	if strings.Contains(name, "Release") {
+	// We have some jobs that are FYI (e.g. Debug-CanvasKit, tree-map generator)
+	if strings.Contains(name, "Release") && !util.In(name, BUILD_STATS_NO_UPLOAD) {
 		uploadName := fmt.Sprintf("%s%s%s", PREFIX_UPLOAD, jobNameSchema.Sep, name)
 		extraProps := map[string]string{
 			"gs_bucket": CONFIG.GsBucketNano,
@@ -1136,7 +1138,6 @@ func test(b *specs.TasksCfgBuilder, name string, parts map[string]string, compil
 		timeout(task, 9*time.Hour)
 		task.Expiration = 48 * time.Hour
 		task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("valgrind"))
-		task.Dimensions = append(task.Dimensions, "valgrind:1")
 	} else if strings.Contains(parts["extra_config"], "MSAN") {
 		timeout(task, 9*time.Hour)
 	} else if parts["arch"] == "x86" && parts["configuration"] == "Debug" {
@@ -1188,7 +1189,6 @@ func perf(b *specs.TasksCfgBuilder, name string, parts map[string]string, compil
 		timeout(task, 9*time.Hour)
 		task.Expiration = 48 * time.Hour
 		task.CipdPackages = append(task.CipdPackages, b.MustGetCipdPackageFromAsset("valgrind"))
-		task.Dimensions = append(task.Dimensions, "valgrind:1")
 	} else if strings.Contains(parts["extra_config"], "MSAN") {
 		timeout(task, 9*time.Hour)
 	} else if parts["arch"] == "x86" && parts["configuration"] == "Debug" {
@@ -1400,6 +1400,14 @@ func process(b *specs.TasksCfgBuilder, name string) {
 	// Calmbench bots.
 	if parts["role"] == "Calmbench" {
 		deps = append(deps, calmbench(b, name, parts, compileTaskName, compileParentName))
+	}
+
+	// Valgrind runs at a low priority so that it doesn't occupy all the bots.
+	if strings.Contains(name, "Valgrind") {
+		// Priority of 0.085 should result in Valgrind tasks with a blamelist of ~10 commits having the
+		// same score as other tasks with a blamelist of 1 commit, when we have insufficient bot
+		// capacity to run more frequently.
+		priority = 0.085
 	}
 
 	// BuildStats bots. This computes things like binary size.

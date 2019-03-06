@@ -1,0 +1,77 @@
+{
+   "MaxCount": 4096,
+   "Duration": 1,
+   "Rate": 1000,
+   "Life": {
+      "XValues": [],
+      "Segments": [
+         {
+            "Constant": true,
+            "Ranged": true,
+            "Bidirectional": false,
+            "A0": 1,
+            "B0": 0,
+            "C0": 0,
+            "D0": 0,
+            "A1": 3,
+            "B1": 0,
+            "C1": 0,
+            "D1": 0
+         }
+      ]
+   },
+   "StartColor": [ 1, 0.35, 0, 1 ],
+   "EndColor": [ 1, 0.978085, 0.627451, 1 ],
+   "Drawable": {
+      "Type": "SkCircleDrawable",
+      "Radius": 1
+   },
+   "Emitter": {
+      "Type": "SkTextEmitter",
+      "Text": "SKIA",
+      "FontSize": 96
+   },
+   "Spawn": [
+      {
+         "Type": "SkLinearVelocityAffector",
+         "Force": false,
+         "Angle": {
+            "XValues": [],
+            "Segments": [
+               {
+                  "Constant": true,
+                  "Ranged": true,
+                  "Bidirectional": false,
+                  "A0": 240,
+                  "B0": 0,
+                  "C0": 0,
+                  "D0": 0,
+                  "A1": 300,
+                  "B1": 0,
+                  "C1": 0,
+                  "D1": 0
+               }
+            ]
+         },
+         "Strength": {
+            "XValues": [],
+            "Segments": [
+               {
+                  "Constant": true,
+                  "Ranged": true,
+                  "Bidirectional": false,
+                  "A0": 10,
+                  "B0": 0,
+                  "C0": 0,
+                  "D0": 0,
+                  "A1": 30,
+                  "B1": 0,
+                  "C1": 0,
+                  "D1": 0
+               }
+            ]
+         }
+      }
+   ],
+   "Update": []
+}

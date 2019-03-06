@@ -7,6 +7,7 @@
 
 #include "GrStrokeRectOp.h"
 
+#include "GrCaps.h"
 #include "GrColor.h"
 #include "GrDefaultGeoProcFactory.h"
 #include "GrDrawOpTest.h"
@@ -106,7 +107,7 @@ public:
     }
 #endif
 
-    static std::unique_ptr<GrDrawOp> Make(GrContext* context,
+    static std::unique_ptr<GrDrawOp> Make(GrRecordingContext* context,
                                           GrPaint&& paint,
                                           const SkMatrix& viewMatrix,
                                           const SkRect& rect,
@@ -317,7 +318,7 @@ private:
 public:
     DEFINE_OP_CLASS_ID
 
-    static std::unique_ptr<GrDrawOp> Make(GrContext* context,
+    static std::unique_ptr<GrDrawOp> Make(GrRecordingContext* context,
                                           GrPaint&& paint,
                                           const SkMatrix& viewMatrix,
                                           const SkRect& devOutside,
@@ -340,7 +341,7 @@ public:
         fWideColor = !SkPMColor4fFitsInBytes(color);
     }
 
-    static std::unique_ptr<GrDrawOp> Make(GrContext* context,
+    static std::unique_ptr<GrDrawOp> Make(GrRecordingContext* context,
                                           GrPaint&& paint,
                                           const SkMatrix& viewMatrix,
                                           const SkRect& rect,
@@ -732,7 +733,7 @@ void AAStrokeRectOp::generateAAStrokeRectGeometry(GrVertexWriter& vertices,
 
 namespace GrStrokeRectOp {
 
-std::unique_ptr<GrDrawOp> Make(GrContext* context,
+std::unique_ptr<GrDrawOp> Make(GrRecordingContext* context,
                                GrPaint&& paint,
                                GrAAType aaType,
                                const SkMatrix& viewMatrix,
@@ -749,7 +750,7 @@ std::unique_ptr<GrDrawOp> Make(GrContext* context,
     }
 }
 
-std::unique_ptr<GrDrawOp> MakeNested(GrContext* context,
+std::unique_ptr<GrDrawOp> MakeNested(GrRecordingContext* context,
                                      GrPaint&& paint,
                                      const SkMatrix& viewMatrix,
                                      const SkRect rects[2]) {

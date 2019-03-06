@@ -289,11 +289,14 @@ public:
 protected:
     GrContext(GrBackendApi, const GrContextOptions&, int32_t contextID = SK_InvalidGenID);
 
-    GrContext* asDirectContext() override { return this; }
-
     bool init(sk_sp<const GrCaps>, sk_sp<GrSkSLFPFactoryCache>) override;
 
+    GrContext* asDirectContext() override { return this; }
+
     virtual GrAtlasManager* onGetAtlasManager() = 0;
+
+    // CONTEXT TODO: move GrDrawingManager to GrRecordingContext for real
+    GrDrawingManager* drawingManager() override;
 
     sk_sp<GrContextThreadSafeProxy>         fThreadSafeProxy;
 
