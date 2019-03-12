@@ -8,6 +8,7 @@
 #include "SkArenaAlloc.h"
 #include "SkBitmapProcShader.h"
 #include "SkColorShader.h"
+#include "SkColorSpacePriv.h"
 #include "SkColorSpaceXformer.h"
 #include "SkEmptyShader.h"
 #include "SkMallocPixelRef.h"
@@ -108,6 +109,10 @@ SkShaderBase::Context::Context(const SkShaderBase& shader, const ContextRec& rec
 }
 
 SkShaderBase::Context::~Context() {}
+
+bool SkShaderBase::ContextRec::isLegacyCompatible(SkColorSpace* shaderColorSpace) const {
+    return sk_can_use_legacy_blits(shaderColorSpace, fDstColorSpace);
+}
 
 const SkMatrix& SkShader::getLocalMatrix() const {
     return as_SB(this)->getLocalMatrix();

@@ -3,20 +3,19 @@
    "Duration": 1,
    "Rate": 90,
    "Life": {
+      "Input": {
+         "Source": "Age",
+         "TileMode": "Repeat",
+         "Left": 0,
+         "Right": 1
+      },
       "XValues": [],
       "Segments": [
          {
-            "Constant": true,
+            "Type": "Constant",
             "Ranged": false,
             "Bidirectional": false,
-            "A0": 30,
-            "B0": 0,
-            "C0": 0,
-            "D0": 0,
-            "A1": 0,
-            "B1": 0,
-            "C1": 0,
-            "D1": 0
+            "A0": 30
          }
       ]
    },
@@ -24,17 +23,69 @@
       "Type": "SkCircleDrawable",
       "Radius": 2
    },
-   "Emitter": {
-      "Type": "SkCircleEmitter",
-      "Center": { "x": 380.8, "y": 273.92 },
-      "Radius": 43
-   },
-   "Spawn": [],
+   "Spawn": [
+      {
+         "Type": "SkPositionInCircleAffector",
+         "Enabled": true,
+         "SetHeading": true,
+         "X": {
+            "Input": {
+               "Source": "Age",
+               "TileMode": "Repeat",
+               "Left": 0,
+               "Right": 1
+            },
+            "XValues": [],
+            "Segments": [
+               {
+                  "Type": "Constant",
+                  "Ranged": false,
+                  "Bidirectional": false,
+                  "A0": 0
+               }
+            ]
+         },
+         "Y": {
+            "Input": {
+               "Source": "Age",
+               "TileMode": "Repeat",
+               "Left": 0,
+               "Right": 1
+            },
+            "XValues": [],
+            "Segments": [
+               {
+                  "Type": "Constant",
+                  "Ranged": false,
+                  "Bidirectional": false,
+                  "A0": 0
+               }
+            ]
+         },
+         "Radius": {
+            "Input": {
+               "Source": "Age",
+               "TileMode": "Repeat",
+               "Left": 0,
+               "Right": 1
+            },
+            "XValues": [],
+            "Segments": [
+               {
+                  "Type": "Constant",
+                  "Ranged": false,
+                  "Bidirectional": false,
+                  "A0": 40
+               }
+            ]
+         }
+      }
+   ],
    "Update": [
       {
          "Type": "SkPointForceAffector",
          "Enabled": true,
-         "Point": { "x": 375, "y": 273 },
+         "Point": { "x": 0, "y": 0 },
          "Constant": -10,
          "InvSquare": 0
       },
@@ -42,20 +93,20 @@
          "Type": "SkSizeAffector",
          "Enabled": true,
          "Curve": {
+            "Input": {
+               "Source": "Age",
+               "TileMode": "Repeat",
+               "Left": 0,
+               "Right": 1
+            },
             "XValues": [],
             "Segments": [
                {
-                  "Constant": false,
+                  "Type": "Linear",
                   "Ranged": false,
                   "Bidirectional": false,
                   "A0": 0.25,
-                  "B0": 1,
-                  "C0": 2,
-                  "D0": 3,
-                  "A1": 0,
-                  "B1": 0,
-                  "C1": 0,
-                  "D1": 0
+                  "D0": 3
                }
             ]
          }
