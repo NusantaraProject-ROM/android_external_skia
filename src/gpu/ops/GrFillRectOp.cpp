@@ -227,10 +227,12 @@ private:
             return;
         }
         mesh->setVertexData(std::move(vbuffer), vertexOffsetInBuffer);
+        target->recordDraw(std::move(gp), mesh);
+    }
 
-        auto pipe = fHelper.makePipeline(target);
-        target->draw(std::move(gp), pipe.fPipeline, pipe.fFixedDynamicState, mesh);
-   }
+    void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
+        fHelper.executeDrawsAndUploads(this, flushState, chainBounds);
+    }
 
     CombineResult onCombineIfPossible(GrOp* t, const GrCaps& caps) override {
         TRACE_EVENT0("skia", TRACE_FUNC);
@@ -374,6 +376,25 @@ std::unique_ptr<GrDrawOp> MakePerEdgeWithLocalRect(GrRecordingContext* context,
     return FillRectOp::Make(context, std::move(paint), aaType, edgeAA, stencilSettings,
                             GrPerspQuad::MakeFromRect(rect, viewMatrix), dstQuadType,
                             GrPerspQuad(localRect), GrQuadType::kRect);
+}
+
+std::unique_ptr<GrDrawOp> MakePerEdgeQuad(GrRecordingContext* context,
+                                          GrPaint&& paint,
+                                          GrAAType aaType,
+                                          GrQuadAAFlags edgeAA,
+                                          const SkMatrix& viewMatrix,
+                                          const SkPoint quad[4],
+                                          const SkPoint localQuad[4],
+                                          const GrUserStencilSettings* stencilSettings) {
+    // With arbitrary quads, the quad types are limited to kStandard or kPerspective (unless we
+    // analyzed the points, but callers have more knowledge and should've just use the appropriate
+    // factory, so assume they can't be rectilinear or simpler)
+    GrQuadType deviceType = viewMatrix.hasPerspective() ? GrQuadType::kPerspective
+                                                        : GrQuadType::kStandard;
+    return FillRectOp::Make(context, std::move(paint), aaType, edgeAA, stencilSettings,
+                            GrPerspQuad::MakeFromSkQuad(quad, viewMatrix), deviceType,
+                            GrPerspQuad::MakeFromSkQuad(localQuad ? localQuad : quad,
+                                                        SkMatrix::I()), GrQuadType::kStandard);
 }
 
 std::unique_ptr<GrDrawOp> MakeSet(GrRecordingContext* context,

@@ -10,6 +10,7 @@
 #include "SkFontArguments.h"
 #include "SkFontMetrics.h"
 #include "SkFontMgr.h"
+#include "SkMakeUnique.h"
 #include "SkMalloc.h"
 #include "SkPoint.h"
 #include "SkRefCnt.h"
@@ -214,15 +215,28 @@ hb_bool_t skhb_glyph_extents(hb_font_t* hb_font,
     return true;
 }
 
+#define SK_HB_VERSION_CHECK(x, y, z) \
+    (HB_VERSION_MAJOR >  (x)) || \
+    (HB_VERSION_MAJOR == (x) && HB_VERSION_MINOR >  (y)) || \
+    (HB_VERSION_MAJOR == (x) && HB_VERSION_MINOR == (y) && HB_VERSION_MICRO >= (z))
+
 hb_font_funcs_t* skhb_get_font_funcs() {
     static hb_font_funcs_t* const funcs = []{
         // HarfBuzz will use the default (parent) implementation if they aren't set.
         hb_font_funcs_t* const funcs = hb_font_funcs_create();
         hb_font_funcs_set_variation_glyph_func(funcs, skhb_glyph, nullptr, nullptr);
         hb_font_funcs_set_nominal_glyph_func(funcs, skhb_nominal_glyph, nullptr, nullptr);
+#if SK_HB_VERSION_CHECK(2, 0, 0)
         hb_font_funcs_set_nominal_glyphs_func(funcs, skhb_nominal_glyphs, nullptr, nullptr);
+#else
+        sk_ignore_unused_variable(skhb_nominal_glyphs);
+#endif
         hb_font_funcs_set_glyph_h_advance_func(funcs, skhb_glyph_h_advance, nullptr, nullptr);
+#if SK_HB_VERSION_CHECK(1, 8, 6)
         hb_font_funcs_set_glyph_h_advances_func(funcs, skhb_glyph_h_advances, nullptr, nullptr);
+#else
+        sk_ignore_unused_variable(skhb_glyph_h_advances);
+#endif
         hb_font_funcs_set_glyph_extents_func(funcs, skhb_glyph_extents, nullptr, nullptr);
         hb_font_funcs_make_immutable(funcs);
         return funcs;
@@ -786,12 +800,24 @@ struct ShapedRunGlyphIterator {
 
 }  // namespace
 
-struct SkShaper::Impl {
+class SkShaperHarfBuzz : public SkShaper {
+public:
+    SkShaperHarfBuzz();
+    bool good() const;
+private:
     HBBuffer fBuffer;
     ICUBrk fLineBreakIterator;
     ICUBrk fGraphemeBreakIterator;
 
-    SkPoint shapeCorrect(RunHandler* handler,
+    SkPoint shape(SkShaper::RunHandler* handler,
+                  const SkFont& srcFont,
+                  const char* utf8text,
+                  size_t textBytes,
+                  bool leftToRight,
+                  SkPoint point,
+                  SkScalar width) const override;
+
+    SkPoint shapeCorrect(SkShaper::RunHandler* handler,
                          const char* utf8,
                          size_t utf8Bytes,
                          SkPoint point,
@@ -802,7 +828,7 @@ struct SkShaper::Impl {
                          const ScriptRunIterator* script,
                          const FontRunIterator* font) const;
 
-    SkPoint shapeOk(RunHandler* handler,
+    SkPoint shapeOk(SkShaper::RunHandler* handler,
                     const char* utf8,
                     size_t utf8Bytes,
                     SkPoint point,
@@ -823,24 +849,29 @@ struct SkShaper::Impl {
                     const FontRunIterator* font) const;
 };
 
-SkShaper::SkShaper() : fImpl(new Impl) {
+std::unique_ptr<SkShaper> SkShaper::MakeHarfBuzz() {
+    auto hb = skstd::make_unique<SkShaperHarfBuzz>();
+    return hb->good() ? std::move(hb) : nullptr;
+}
+
+SkShaperHarfBuzz::SkShaperHarfBuzz() {
 #if defined(SK_USING_THIRD_PARTY_ICU)
     if (!SkLoadICU()) {
         SkDebugf("SkLoadICU() failed!\n");
         return;
     }
 #endif
-    fImpl->fBuffer.reset(hb_buffer_create());
-    SkASSERT(fImpl->fBuffer);
+    fBuffer.reset(hb_buffer_create());
+    SkASSERT(fBuffer);
 
     UErrorCode status = U_ZERO_ERROR;
-    fImpl->fLineBreakIterator.reset(ubrk_open(UBRK_LINE, "th", nullptr, 0, &status));
+    fLineBreakIterator.reset(ubrk_open(UBRK_LINE, "th", nullptr, 0, &status));
     if (U_FAILURE(status)) {
         SkDebugf("Could not create line break iterator: %s", u_errorName(status));
         SK_ABORT("");
     }
 
-    fImpl->fGraphemeBreakIterator.reset(ubrk_open(UBRK_CHARACTER, "th", nullptr, 0, &status));
+    fGraphemeBreakIterator.reset(ubrk_open(UBRK_CHARACTER, "th", nullptr, 0, &status));
     if (U_FAILURE(status)) {
         SkDebugf("Could not create grapheme break iterator: %s", u_errorName(status));
         SK_ABORT("");
@@ -848,21 +879,19 @@ SkShaper::SkShaper() : fImpl(new Impl) {
 
 }
 
-SkShaper::~SkShaper() {}
-
-bool SkShaper::good() const {
-    return fImpl->fBuffer &&
-           fImpl->fLineBreakIterator &&
-           fImpl->fGraphemeBreakIterator;
+bool SkShaperHarfBuzz::good() const {
+    return fBuffer &&
+           fLineBreakIterator &&
+           fGraphemeBreakIterator;
 }
 
-SkPoint SkShaper::shape(RunHandler* handler,
-                        const SkFont& srcFont,
-                        const char* utf8,
-                        size_t utf8Bytes,
-                        bool leftToRight,
-                        SkPoint point,
-                        SkScalar width) const
+SkPoint SkShaperHarfBuzz::shape(SkShaper::RunHandler* handler,
+                                const SkFont& srcFont,
+                                const char* utf8,
+                                size_t utf8Bytes,
+                                bool leftToRight,
+                                SkPoint point,
+                                SkScalar width) const
 {
     SkASSERT(handler);
     sk_sp<SkFontMgr> fontMgr = SkFontMgr::RefDefault();
@@ -884,7 +913,7 @@ SkPoint SkShaper::shape(RunHandler* handler,
     }
     runSegmenter.insert(language);
 
-    hb_unicode_funcs_t* hbUnicode = hb_buffer_get_unicode_funcs(fImpl->fBuffer.get());
+    hb_unicode_funcs_t* hbUnicode = hb_buffer_get_unicode_funcs(fBuffer.get());
     SkTLazy<ScriptRunIterator> maybeScript(ScriptRunIterator::Make(utf8, utf8Bytes, hbUnicode));
     ScriptRunIterator* script = maybeScript.getMaybeNull();
     if (!script) {
@@ -901,24 +930,24 @@ SkPoint SkShaper::shape(RunHandler* handler,
     runSegmenter.insert(font);
 
     if (true) {
-        return fImpl->shapeCorrect(handler, utf8, utf8Bytes, point, width,
+        return shapeCorrect(handler, utf8, utf8Bytes, point, width,
                                    runSegmenter, bidi, language, script, font);
     } else {
-        return fImpl->shapeOk(handler, utf8, utf8Bytes, point, width,
+        return shapeOk(handler, utf8, utf8Bytes, point, width,
                               runSegmenter, bidi, language, script, font);
     }
 }
 
-SkPoint SkShaper::Impl::shapeCorrect(RunHandler* handler,
-                                     const char* utf8,
-                                     size_t utf8Bytes,
-                                     SkPoint point,
-                                     SkScalar width,
-                                     RunIteratorQueue& runSegmenter,
-                                     const BiDiRunIterator* bidi,
-                                     const LanguageRunIterator* language,
-                                     const ScriptRunIterator* script,
-                                     const FontRunIterator* font) const
+SkPoint SkShaperHarfBuzz::shapeCorrect(RunHandler* handler,
+                                       const char* utf8,
+                                       size_t utf8Bytes,
+                                       SkPoint point,
+                                       SkScalar width,
+                                       RunIteratorQueue& runSegmenter,
+                                       const BiDiRunIterator* bidi,
+                                       const LanguageRunIterator* language,
+                                       const ScriptRunIterator* script,
+                                       const FontRunIterator* font) const
 {
     ShapedLine line;
     SkPoint currentPoint = point;
@@ -1064,16 +1093,16 @@ SkPoint SkShaper::Impl::shapeCorrect(RunHandler* handler,
     return currentPoint;
 }
 
-SkPoint SkShaper::Impl::shapeOk(RunHandler* handler,
-                                const char* utf8,
-                                size_t utf8Bytes,
-                                SkPoint point,
-                                SkScalar width,
-                                RunIteratorQueue& runSegmenter,
-                                const BiDiRunIterator* bidi,
-                                const LanguageRunIterator* language,
-                                const ScriptRunIterator* script,
-                                const FontRunIterator* font) const
+SkPoint SkShaperHarfBuzz::shapeOk(RunHandler* handler,
+                                   const char* utf8,
+                                   size_t utf8Bytes,
+                                   SkPoint point,
+                                   SkScalar width,
+                                   RunIteratorQueue& runSegmenter,
+                                   const BiDiRunIterator* bidi,
+                                   const LanguageRunIterator* language,
+                                   const ScriptRunIterator* script,
+                                   const FontRunIterator* font) const
 {
     SkTArray<ShapedRun> runs;
 {
@@ -1288,14 +1317,14 @@ SkPoint SkShaper::Impl::shapeOk(RunHandler* handler,
 }
 
 
-ShapedRun SkShaper::Impl::shape(const char* utf8,
-                                const size_t utf8Bytes,
-                                const char* utf8Start,
-                                const char* utf8End,
-                                const BiDiRunIterator* bidi,
-                                const LanguageRunIterator* language,
-                                const ScriptRunIterator* script,
-                                const FontRunIterator* font) const
+ShapedRun SkShaperHarfBuzz::shape(const char* utf8,
+                                   const size_t utf8Bytes,
+                                   const char* utf8Start,
+                                   const char* utf8End,
+                                   const BiDiRunIterator* bidi,
+                                   const LanguageRunIterator* language,
+                                   const ScriptRunIterator* script,
+                                   const FontRunIterator* font) const
 {
     ShapedRun run(SkSpan<const char>(), SkFont(), 0, nullptr, 0);
 
@@ -1377,7 +1406,11 @@ ShapedRun SkShaper::Impl::shape(const char* utf8,
         SkPaint p;
         run.fFont.getWidthsBounds(&glyph.fID, 1, &advance, &bounds, &p);
         glyph.fHasVisual = !bounds.isEmpty(); //!font->currentTypeface()->glyphBoundsAreZero(glyph.fID);
+#if SK_HB_VERSION_CHECK(1, 5, 0)
         glyph.fUnsafeToBreak = info[i].mask & HB_GLYPH_FLAG_UNSAFE_TO_BREAK;
+#else
+        glyph.fUnsafeToBreak = false;
+#endif
         glyph.fMustLineBreakBefore = false;
 
         runAdvance += glyph.fAdvance;
