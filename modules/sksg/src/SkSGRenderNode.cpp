@@ -17,7 +17,9 @@ RenderNode::RenderNode(uint32_t inval_traits) : INHERITED(inval_traits) {}
 
 void RenderNode::render(SkCanvas* canvas, const RenderContext* ctx) const {
     SkASSERT(!this->hasInval());
-    this->onRender(canvas, ctx);
+    if (!this->bounds().isEmpty()) {
+        this->onRender(canvas, ctx);
+    }
 }
 
 const RenderNode* RenderNode::nodeAt(const SkPoint& p) const {
@@ -28,10 +30,11 @@ bool RenderNode::RenderContext::modulatePaint(SkPaint* paint) const {
     const auto initial_alpha = paint->getAlpha(),
                        alpha = SkToU8(sk_float_round2int(initial_alpha * fOpacity));
 
-    if (alpha != initial_alpha || fColorFilter) {
+    if (alpha != initial_alpha || fColorFilter || fBlendMode != paint->getBlendMode()) {
         paint->setAlpha(alpha);
         paint->setColorFilter(SkColorFilter::MakeComposeFilter(fColorFilter,
                                                                paint->refColorFilter()));
+        paint->setBlendMode(fBlendMode);
         return true;
     }
 
@@ -60,6 +63,12 @@ RenderNode::ScopedRenderContext&&
 RenderNode::ScopedRenderContext::modulateColorFilter(sk_sp<SkColorFilter> cf) {
     fCtx.fColorFilter = SkColorFilter::MakeComposeFilter(std::move(fCtx.fColorFilter),
                                                          std::move(cf));
+    return std::move(*this);
+}
+
+RenderNode::ScopedRenderContext&&
+RenderNode::ScopedRenderContext::modulateBlendMode(SkBlendMode mode) {
+    fCtx.fBlendMode = mode;
     return std::move(*this);
 }
 

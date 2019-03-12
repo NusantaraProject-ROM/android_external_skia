@@ -462,7 +462,7 @@ private:
 };
 
 sk_sp<sksg::RenderNode> AnimationBuilder::attachLayer(const skjson::ObjectValue* jlayer,
-                                                     AttachLayerContext* layerCtx) const {
+                                                      AttachLayerContext* layerCtx) const {
     if (!jlayer) return nullptr;
 
     const LayerInfo layer_info = {
@@ -525,6 +525,9 @@ sk_sp<sksg::RenderNode> AnimationBuilder::attachLayer(const skjson::ObjectValue*
     if (const skjson::ArrayValue* jeffects = (*jlayer)["ef"]) {
         layer = this->attachLayerEffects(*jeffects, &layer_animators, std::move(layer));
     }
+
+    // Optional blend mode.
+    layer = this->attachBlendMode(*jlayer, std::move(layer));
 
     class LayerController final : public sksg::GroupAnimator {
     public:

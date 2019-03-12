@@ -12,11 +12,6 @@ if (is_fuchsia) {
   import("//build/vulkan/config.gni")
 }
 
-if (!defined(is_skia_standalone)) {
-  is_skia_standalone = false
-}
-is_skia_dev_build = is_skia_standalone && !is_official_build
-
 declare_args() {
   skia_enable_flutter_defines = false
 }
@@ -45,12 +40,10 @@ declare_args() {
   skia_enable_ccpr = true
   skia_enable_nvpr = !skia_enable_flutter_defines
   skia_enable_discrete_gpu = true
-  skia_enable_gpu = true
   skia_enable_nima = false
   skia_enable_pdf = true
   skia_enable_spirv_validation = is_skia_dev_build && is_debug
   skia_enable_skpicture = true
-  skia_enable_tools = is_skia_dev_build
   skia_enable_vulkan_debug_layers = is_skia_dev_build && is_debug
   skia_qt_path = getenv("QT_PATH")
   skia_compile_processors = false
@@ -92,9 +85,6 @@ declare_args() {
 if (defined(skia_settings)) {
   import(skia_settings)
 }
-
-# Our tools require static linking (they use non-exported symbols), and the GPU backend.
-skia_enable_tools = skia_enable_tools && !is_component_build && skia_enable_gpu
 
 skia_public_includes = [
   "include/android",
@@ -592,7 +582,7 @@ if (skia_compile_processors) {
   }
 }
 
-optional("gpu_for_real") {
+optional("gpu") {
   enabled = skia_enable_gpu
   deps = [
     ":compile_processors",
@@ -866,19 +856,12 @@ if (skia_enable_gpu && skia_generate_workarounds) {
   }
 }
 
-# Temporary fake targets so Flutter-in-Fuchsia can "depend" on them.
-# TODO: rename :gpu_for_real back to :gpu when cleaning up.
-source_set("effects") {
-}
-source_set("gpu") {
-}
-
 component("skia") {
   public_configs = [ ":skia_public" ]
   configs += skia_library_configs
 
   public_deps = [
-    ":gpu_for_real",
+    ":gpu",
     ":pdf",
     ":skcms",
   ]
@@ -1129,6 +1112,13 @@ static_library("pathkit") {
     "src/utils/SkParse.cpp",
     "src/utils/SkParsePath.cpp",
     "src/utils/SkUTF.cpp",
+  ]
+}
+
+group("modules") {
+  deps = [
+    "modules/skottie",
+    "modules/skshaper",
   ]
 }
 
@@ -1589,6 +1579,7 @@ if (skia_enable_tools) {
       "modules/skottie:tests",
       "modules/sksg:tests",
       "//third_party/libpng",
+      "//third_party/libwebp",
       "//third_party/zlib",
     ]
     public_deps = [

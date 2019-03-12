@@ -29,6 +29,8 @@ VkPipelineStageFlags GrVkImage::LayoutToPipelineSrcStageFlags(const VkImageLayou
         return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     } else if (VK_IMAGE_LAYOUT_PREINITIALIZED == layout) {
         return VK_PIPELINE_STAGE_HOST_BIT;
+    } else if (VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+        return VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     }
 
     SkASSERT(VK_IMAGE_LAYOUT_UNDEFINED == layout);
@@ -64,6 +66,8 @@ VkAccessFlags GrVkImage::LayoutToSrcAccessMask(const VkImageLayout layout) {
         flags = VK_ACCESS_TRANSFER_READ_BIT;
     } else if (VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL == layout) {
         flags = VK_ACCESS_SHADER_READ_BIT;
+    } else if (VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+        flags = 0;
     }
     return flags;
 }
@@ -97,6 +101,7 @@ void GrVkImage::setImageLayout(const GrVkGpu* gpu, VkImageLayout newLayout,
     // If the old and new layout are the same and the layout is a read only layout, there is no need
     // to put in a barrier.
     if (newLayout == currentLayout &&
+        !releaseFamilyQueue &&
         (VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL == currentLayout ||
          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL == currentLayout ||
          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL == currentLayout)) {
@@ -142,7 +147,8 @@ void GrVkImage::setImageLayout(const GrVkGpu* gpu, VkImageLayout newLayout,
         { aspectFlags, 0, fInfo.fLevelCount, 0, 1 }      // subresourceRange
     };
 
-    gpu->addImageMemoryBarrier(srcStageMask, dstStageMask, byRegion, &imageMemoryBarrier);
+    gpu->addImageMemoryBarrier(this->resource(), srcStageMask, dstStageMask, byRegion,
+                               &imageMemoryBarrier);
 
     this->updateImageLayout(newLayout);
 }
@@ -246,7 +252,7 @@ void GrVkImage::setResourceRelease(sk_sp<GrReleaseProcHelper> releaseHelper) {
 }
 
 void GrVkImage::Resource::freeGPUData(GrVkGpu* gpu) const {
-    SkASSERT(!fReleaseHelper);
+    this->invokeReleaseProc();
     VK_CALL(gpu, DestroyImage(gpu->device(), fImage, nullptr));
     bool isLinear = (VK_IMAGE_TILING_LINEAR == fImageTiling);
     GrVkMemory::FreeImageMemory(gpu, isLinear, fAlloc);
@@ -290,4 +296,10 @@ void GrVkImage::BorrowedResource::freeGPUData(GrVkGpu* gpu) const {
 void GrVkImage::BorrowedResource::abandonGPUData() const {
     this->invokeReleaseProc();
 }
+
+#if GR_TEST_UTILS
+void GrVkImage::setCurrentQueueFamilyToGraphicsQueue(GrVkGpu* gpu) {
+    fInfo.fCurrentQueueFamily = gpu->queueIndex();
+}
+#endif
 

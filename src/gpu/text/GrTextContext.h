@@ -45,7 +45,7 @@ public:
 
     static std::unique_ptr<GrTextContext> Make(const Options& options);
 
-    void drawGlyphRunList(GrContext*, GrTextTarget*, const GrClip&,
+    void drawGlyphRunList(GrRecordingContext*, GrTextTarget*, const GrClip&,
                           const SkMatrix& viewMatrix, const SkSurfaceProps&, const SkGlyphRunList&);
 
     std::unique_ptr<GrDrawOp> createOp_TestingOnly(GrRecordingContext*,
@@ -62,14 +62,17 @@ public:
                                         const SkSurfaceProps& props,
                                         bool contextSupportsDistanceFieldText,
                                         const Options& options);
-    static void InitDistanceFieldPaint(SkScalar textSize,
-                                       const SkMatrix& viewMatrix,
-                                       const Options& options,
-                                       GrTextBlob* blob,
-                                       SkPaint* skPaint,
-                                       SkFont* skFont,
-                                       SkScalar* textRatio,
-                                       SkScalerContextFlags* flags);
+
+    static SkFont InitDistanceFieldFont(const SkFont& font,
+                                        const SkMatrix& viewMatrix,
+                                        const Options& options,
+                                        SkScalar* textRatio);
+
+    static SkPaint InitDistanceFieldPaint(const SkPaint& paint);
+
+    static std::pair<SkScalar, SkScalar> InitDistanceFieldMinMaxScale(SkScalar textSize,
+                                                                      const SkMatrix& viewMatrix,
+                                                                      const Options& options);
 
 private:
     GrTextContext(const Options& options);

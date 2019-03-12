@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.4.0] - 2019-02-25
+
 ### Added
  - `SkPath.addRoundRect`, `SkPath.reset`, `SkPath.rewind` exposed.
  - `SkCanvas.drawArc`, `SkCanvas.drawLine`, `SkCanvas.drawOval`, `SkCanvas.drawRoundRect` exposed.
@@ -13,13 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    `SkPath.toCmds`.
  - `SkCanvas.drawTextBlob()` and `SkCanvas.SkTextBlob.MakeFromText()` to draw text to a canvas.
  - `CanvasKit.TextEncoding` enum. For use with `SkTextBlob`.
+ - Text shaping with `ShapedText` object and `SkCanvas.drawText`. At compile time, one can choose
+   between using Harfbuzz/ICU (default) or a primitive one ("primitive_shaper") which just does
+   line breaking. Using Harfbuzz/ICU substantially increases code size (4.3 MB to 6.4 MB).
 
 ### Changed
- - `SkCanvas.drawText()` now requires an `SkFont` object.
+ - `SkCanvas.drawText()` now requires an `SkFont` object for raw strings.
+
 
 ### Removed
  -  `SkPaint.setTextSize()`, `SkPaint.getTextSize()`, `SkPaint.setTypeface()`
    which should be replaced by using `SkFont`.
+ - Deprecated `CanvasKitInit().then()` interface (see 0.3.1 notes)
 
 
 ### Fixed
