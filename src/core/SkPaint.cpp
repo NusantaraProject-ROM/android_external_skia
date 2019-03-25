@@ -39,97 +39,32 @@
 // e.g. setTextSize(-1)
 //#define SK_REPORT_API_RANGE_CHECK
 
-SkPaint::SkPaint() {
-    fColor4f    = { 0, 0, 0, 1 }; // opaque black
-    fWidth      = 0;
-    fMiterLimit = SkPaintDefaults_MiterLimit;
 
-    // we init (to 0) and copy using fBitfieldsUInt rather than fBitfields, so we need it
-    // to be large enough to cover all of the bits.
-    static_assert(sizeof(fBitfields) <= sizeof(fBitfieldsUInt),
-                  "need union uint to be large enough");
-
-    // Zero all bitfields, then set some non-zero defaults.
-    fBitfieldsUInt           = 0;
-    fBitfields.fCapType      = kDefault_Cap;
-    fBitfields.fJoinType     = kDefault_Join;
-    fBitfields.fStyle        = kFill_Style;
-    fBitfields.fBlendMode  = (unsigned)SkBlendMode::kSrcOver;
+SkPaint::SkPaint()
+    : fColor4f{0, 0, 0, 1}  // opaque black
+    , fWidth{0}
+    , fMiterLimit{SkPaintDefaults_MiterLimit}
+    , fBitfields{(unsigned)false,                   // fAntiAlias
+                 (unsigned)false,                   // fDither
+                 (unsigned)SkPaint::kDefault_Cap,   // fCapType
+                 (unsigned)SkPaint::kDefault_Join,  // fJoinType
+                 (unsigned)SkPaint::kFill_Style,    // fStyle
+                 (unsigned)kNone_SkFilterQuality,   // fFilterQuality
+                 (unsigned)SkBlendMode::kSrcOver,   // fBlendMode
+                 0}                                 // fPadding
+{
+    static_assert(sizeof(fBitfields) == sizeof(fBitfieldsUInt), "");
 }
 
-SkPaint::SkPaint(const SkPaint& src)
-#define COPY(field) field(src.field)
-    : COPY(fPathEffect)
-    , COPY(fShader)
-    , COPY(fMaskFilter)
-    , COPY(fColorFilter)
-    , COPY(fDrawLooper)
-    , COPY(fImageFilter)
-    , COPY(fColor4f)
-    , COPY(fWidth)
-    , COPY(fMiterLimit)
-    , COPY(fBitfieldsUInt)
-#undef COPY
-{}
+SkPaint::SkPaint(const SkPaint& src) = default;
 
-SkPaint::SkPaint(SkPaint&& src) {
-#define MOVE(field) field = std::move(src.field)
-    MOVE(fPathEffect);
-    MOVE(fShader);
-    MOVE(fMaskFilter);
-    MOVE(fColorFilter);
-    MOVE(fDrawLooper);
-    MOVE(fImageFilter);
-    MOVE(fColor4f);
-    MOVE(fWidth);
-    MOVE(fMiterLimit);
-    MOVE(fBitfieldsUInt);
-#undef MOVE
-}
+SkPaint::SkPaint(SkPaint&& src) = default;
 
-SkPaint::~SkPaint() {}
+SkPaint::~SkPaint() = default;
 
-SkPaint& SkPaint::operator=(const SkPaint& src) {
-    if (this == &src) {
-        return *this;
-    }
+SkPaint& SkPaint::operator=(const SkPaint& src) = default;
 
-#define ASSIGN(field) field = src.field
-    ASSIGN(fPathEffect);
-    ASSIGN(fShader);
-    ASSIGN(fMaskFilter);
-    ASSIGN(fColorFilter);
-    ASSIGN(fDrawLooper);
-    ASSIGN(fImageFilter);
-    ASSIGN(fColor4f);
-    ASSIGN(fWidth);
-    ASSIGN(fMiterLimit);
-    ASSIGN(fBitfieldsUInt);
-#undef ASSIGN
-
-    return *this;
-}
-
-SkPaint& SkPaint::operator=(SkPaint&& src) {
-    if (this == &src) {
-        return *this;
-    }
-
-#define MOVE(field) field = std::move(src.field)
-    MOVE(fPathEffect);
-    MOVE(fShader);
-    MOVE(fMaskFilter);
-    MOVE(fColorFilter);
-    MOVE(fDrawLooper);
-    MOVE(fImageFilter);
-    MOVE(fColor4f);
-    MOVE(fWidth);
-    MOVE(fMiterLimit);
-    MOVE(fBitfieldsUInt);
-#undef MOVE
-
-    return *this;
-}
+SkPaint& SkPaint::operator=(SkPaint&& src) = default;
 
 bool operator==(const SkPaint& a, const SkPaint& b) {
 #define EQUAL(field) (a.field == b.field)
@@ -156,10 +91,7 @@ DEFINE_REF_FOO(PathEffect)
 DEFINE_REF_FOO(Shader)
 #undef DEFINE_REF_FOO
 
-void SkPaint::reset() {
-    SkPaint init;
-    *this = init;
-}
+void SkPaint::reset() { *this = SkPaint(); }
 
 void SkPaint::setFilterQuality(SkFilterQuality quality) {
     fBitfields.fFilterQuality = quality;
@@ -180,15 +112,17 @@ void SkPaint::setColor(SkColor color) {
 }
 
 void SkPaint::setColor4f(const SkColor4f& color, SkColorSpace* colorSpace) {
+    SkASSERT(fColor4f.fA >= 0 && fColor4f.fA <= 1.0f);
+
     SkColorSpaceXformSteps steps{colorSpace,          kUnpremul_SkAlphaType,
                                  sk_srgb_singleton(), kUnpremul_SkAlphaType};
     fColor4f = color;
     steps.apply(fColor4f.vec());
 }
 
-void SkPaint::setAlpha(U8CPU a) {
-    SkASSERT(a <= 255);
-    fColor4f.fA = a * (1.0f / 255);
+void SkPaint::setAlphaf(float a) {
+    SkASSERT(a >= 0 && a <= 1.0f);
+    fColor4f.fA = a;
 }
 
 void SkPaint::setARGB(U8CPU a, U8CPU r, U8CPU g, U8CPU b) {

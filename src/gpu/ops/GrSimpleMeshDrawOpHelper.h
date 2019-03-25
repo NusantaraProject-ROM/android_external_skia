@@ -8,12 +8,12 @@
 #ifndef GrSimpleMeshDrawOpHelper_DEFINED
 #define GrSimpleMeshDrawOpHelper_DEFINED
 
-#include "GrContext.h"
-#include "GrContextPriv.h"
 #include "GrMemoryPool.h" // only here bc of the templated FactoryHelper
 #include "GrMeshDrawOp.h"
 #include "GrOpFlushState.h"
 #include "GrPipeline.h"
+#include "GrRecordingContext.h"
+#include "GrRecordingContextPriv.h"
 #include <new>
 
 struct SkRect;
@@ -36,7 +36,7 @@ public:
      * which is public or made accessible via 'friend'.
      */
     template <typename Op, typename... OpArgs>
-    static std::unique_ptr<GrDrawOp> FactoryHelper(GrContext*, GrPaint&& paint, OpArgs... opArgs);
+    static std::unique_ptr<GrDrawOp> FactoryHelper(GrRecordingContext*, GrPaint&&, OpArgs...);
 
     enum class Flags : uint32_t {
         kNone = 0x0,
@@ -92,14 +92,6 @@ public:
 
     bool compatibleWithAlphaAsCoverage() const { return fCompatibleWithAlphaAsCoveage; }
 
-    using PipelineAndFixedDynamicState = GrOpFlushState::PipelineAndFixedDynamicState;
-    /** Makes a pipeline that consumes the processor set and the op's applied clip. */
-    PipelineAndFixedDynamicState makePipeline(GrMeshDrawOp::Target* target,
-                                              int numPrimitiveProcessorTextures = 0) {
-        return this->internalMakePipeline(target, this->pipelineInitArgs(target),
-                                          numPrimitiveProcessorTextures);
-    }
-
     struct MakeArgs {
     private:
         MakeArgs() = default;
@@ -124,16 +116,11 @@ public:
       fAAType = static_cast<unsigned>(aaType);
     }
 
+    void executeDrawsAndUploads(const GrOp*, GrOpFlushState*, const SkRect& chainBounds);
+
 protected:
     uint32_t pipelineFlags() const { return fPipelineFlags; }
 
-    GrPipeline::InitArgs pipelineInitArgs(GrMeshDrawOp::Target* target) const;
-
-    PipelineAndFixedDynamicState internalMakePipeline(GrMeshDrawOp::Target*,
-                                                      const GrPipeline::InitArgs&,
-                                                      int numPrimitiveProcessorTextures);
-
-private:
     GrProcessorSet* fProcessors;
     unsigned fPipelineFlags : 8;
     unsigned fAAType : 2;
@@ -152,13 +139,12 @@ class GrSimpleMeshDrawOpHelperWithStencil : private GrSimpleMeshDrawOpHelper {
 public:
     using MakeArgs = GrSimpleMeshDrawOpHelper::MakeArgs;
     using Flags = GrSimpleMeshDrawOpHelper::Flags;
-    using PipelineAndFixedDynamicState = GrOpFlushState::PipelineAndFixedDynamicState;
 
     using GrSimpleMeshDrawOpHelper::visitProxies;
 
     // using declarations can't be templated, so this is a pass through function instead.
     template <typename Op, typename... OpArgs>
-    static std::unique_ptr<GrDrawOp> FactoryHelper(GrContext* context, GrPaint&& paint,
+    static std::unique_ptr<GrDrawOp> FactoryHelper(GrRecordingContext* context, GrPaint&& paint,
                                                    OpArgs... opArgs) {
         return GrSimpleMeshDrawOpHelper::FactoryHelper<Op, OpArgs...>(
                 context, std::move(paint), std::forward<OpArgs>(opArgs)...);
@@ -180,8 +166,7 @@ public:
                       const SkRect& thisBounds, const SkRect& thatBounds,
                       bool noneAACompatibleWithCoverage = false) const;
 
-    PipelineAndFixedDynamicState makePipeline(GrMeshDrawOp::Target*,
-                                              int numPrimitiveProcessorTextures = 0);
+    void executeDrawsAndUploads(const GrOp*, GrOpFlushState*, const SkRect& chainBounds);
 
 #ifdef SK_DEBUG
     SkString dumpInfo() const;
@@ -193,10 +178,10 @@ private:
 };
 
 template <typename Op, typename... OpArgs>
-std::unique_ptr<GrDrawOp> GrSimpleMeshDrawOpHelper::FactoryHelper(GrContext* context,
+std::unique_ptr<GrDrawOp> GrSimpleMeshDrawOpHelper::FactoryHelper(GrRecordingContext* context,
                                                                   GrPaint&& paint,
                                                                   OpArgs... opArgs) {
-    GrOpMemoryPool* pool = context->contextPriv().opMemoryPool();
+    GrOpMemoryPool* pool = context->priv().opMemoryPool();
 
     MakeArgs makeArgs;
 

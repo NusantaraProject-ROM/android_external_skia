@@ -6,15 +6,11 @@
 import("gn/flutter_defines.gni")
 import("gn/fuchsia_defines.gni")
 import("gn/shared_sources.gni")
+import("gn/skia.gni")
 
 if (is_fuchsia) {
   import("//build/vulkan/config.gni")
 }
-
-if (!defined(is_skia_standalone)) {
-  is_skia_standalone = false
-}
-is_skia_dev_build = is_skia_standalone && !is_official_build
 
 declare_args() {
   skia_enable_flutter_defines = false
@@ -28,7 +24,6 @@ declare_args() {
   skia_use_fonthost_mac = is_mac
   skia_use_freetype = is_android || is_fuchsia || is_linux
   skia_use_fixed_gamma_text = is_android
-  skia_use_icu = !is_fuchsia && !is_ios && !is_win  # TODO: Windows
   skia_use_libjpeg_turbo = true
   skia_use_libpng = true
   skia_use_libwebp = !is_fuchsia
@@ -45,12 +40,10 @@ declare_args() {
   skia_enable_ccpr = true
   skia_enable_nvpr = !skia_enable_flutter_defines
   skia_enable_discrete_gpu = true
-  skia_enable_gpu = true
   skia_enable_nima = false
   skia_enable_pdf = true
   skia_enable_spirv_validation = is_skia_dev_build && is_debug
   skia_enable_skpicture = true
-  skia_enable_tools = is_skia_dev_build
   skia_enable_vulkan_debug_layers = is_skia_dev_build && is_debug
   skia_qt_path = getenv("QT_PATH")
   skia_compile_processors = false
@@ -92,9 +85,6 @@ declare_args() {
 if (defined(skia_settings)) {
   import(skia_settings)
 }
-
-# Our tools require static linking (they use non-exported symbols), and the GPU backend.
-skia_enable_tools = skia_enable_tools && !is_component_build && skia_enable_gpu
 
 skia_public_includes = [
   "include/android",
@@ -429,7 +419,7 @@ optional("fontmgr_fuchsia") {
   enabled = skia_enable_fontmgr_fuchsia
 
   deps = [
-    "//garnet/public/fidl/fuchsia.fonts",
+    "//sdk/fidl/fuchsia.fonts",
   ]
   sources = [
     "src/ports/SkFontMgr_fuchsia.cpp",
@@ -592,7 +582,7 @@ if (skia_compile_processors) {
   }
 }
 
-optional("gpu_for_real") {
+optional("gpu") {
   enabled = skia_enable_gpu
   deps = [
     ":compile_processors",
@@ -734,7 +724,7 @@ optional("pdf") {
 
   if (skia_use_sfntly) {
     deps += [ "//third_party/sfntly" ]
-    public_defines += [ "SK_PDF_USE_SFNTLY" ]
+    defines = [ "SK_PDF_USE_SFNTLY" ]
   }
 }
 
@@ -866,19 +856,12 @@ if (skia_enable_gpu && skia_generate_workarounds) {
   }
 }
 
-# Temporary fake targets so Flutter-in-Fuchsia can "depend" on them.
-# TODO: rename :gpu_for_real back to :gpu when cleaning up.
-source_set("effects") {
-}
-source_set("gpu") {
-}
-
 component("skia") {
   public_configs = [ ":skia_public" ]
   configs += skia_library_configs
 
   public_deps = [
-    ":gpu_for_real",
+    ":gpu",
     ":pdf",
     ":skcms",
   ]
@@ -1093,6 +1076,7 @@ static_library("pathkit") {
   sources += [
     "src/core/SkAnalyticEdge.cpp",
     "src/core/SkArenaAlloc.cpp",
+    "src/core/SkContourMeasure.cpp",
     "src/core/SkCubicMap.cpp",
     "src/core/SkEdge.cpp",
     "src/core/SkEdgeBuilder.cpp",
@@ -1128,6 +1112,13 @@ static_library("pathkit") {
     "src/utils/SkParse.cpp",
     "src/utils/SkParsePath.cpp",
     "src/utils/SkUTF.cpp",
+  ]
+}
+
+group("modules") {
+  deps = [
+    "modules/skottie",
+    "modules/skshaper",
   ]
 }
 
@@ -1564,6 +1555,10 @@ if (skia_enable_tools) {
     public_deps = [
       ":gpu_tool_utils",
     ]
+    if (skia_enable_skshaper) {
+      deps += [ "modules/skshaper" ]
+      defines = [ "SK_USING_SKSHAPER" ]
+    }
   }
 
   import("gn/tests.gni")
@@ -1584,11 +1579,16 @@ if (skia_enable_tools) {
       "modules/skottie:tests",
       "modules/sksg:tests",
       "//third_party/libpng",
+      "//third_party/libwebp",
       "//third_party/zlib",
     ]
     public_deps = [
       ":gpu_tool_utils",  # Test.h #includes headers from this target.
     ]
+    if (skia_enable_skshaper) {
+      deps += [ "modules/skshaper" ]
+      defines = [ "SK_USING_SKSHAPER" ]
+    }
   }
 
   import("gn/bench.gni")
@@ -1698,7 +1698,6 @@ if (skia_enable_tools) {
       ":flags",
       ":skia",
       ":tool_utils",
-      "//third_party/jsoncpp",
     ]
   }
 
@@ -1723,6 +1722,7 @@ if (skia_enable_tools) {
         ":experimental_svg_model",
         ":flags",
         ":xml",
+        "modules/sksg",
         "modules/skshaper",
       ]
 
@@ -2159,7 +2159,18 @@ if (skia_enable_tools) {
         libs += [ "X11-xcb" ]
       } else if (is_win) {
         sources += [ "tools/sk_app/win/VulkanWindowContext_win.cpp" ]
+      } else if (is_mac) {
+        sources += [ "tools/sk_app/mac/VulkanWindowContext_mac.mm" ]
+        libs += [ "MetalKit.framework" ]
       }
+    }
+
+    if (skia_use_metal) {
+      sources += [ "tools/sk_app/MetalWindowContext.mm" ]
+      if (is_mac) {
+        sources += [ "tools/sk_app/mac/MetalWindowContext_mac.mm" ]
+      }
+      libs += [ "MetalKit.framework" ]
     }
 
     deps = [
@@ -2187,6 +2198,7 @@ if (skia_enable_tools) {
       "tools/viewer/GMSlide.cpp",
       "tools/viewer/ImGuiLayer.cpp",
       "tools/viewer/ImageSlide.cpp",
+      "tools/viewer/ParticlesSlide.cpp",
       "tools/viewer/SKPSlide.cpp",
       "tools/viewer/SampleSlide.cpp",
       "tools/viewer/SkottieSlide.cpp",
@@ -2209,6 +2221,7 @@ if (skia_enable_tools) {
       ":sk_app",
       ":skia",
       ":tool_utils",
+      "modules/particles",
       "modules/skottie",
       "modules/skottie:utils",
       "modules/sksg",
@@ -2396,16 +2409,11 @@ if (skia_enable_tools) {
   if (skia_use_opencl) {
     test_app("hello-opencl") {
       sources = [
-        "src/compute/common/cl/assert_cl.c",
-        "src/compute/common/cl/find_cl.c",
         "tools/hello-opencl.cpp",
       ]
-      include_dirs = [ "src/compute/common" ]
-      if (is_linux) {
-        libs = [ "OpenCL" ]
-      } else if (is_win) {
-        libs = [ "OpenCL.lib" ]
-      }
+      deps = [
+        "//third_party/opencl",
+      ]
     }
   }
 }

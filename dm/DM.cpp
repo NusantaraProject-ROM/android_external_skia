@@ -826,9 +826,11 @@ static bool gather_srcs() {
     return true;
 }
 
+static constexpr skcms_TransferFunction k2020_TF =
+    {2.22222f, 0.909672f, 0.0903276f, 0.222222f, 0.0812429f, 0, 0};
+
 static sk_sp<SkColorSpace> rec2020() {
-    return SkColorSpace::MakeRGB({2.22222f, 0.909672f, 0.0903276f, 0.222222f, 0.0812429f, 0, 0},
-                                 SkNamedGamut::kRec2020);
+    return SkColorSpace::MakeRGB(k2020_TF, SkNamedGamut::kRec2020);
 }
 
 static void push_sink(const SkCommandLineConfig& config, Sink* s) {
@@ -856,6 +858,10 @@ static void push_sink(const SkCommandLineConfig& config, Sink* s) {
     TaggedSink& ts = gSinks.push_back();
     ts.reset(sink.release());
     ts.tag = config.getTag();
+}
+
+static sk_sp<SkColorSpace> rgb_to_gbr() {
+    return SkColorSpace::MakeSRGB()->makeColorSpin();
 }
 
 static Sink* create_sink(const GrContextOptions& grCtxOptions, const SkCommandLineConfig* config) {
@@ -928,6 +934,7 @@ static Sink* create_sink(const GrContextOptions& grCtxOptions, const SkCommandLi
         SINK(     "f16",  RasterSink,  kRGBA_F16_SkColorType, srgbLinear);
         SINK(    "srgb",  RasterSink, kRGBA_8888_SkColorType, srgb      );
         SINK(   "esrgb",  RasterSink,  kRGBA_F16_SkColorType, srgb      );
+        SINK(   "esgbr",  RasterSink,  kRGBA_F16_SkColorType, rgb_to_gbr());
         SINK(  "narrow",  RasterSink, kRGBA_8888_SkColorType, narrow    );
         SINK( "enarrow",  RasterSink,  kRGBA_F16_SkColorType, narrow    );
         SINK(      "p3",  RasterSink, kRGBA_8888_SkColorType, p3        );
@@ -939,10 +946,6 @@ static Sink* create_sink(const GrContextOptions& grCtxOptions, const SkCommandLi
     }
 #undef SINK
     return nullptr;
-}
-
-static sk_sp<SkColorSpace> rgb_to_gbr() {
-    return SkColorSpace::MakeSRGB()->makeColorSpin();
 }
 
 static Sink* create_via(const SkString& tag, Sink* wrapped) {
@@ -1187,14 +1190,66 @@ struct Task {
         done(task.sink.tag.c_str(), task.src.tag.c_str(), task.src.options.c_str(), name.c_str());
     }
 
+    static SkString identify_gamut(SkColorSpace* cs) {
+        if (!cs) {
+            return SkString("untagged");
+        }
+
+        skcms_Matrix3x3 gamut;
+        if (cs->toXYZD50(&gamut)) {
+            auto eq = [](skcms_Matrix3x3 x, skcms_Matrix3x3 y) {
+                for (int i = 0; i < 3; i++)
+                for (int j = 0; j < 3; j++) {
+                    if (x.vals[i][j] != y.vals[i][j]) { return false; }
+                }
+                return true;
+            };
+
+            if (eq(gamut, SkNamedGamut::kSRGB    )) { return SkString("sRGB"); }
+            if (eq(gamut, SkNamedGamut::kAdobeRGB)) { return SkString("Adobe"); }
+            if (eq(gamut, SkNamedGamut::kDCIP3   )) { return SkString("P3"); }
+            if (eq(gamut, SkNamedGamut::kRec2020 )) { return SkString("2020"); }
+            if (eq(gamut, SkNamedGamut::kXYZ     )) { return SkString("XYZ"); }
+            if (eq(gamut,     gNarrow_toXYZD50   )) { return SkString("narrow"); }
+            return SkString("other");
+        }
+        return SkString("non-XYZ");
+    }
+
+    static SkString identify_transfer_fn(SkColorSpace* cs) {
+        if (!cs) {
+            return SkString("untagged");
+        }
+
+        skcms_TransferFunction tf;
+        if (cs->isNumericalTransferFn(&tf)) {
+            auto eq = [](skcms_TransferFunction x, skcms_TransferFunction y) {
+                return x.g == y.g
+                    && x.a == y.a
+                    && x.b == y.b
+                    && x.c == y.c
+                    && x.d == y.d
+                    && x.e == y.e
+                    && x.f == y.f;
+            };
+
+            if (tf.a == 1 && tf.b == 0 && tf.c == 0 && tf.d == 0 && tf.e == 0 && tf.f == 0) {
+                return SkStringPrintf("gamma %.3g", tf.g);
+            }
+            if (eq(tf, SkNamedTransferFn::kSRGB)) { return SkString("sRGB"); }
+            if (eq(tf, k2020_TF                )) { return SkString("2020"); }
+            return SkStringPrintf("%.3g %.3g %.3g %.3g %.3g %.3g %.3g",
+                                  tf.g, tf.a, tf.b, tf.c, tf.d, tf.e, tf.f);
+        }
+        return SkString("non-numeric");
+    }
+
     static void WriteToDisk(const Task& task,
                             SkString md5,
                             const char* ext,
                             SkStream* data, size_t len,
                             const SkBitmap* bitmap) {
-        bool gammaCorrect = bitmap &&
-                            bitmap->info().colorSpace() &&
-                            bitmap->info().colorSpace()->gammaIsLinear();
+        SkColorSpace* cs = bitmap ? bitmap->info().colorSpace() : nullptr;
 
         JsonWriter::BitmapResult result;
         result.name          = task.src->name();
@@ -1202,7 +1257,8 @@ struct Task {
         result.sourceType    = task.src.tag;
         result.sourceOptions = task.src.options;
         result.ext           = ext;
-        result.gammaCorrect  = gammaCorrect;
+        result.gamut         = identify_gamut(cs);
+        result.transferFn    = identify_transfer_fn(cs);
         result.md5           = md5;
         JsonWriter::AddBitmapResult(result);
 

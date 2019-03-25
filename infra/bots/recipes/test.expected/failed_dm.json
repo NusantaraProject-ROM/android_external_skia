@@ -136,7 +136,7 @@
     ],
     "env": {
       "CHROME_HEADLESS": "1",
-      "PATH": "<PATH>:RECIPE_PACKAGE_REPO[depot_tools]"
+      "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
     },
     "infra_step": true,
     "name": "get uninteresting hashes",
@@ -247,6 +247,8 @@
       "GCE",
       "os",
       "Debian9",
+      "style",
+      "default",
       "--uninterestingHashesFile",
       "[START_DIR]/tmp/uninteresting_hashes.txt",
       "--writePath",
@@ -273,7 +275,7 @@
     "cwd": "[START_DIR]/skia",
     "env": {
       "CHROME_HEADLESS": "1",
-      "PATH": "<PATH>:RECIPE_PACKAGE_REPO[depot_tools]"
+      "PATH": "<PATH>:RECIPE_REPO[depot_tools]"
     },
     "name": "symbolized dm",
     "~followup_annotations": [

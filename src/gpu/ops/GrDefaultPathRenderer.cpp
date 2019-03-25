@@ -6,7 +6,8 @@
  */
 
 #include "GrDefaultPathRenderer.h"
-#include "GrContext.h"
+
+#include "GrCaps.h"
 #include "GrDefaultGeoProcFactory.h"
 #include "GrDrawOpTest.h"
 #include "GrFillRectOp.h"
@@ -65,14 +66,11 @@ namespace {
 class PathGeoBuilder {
 public:
     PathGeoBuilder(GrPrimitiveType primitiveType, GrMeshDrawOp::Target* target,
-                   sk_sp<const GrGeometryProcessor> geometryProcessor, const GrPipeline* pipeline,
-                   const GrPipeline::FixedDynamicState* fixedDynamicState)
+                   sk_sp<const GrGeometryProcessor> geometryProcessor)
             : fPrimitiveType(primitiveType)
             , fTarget(target)
             , fVertexStride(sizeof(SkPoint))
             , fGeometryProcessor(std::move(geometryProcessor))
-            , fPipeline(pipeline)
-            , fFixedDynamicState(fixedDynamicState)
             , fFirstIndex(0)
             , fIndicesInChunk(0)
             , fIndices(nullptr) {
@@ -278,7 +276,7 @@ private:
                                  vertexCount - 1, GrPrimitiveRestart::kNo);
             }
             mesh->setVertexData(std::move(fVertexBuffer), fFirstVertex);
-            fTarget->draw(fGeometryProcessor, fPipeline, fFixedDynamicState, mesh);
+            fTarget->recordDraw(fGeometryProcessor, mesh);
         }
 
         fTarget->putBackIndices((size_t)(fIndicesInChunk - indexCount));
@@ -315,8 +313,6 @@ private:
     GrMeshDrawOp::Target* fTarget;
     size_t fVertexStride;
     sk_sp<const GrGeometryProcessor> fGeometryProcessor;
-    const GrPipeline* fPipeline;
-    const GrPipeline::FixedDynamicState* fFixedDynamicState;
 
     sk_sp<const GrBuffer> fVertexBuffer;
     int fFirstVertex;
@@ -339,7 +335,7 @@ private:
 public:
     DEFINE_OP_CLASS_ID
 
-    static std::unique_ptr<GrDrawOp> Make(GrContext* context,
+    static std::unique_ptr<GrDrawOp> Make(GrRecordingContext* context,
                                           GrPaint&& paint,
                                           const SkPath& path,
                                           SkScalar tolerance,
@@ -429,15 +425,17 @@ private:
         } else {
             primitiveType = GrPrimitiveType::kTriangles;
         }
-        auto pipe = fHelper.makePipeline(target);
-        PathGeoBuilder pathGeoBuilder(primitiveType, target, std::move(gp), pipe.fPipeline,
-                                      pipe.fFixedDynamicState);
+        PathGeoBuilder pathGeoBuilder(primitiveType, target, std::move(gp));
 
         // fill buffers
         for (int i = 0; i < instanceCount; i++) {
             const PathData& args = fPaths[i];
             pathGeoBuilder.addPath(args.fPath, args.fTolerance);
         }
+    }
+
+    void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
+        fHelper.executeDrawsAndUploads(this, flushState, chainBounds);
     }
 
     CombineResult onCombineIfPossible(GrOp* t, const GrCaps& caps) override {
@@ -496,7 +494,7 @@ bool GrDefaultPathRenderer::internalDrawPath(GrRenderTargetContext* renderTarget
                                              const SkMatrix& viewMatrix,
                                              const GrShape& shape,
                                              bool stencilOnly) {
-    GrContext* context = renderTargetContext->surfPriv().getContext();
+    auto context = renderTargetContext->surfPriv().getContext();
 
     SkASSERT(GrAAType::kCoverage != aaType);
     SkPath path;

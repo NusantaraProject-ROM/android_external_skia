@@ -7,8 +7,9 @@
 
 #include "GrGpuCommandBuffer.h"
 
-#include "GrContext.h"
 #include "GrCaps.h"
+#include "GrContext.h"
+#include "GrContextPriv.h"
 #include "GrFixedClip.h"
 #include "GrGpu.h"
 #include "GrMesh.h"
@@ -47,7 +48,7 @@ bool GrGpuRTCommandBuffer::draw(const GrPrimitiveProcessor& primProc, const GrPi
     SkASSERT(!pipeline.isScissorEnabled() || fixedDynamicState ||
              (dynamicStateArrays && dynamicStateArrays->fScissorRects));
 
-    auto resourceProvider = this->gpu()->getContext()->contextPriv().resourceProvider();
+    auto resourceProvider = this->gpu()->getContext()->priv().resourceProvider();
 
     if (pipeline.isBad()) {
         return false;

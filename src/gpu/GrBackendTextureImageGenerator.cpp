@@ -10,6 +10,8 @@
 #include "GrContextPriv.h"
 #include "GrGpu.h"
 #include "GrProxyProvider.h"
+#include "GrRecordingContext.h"
+#include "GrRecordingContextPriv.h"
 #include "GrRenderTargetContext.h"
 #include "GrResourceCache.h"
 #include "GrResourceProvider.h"
@@ -40,7 +42,7 @@ GrBackendTextureImageGenerator::Make(sk_sp<GrTexture> texture, GrSurfaceOrigin o
     // Attach our texture to this context's resource cache. This ensures that deletion will happen
     // in the correct thread/context. This adds the only ref to the texture that will persist from
     // this point. That ref will be released when the generator's RefHelper is freed.
-    context->contextPriv().getResourceCache()->insertCrossContextGpuResource(texture.get());
+    context->priv().getResourceCache()->insertCrossContextGpuResource(texture.get());
 
     GrBackendTexture backendTexture = texture->getBackendTexture();
     GrBackendFormat backendFormat = backendTexture.getBackendFormat();
@@ -48,7 +50,7 @@ GrBackendTextureImageGenerator::Make(sk_sp<GrTexture> texture, GrSurfaceOrigin o
         return nullptr;
     }
     backendTexture.fConfig =
-            context->contextPriv().caps()->getConfigFromBackendFormat(backendFormat, colorType);
+            context->priv().caps()->getConfigFromBackendFormat(backendFormat, colorType);
     if (backendTexture.fConfig == kUnknown_GrPixelConfig) {
         return nullptr;
     }
@@ -56,7 +58,7 @@ GrBackendTextureImageGenerator::Make(sk_sp<GrTexture> texture, GrSurfaceOrigin o
     SkImageInfo info = SkImageInfo::Make(texture->width(), texture->height(), colorType, alphaType,
                                          std::move(colorSpace));
     return std::unique_ptr<SkImageGenerator>(new GrBackendTextureImageGenerator(
-          info, texture.get(), origin, context->contextPriv().contextID(),
+          info, texture.get(), origin, context->priv().contextID(),
           std::move(semaphore), backendTexture));
 }
 
@@ -90,7 +92,8 @@ void GrBackendTextureImageGenerator::ReleaseRefHelper_TextureReleaseProc(void* c
 }
 
 sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
-        GrContext* context, const SkImageInfo& info, const SkIPoint& origin, bool willNeedMipMaps) {
+        GrRecordingContext* context, const SkImageInfo& info,
+        const SkIPoint& origin, bool willNeedMipMaps) {
     SkASSERT(context);
 
     if (context->backend() != fBackendTexture.backend()) {
@@ -100,12 +103,12 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
         return nullptr;
     }
 
-    auto proxyProvider = context->contextPriv().proxyProvider();
+    auto proxyProvider = context->priv().proxyProvider();
 
     fBorrowingMutex.acquire();
     sk_sp<GrReleaseProcHelper> releaseProcHelper;
     if (SK_InvalidGenID != fRefHelper->fBorrowingContextID) {
-        if (fRefHelper->fBorrowingContextID != context->contextPriv().contextID()) {
+        if (fRefHelper->fBorrowingContextID != context->priv().contextID()) {
             fBorrowingMutex.release();
             return nullptr;
         } else {
@@ -122,10 +125,10 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
                                                         fRefHelper));
         fRefHelper->fBorrowingContextReleaseProc = releaseProcHelper.get();
     }
-    fRefHelper->fBorrowingContextID = context->contextPriv().contextID();
+    fRefHelper->fBorrowingContextID = context->priv().contextID();
     fBorrowingMutex.release();
 
-    SkASSERT(fRefHelper->fBorrowingContextID == context->contextPriv().contextID());
+    SkASSERT(fRefHelper->fBorrowingContextID == context->priv().contextID());
 
     GrSurfaceDesc desc;
     desc.fWidth = fBackendTexture.width();
@@ -145,10 +148,6 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
     sk_sp<GrTextureProxy> proxy = proxyProvider->createLazyProxy(
             [refHelper, releaseProcHelper, semaphore,
              backendTexture](GrResourceProvider* resourceProvider) {
-                if (!resourceProvider) {
-                    return sk_sp<GrTexture>();
-                }
-
                 if (semaphore) {
                     resourceProvider->priv().gpu()->waitSemaphore(semaphore);
                 }
@@ -206,7 +205,7 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
         }
 
         sk_sp<GrRenderTargetContext> rtContext(
-            context->contextPriv().makeDeferredRenderTargetContext(
+            context->priv().makeDeferredRenderTargetContext(
                 format, SkBackingFit::kExact, info.width(), info.height(),
                 proxy->config(), nullptr, 1, mipMapped, proxy->origin(), nullptr,
                 SkBudgeted::kYes));

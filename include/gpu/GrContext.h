@@ -11,9 +11,7 @@
 #include "SkMatrix.h"
 #include "SkPathEffect.h"
 #include "SkTypes.h"
-#include "../private/GrAuditTrail.h"
 #include "../private/GrRecordingContext.h"
-#include "../private/GrSingleOwner.h"
 #include "GrContextOptions.h"
 
 // We shouldn't need this but currently Android is relying on this being include transitively.
@@ -25,15 +23,11 @@ class GrBackendSemaphore;
 class GrCaps;
 class GrContextPriv;
 class GrContextThreadSafeProxy;
-class GrDrawingManager;
 class GrFragmentProcessor;
 struct GrGLInterface;
-class GrStrikeCache;
 class GrGpu;
 struct GrMockOptions;
-class GrOpMemoryPool;
 class GrPath;
-class GrProxyProvider;
 class GrRenderTargetContext;
 class GrResourceCache;
 class GrResourceProvider;
@@ -41,7 +35,6 @@ class GrSamplerState;
 class GrSkSLFPFactoryCache;
 class GrSurfaceProxy;
 class GrSwizzle;
-class GrTextBlobCache;
 class GrTextContext;
 class GrTextureProxy;
 struct GrVkBackendContext;
@@ -79,7 +72,7 @@ public:
     static sk_sp<GrContext> MakeMock(const GrMockOptions*, const GrContextOptions&);
     static sk_sp<GrContext> MakeMock(const GrMockOptions*);
 
-    virtual ~GrContext();
+    ~GrContext() override;
 
     sk_sp<GrContextThreadSafeProxy> threadSafeProxy();
 
@@ -94,6 +87,17 @@ public:
     void resetContext(uint32_t state = kAll_GrBackendState);
 
     /**
+     * If the backend is GrBackendApi::kOpenGL, then all texture unit/target combinations for which
+     * the GrContext has modified the bound texture will have texture id 0 bound. This does not
+     * flush the GrContext. Calling resetContext() does not change the set that will be bound
+     * to texture id 0 on the next call to resetGLTextureBindings(). After this is called
+     * all unit/target combinations are considered to have unmodified bindings until the GrContext
+     * subsequently modifies them (meaning if this is called twice in a row with no intervening
+     * GrContext usage then the second call is a no-op.)
+     */
+    void resetGLTextureBindings();
+
+    /**
      * Abandons all GPU resources and assumes the underlying backend 3D API context is no longer
      * usable. Call this if you have lost the associated GPU context, and thus internal texture,
      * buffer, etc. references/IDs are now invalid. Calling this ensures that the destructors of the
@@ -104,12 +108,12 @@ public:
      * The typical use case for this function is that the underlying 3D context was lost and further
      * API calls may crash.
      */
-    virtual void abandonContext();
+    void abandonContext() override;
 
     /**
      * Returns true if the context was abandoned.
      */
-    bool abandoned() const;
+    using GrImageContext::abandoned;
 
     /**
      * This is similar to abandonContext() however the underlying 3D context is not yet lost and
@@ -268,8 +272,8 @@ public:
                                                    GrBackendSemaphore signalSemaphores[]);
 
     // Provides access to functions that aren't part of the public API.
-    GrContextPriv contextPriv();
-    const GrContextPriv contextPriv() const;
+    GrContextPriv priv();
+    const GrContextPriv priv() const;
 
     /** Enumerates all cached GPU resources and dumps their memory to traceMemoryDump. */
     // Chrome is using this!
@@ -280,16 +284,15 @@ public:
     void storeVkPipelineCacheData();
 
 protected:
-    GrContext(GrBackendApi, const GrContextOptions& options, int32_t id = SK_InvalidGenID);
+    GrContext(GrBackendApi, const GrContextOptions&, int32_t contextID = SK_InvalidGenID);
 
-    bool initCommon();
-    virtual bool init() = 0; // must be called after the ctor!
+    bool init(sk_sp<const GrCaps>, sk_sp<GrSkSLFPFactoryCache>) override;
+
+    GrContext* asDirectContext() override { return this; }
 
     virtual GrAtlasManager* onGetAtlasManager() = 0;
 
-    sk_sp<const GrCaps>                     fCaps;
     sk_sp<GrContextThreadSafeProxy>         fThreadSafeProxy;
-    sk_sp<GrSkSLFPFactoryCache>             fFPFactoryCache;
 
 private:
     // fTaskGroup must appear before anything that uses it (e.g. fGpu), so that it is destroyed
@@ -300,26 +303,10 @@ private:
     sk_sp<GrGpu>                            fGpu;
     GrResourceCache*                        fResourceCache;
     GrResourceProvider*                     fResourceProvider;
-    GrProxyProvider*                        fProxyProvider;
-
-    // All the GrOp-derived classes use this pool.
-    sk_sp<GrOpMemoryPool>                   fOpMemoryPool;
-
-    GrStrikeCache*                           fGlyphCache;
-    std::unique_ptr<GrTextBlobCache>        fTextBlobCache;
 
     bool                                    fDidTestPMConversions;
     // true if the PM/UPM conversion succeeded; false otherwise
     bool                                    fPMUPMConversionsRoundTrip;
-
-    // In debug builds we guard against improper thread handling
-    // This guard is passed to the GrDrawingManager and, from there to all the
-    // GrRenderTargetContexts.  It is also passed to the GrResourceProvider and SkGpuDevice.
-    mutable GrSingleOwner                   fSingleOwner;
-
-    std::unique_ptr<GrDrawingManager>       fDrawingManager;
-
-    GrAuditTrail                            fAuditTrail;
 
     GrContextOptions::PersistentCache*      fPersistentCache;
 
@@ -338,12 +325,6 @@ private:
      * did we find a pair of round-trip preserving conversion effects?
      */
     bool validPMUPMConversionExists();
-
-    /**
-     * A callback similar to the above for use by the TextBlobCache
-     * TODO move textblob draw calls below context so we can use the call above.
-     */
-    static void TextBlobCacheOverBudgetCB(void* data);
 
     typedef GrRecordingContext INHERITED;
 };

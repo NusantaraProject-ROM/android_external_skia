@@ -22,14 +22,21 @@ struct MacWindowInfo {
     NSView*   fMainView;
 };
 
+#ifdef SK_VULKAN
+WindowContext* NewVulkanForMac(const MacWindowInfo&, const DisplayParams&);
+#else
 inline WindowContext* NewVulkanForMac(const MacWindowInfo&, const DisplayParams&) {
     // No Vulkan support on Mac.
     return nullptr;
 }
+#endif
 
 WindowContext* NewGLForMac(const MacWindowInfo&, const DisplayParams&);
 
 WindowContext* NewRasterForMac(const MacWindowInfo&, const DisplayParams&);
+#ifdef SK_METAL
+WindowContext* NewMetalForMac(const MacWindowInfo&, const DisplayParams&);
+#endif
 
 }  // namespace window_context_factory
 

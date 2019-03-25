@@ -8,16 +8,10 @@
 #ifndef GrContextThreadSafeProxy_DEFINED
 #define GrContextThreadSafeProxy_DEFINED
 
-#include "GrContextOptions.h"
-#include "SkRefCnt.h"
 #include "../private/GrContext_Base.h"
 
 class GrBackendFormat;
-class GrCaps;
-class GrContext;
-class GrContext_Base;
 class GrContextThreadSafeProxyPriv;
-class GrSkSLFPFactoryCache;
 struct SkImageInfo;
 class SkSurfaceCharacterization;
 
@@ -28,8 +22,6 @@ class SkSurfaceCharacterization;
 class SK_API GrContextThreadSafeProxy : public GrContext_Base {
 public:
     ~GrContextThreadSafeProxy() override;
-
-    bool matches(GrContext_Base* context) const;
 
     /**
      *  Create a surface characterization for a DDL that will be replayed into the GrContext
@@ -84,18 +76,12 @@ public:
     const GrContextThreadSafeProxyPriv priv() const;
 
 private:
+    friend class GrContextThreadSafeProxyPriv; // for ctor and hidden methods
+
     // DDL TODO: need to add unit tests for backend & maybe options
-    GrContextThreadSafeProxy(sk_sp<const GrCaps> caps,
-                             uint32_t uniqueID,
-                             GrBackendApi backend,
-                             const GrContextOptions& options,
-                             sk_sp<GrSkSLFPFactoryCache> cache);
+    GrContextThreadSafeProxy(GrBackendApi, const GrContextOptions&, uint32_t contextID);
 
-    sk_sp<const GrCaps>         fCaps;
-    sk_sp<GrSkSLFPFactoryCache> fFPFactoryCache;
-
-    friend class GrDirectContext; // To construct this object
-    friend class GrContextThreadSafeProxyPriv;
+    bool init(sk_sp<const GrCaps>, sk_sp<GrSkSLFPFactoryCache>) override;
 
     typedef GrContext_Base INHERITED;
 };

@@ -49,6 +49,9 @@ public:
 #ifdef SK_VULKAN
         kVulkan_BackendType,
 #endif
+#if SK_METAL && defined(SK_BUILD_FOR_MAC)
+        kMetal_BackendType,
+#endif
         kRaster_BackendType,
 
         kLast_BackendType = kRaster_BackendType
@@ -172,8 +175,8 @@ public:
     void onPaint();
     void onResize(int width, int height);
 
-    int width();
-    int height();
+    int width() const;
+    int height() const;
 
     virtual const DisplayParams& getRequestedDisplayParams() { return fRequestedDisplayParams; }
     virtual void setRequestedDisplayParams(const DisplayParams&, bool allowReattach = true);

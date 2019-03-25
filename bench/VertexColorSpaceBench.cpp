@@ -222,9 +222,12 @@ private:
         GrMesh* mesh = target->allocMesh(GrPrimitiveType::kTriangleStrip);
         mesh->setNonIndexedNonInstanced(kVertexCount);
         mesh->setVertexData(std::move(vertexBuffer), firstVertex);
-        auto pipe = target->makePipeline(0, GrProcessorSet::MakeEmptySet(),
-                                         target->detachAppliedClip());
-        target->draw(gp, pipe.fPipeline, pipe.fFixedDynamicState, mesh);
+        target->recordDraw(gp, mesh);
+    }
+
+    void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
+        flushState->executeDrawsAndUploadsForMeshDrawOp(
+                this, chainBounds, GrProcessorSet::MakeEmptySet());
     }
 
     Mode fMode;
@@ -251,11 +254,11 @@ public:
         SkASSERT(context);
 
         if (kHalf_Mode == fMode &&
-            !context->contextPriv().caps()->halfFloatVertexAttributeSupport()) {
+            !context->priv().caps()->halfFloatVertexAttributeSupport()) {
             return;
         }
 
-        GrOpMemoryPool* pool = context->contextPriv().opMemoryPool();
+        GrOpMemoryPool* pool = context->priv().opMemoryPool();
 
         auto p3 = SkColorSpace::MakeRGB(SkNamedTransferFn::kSRGB,
                                         SkNamedGamut::kDCIP3);
@@ -266,10 +269,10 @@ public:
         const int kDrawsPerLoop = 32;
 
         const GrBackendFormat format =
-            context->contextPriv().caps()->getBackendFormatFromColorType(kRGBA_8888_SkColorType);
+            context->priv().caps()->getBackendFormatFromColorType(kRGBA_8888_SkColorType);
         for (int i = 0; i < loops; ++i) {
             sk_sp<GrRenderTargetContext> rtc(
-                    context->contextPriv().makeDeferredRenderTargetContext(
+                    context->priv().makeDeferredRenderTargetContext(
                             format, SkBackingFit::kApprox, 100, 100, kRGBA_8888_GrPixelConfig, p3));
             SkASSERT(rtc);
 

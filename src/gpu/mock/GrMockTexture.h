@@ -43,9 +43,6 @@ public:
     }
 
     void textureParamsModified() override {}
-    void setRelease(sk_sp<GrReleaseProcHelper> releaseHelper) override {
-        fReleaseHelper = std::move(releaseHelper);
-    }
 
     void setIdleProc(IdleProc proc, void* context) override {
         fIdleProc = proc;
@@ -62,12 +59,10 @@ protected:
             , fInfo(info) {}
 
     void onRelease() override {
-        this->invokeReleaseProc();
         INHERITED::onRelease();
     }
 
     void onAbandon() override {
-        this->invokeReleaseProc();
         INHERITED::onAbandon();
     }
 
@@ -77,7 +72,7 @@ protected:
 
     // protected so that GrMockTextureRenderTarget can call this to avoid "inheritance via
     // dominance" warning.
-    void removedLastRefOrPendingIO() override {
+    void willRemoveLastRefOrPendingIO() override {
         if (fIdleProc) {
             fIdleProc(fIdleProcContext);
             fIdleProc = nullptr;
@@ -86,11 +81,7 @@ protected:
     }
 
 private:
-    void invokeReleaseProc() {
-        // Depending on the ref count of fReleaseHelper this may or may not actually trigger the
-        // ReleaseProc to be called.
-        fReleaseHelper.reset();
-    }
+    void onSetRelease(sk_sp<GrReleaseProcHelper> releaseHelper) override {}
 
     GrMockTextureInfo fInfo;
     sk_sp<GrReleaseProcHelper> fReleaseHelper;
@@ -148,6 +139,8 @@ protected:
             : GrSurface(gpu, desc), INHERITED(gpu, desc), fInfo(info) {}
 
 private:
+    void onSetRelease(sk_sp<GrReleaseProcHelper> releaseHelper) override {}
+
     GrMockRenderTargetInfo fInfo;
 
     typedef GrRenderTarget INHERITED;
@@ -185,6 +178,8 @@ public:
     }
 
 private:
+    void onSetRelease(sk_sp<GrReleaseProcHelper> releaseHelper) override {}
+
     void onAbandon() override {
         GrRenderTarget::onAbandon();
         GrMockTexture::onAbandon();
@@ -196,7 +191,7 @@ private:
     }
 
     // We implement this to avoid the inheritance via dominance warning.
-    void removedLastRefOrPendingIO() override { GrMockTexture::removedLastRefOrPendingIO(); }
+    void willRemoveLastRefOrPendingIO() override { GrMockTexture::willRemoveLastRefOrPendingIO(); }
 
     size_t onGpuMemorySize() const override {
         int numColorSamples = this->numColorSamples();

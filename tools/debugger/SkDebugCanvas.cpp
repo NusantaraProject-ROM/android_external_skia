@@ -17,6 +17,7 @@
 
 #include "GrAuditTrail.h"
 #include "GrContext.h"
+#include "GrContextPriv.h"
 #include "GrRenderTargetContext.h"
 
 #define SKDEBUGCANVAS_VERSION                     1
@@ -218,7 +219,7 @@ GrAuditTrail* SkDebugCanvas::getAuditTrail(SkCanvas* canvas) {
     GrAuditTrail* at = nullptr;
     GrContext* ctx = canvas->getGrContext();
     if (ctx) {
-        at = ctx->contextPriv().getAuditTrail();
+        at = ctx->priv().auditTrail();
     }
     return at;
 }

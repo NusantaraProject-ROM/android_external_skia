@@ -1,0 +1,145 @@
+{
+   "MaxCount": 32,
+   "Duration": 1,
+   "Rate": 0.5,
+   "Life": {
+      "XValues": [],
+      "Segments": [
+         {
+            "Constant": true,
+            "Ranged": false,
+            "Bidirectional": false,
+            "A0": 20,
+            "B0": 0,
+            "C0": 0,
+            "D0": 0,
+            "A1": 0,
+            "B1": 0,
+            "C1": 0,
+            "D1": 0
+         }
+      ]
+   },
+   "Drawable": {
+      "Type": "SkImageDrawable",
+      "Path": "images/baby_tux.png",
+      "Columns": 1,
+      "Rows": 1
+   },
+   "Emitter": {
+      "Type": "SkLineEmitter",
+      "P1": { "x": 237, "y": 396 },
+      "P2": { "x": 214, "y": 398 }
+   },
+   "Spawn": [
+      {
+         "Type": "SkLinearVelocityAffector",
+         "Enabled": true,
+         "Force": false,
+         "Frame": "World",
+         "Angle": {
+            "XValues": [],
+            "Segments": [
+               {
+                  "Constant": true,
+                  "Ranged": true,
+                  "Bidirectional": false,
+                  "A0": 10,
+                  "B0": 0,
+                  "C0": 0,
+                  "D0": 0,
+                  "A1": 70,
+                  "B1": 0,
+                  "C1": 0,
+                  "D1": 0
+               }
+            ]
+         },
+         "Strength": {
+            "XValues": [],
+            "Segments": [
+               {
+                  "Constant": true,
+                  "Ranged": true,
+                  "Bidirectional": false,
+                  "A0": 140,
+                  "B0": 0,
+                  "C0": 0,
+                  "D0": 0,
+                  "A1": 200,
+                  "B1": 0,
+                  "C1": 0,
+                  "D1": 0
+               }
+            ]
+         }
+      }
+   ],
+   "Update": [
+      {
+         "Type": "SkLinearVelocityAffector",
+         "Enabled": true,
+         "Force": true,
+         "Frame": "World",
+         "Angle": {
+            "XValues": [],
+            "Segments": [
+               {
+                  "Constant": true,
+                  "Ranged": false,
+                  "Bidirectional": false,
+                  "A0": 180,
+                  "B0": 0,
+                  "C0": 0,
+                  "D0": 0,
+                  "A1": 0,
+                  "B1": 0,
+                  "C1": 0,
+                  "D1": 0
+               }
+            ]
+         },
+         "Strength": {
+            "XValues": [],
+            "Segments": [
+               {
+                  "Constant": true,
+                  "Ranged": false,
+                  "Bidirectional": false,
+                  "A0": 50,
+                  "B0": 0,
+                  "C0": 0,
+                  "D0": 0,
+                  "A1": 0,
+                  "B1": 0,
+                  "C1": 0,
+                  "D1": 0
+               }
+            ]
+         }
+      },
+      {
+         "Type": "SkOrientationAffector",
+         "Enabled": true,
+         "Frame": "Velocity",
+         "Angle": {
+            "XValues": [],
+            "Segments": [
+               {
+                  "Constant": true,
+                  "Ranged": false,
+                  "Bidirectional": false,
+                  "A0": 0,
+                  "B0": 0,
+                  "C0": 0,
+                  "D0": 0,
+                  "A1": 0,
+                  "B1": 0,
+                  "C1": 0,
+                  "D1": 0
+               }
+            ]
+         }
+      }
+   ]
+}

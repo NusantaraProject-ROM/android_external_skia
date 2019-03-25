@@ -148,14 +148,6 @@ void SkBaseDevice::drawPatch(const SkPoint cubics[12], const SkColor colors[4],
     }
 }
 
-void SkBaseDevice::drawImage(const SkImage* image, SkScalar x, SkScalar y,
-                             const SkPaint& paint) {
-    SkBitmap bm;
-    if (as_IB(image)->getROPixels(&bm)) {
-        this->drawBitmap(bm, x, y, paint);
-    }
-}
-
 void SkBaseDevice::drawImageRect(const SkImage* image, const SkRect* src,
                                  const SkRect& dst, const SkPaint& paint,
                                  SkCanvas::SrcRectConstraint constraint) {
@@ -396,8 +388,10 @@ sk_sp<SkSpecialImage> SkBaseDevice::snapBackImage(const SkIRect&) {
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
-void SkBaseDevice::LogDrawScaleFactor(const SkMatrix& matrix, SkFilterQuality filterQuality) {
+void SkBaseDevice::LogDrawScaleFactor(const SkMatrix& view, const SkMatrix& srcToDst,
+                                      SkFilterQuality filterQuality) {
 #if SK_HISTOGRAMS_ENABLED
+    SkMatrix matrix = SkMatrix::Concat(view, srcToDst);
     enum ScaleFactor {
         kUpscale_ScaleFactor,
         kNoScale_ScaleFactor,

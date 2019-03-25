@@ -7,8 +7,9 @@
  */
 
 #include "GrSmallPathRenderer.h"
+
 #include "GrBuffer.h"
-#include "GrContext.h"
+#include "GrCaps.h"
 #include "GrDistanceFieldGenFromVector.h"
 #include "GrDrawOpTest.h"
 #include "GrQuad.h"
@@ -229,7 +230,7 @@ public:
     using ShapeCache = SkTDynamicHash<ShapeData, ShapeDataKey>;
     using ShapeDataList = GrSmallPathRenderer::ShapeDataList;
 
-    static std::unique_ptr<GrDrawOp> Make(GrContext* context,
+    static std::unique_ptr<GrDrawOp> Make(GrRecordingContext* context,
                                           GrPaint&& paint,
                                           const GrShape& shape,
                                           const SkMatrix& viewMatrix,
@@ -307,7 +308,6 @@ private:
         sk_sp<const GrBuffer> fVertexBuffer;
         sk_sp<const GrBuffer> fIndexBuffer;
         sk_sp<GrGeometryProcessor>   fGeometryProcessor;
-        const GrPipeline* fPipeline;
         GrPipeline::FixedDynamicState* fFixedDynamicState;
         int fVertexOffset;
         int fInstancesToFlush;
@@ -319,16 +319,13 @@ private:
         static constexpr int kMaxTextures = GrDistanceFieldPathGeoProc::kMaxTextures;
         GR_STATIC_ASSERT(GrBitmapTextGeoProc::kMaxTextures == kMaxTextures);
 
-        auto pipe = fHelper.makePipeline(target, kMaxTextures);
+        FlushInfo flushInfo;
+        flushInfo.fFixedDynamicState = target->makeFixedDynamicState(kMaxTextures);
         int numActiveProxies = fAtlas->numActivePages();
         const auto proxies = fAtlas->getProxies();
         for (int i = 0; i < numActiveProxies; ++i) {
-            pipe.fFixedDynamicState->fPrimitiveProcessorTextures[i] = proxies[i].get();
+            flushInfo.fFixedDynamicState->fPrimitiveProcessorTextures[i] = proxies[i].get();
         }
-
-        FlushInfo flushInfo;
-        flushInfo.fPipeline = pipe.fPipeline;
-        flushInfo.fFixedDynamicState = pipe.fFixedDynamicState;
 
         // Setup GrGeometryProcessor
         const SkMatrix& ctm = fShapes[0].fViewMatrix;
@@ -761,8 +758,7 @@ private:
         };
 
         if (fUsesDistanceField && !ctm.hasPerspective()) {
-            GrQuad quad(translatedBounds, ctm);
-            vertices.writeQuad(quad,
+            vertices.writeQuad(GrQuad::MakeFromRect(translatedBounds, ctm),
                                color,
                                texCoords);
         } else {
@@ -794,15 +790,19 @@ private:
         if (flushInfo->fInstancesToFlush) {
             GrMesh* mesh = target->allocMesh(GrPrimitiveType::kTriangles);
             int maxInstancesPerDraw =
-                static_cast<int>(flushInfo->fIndexBuffer->gpuMemorySize() / sizeof(uint16_t) / 6);
+                    static_cast<int>(flushInfo->fIndexBuffer->size() / sizeof(uint16_t) / 6);
             mesh->setIndexedPatterned(flushInfo->fIndexBuffer, kIndicesPerQuad, kVerticesPerQuad,
                                       flushInfo->fInstancesToFlush, maxInstancesPerDraw);
             mesh->setVertexData(flushInfo->fVertexBuffer, flushInfo->fVertexOffset);
-            target->draw(flushInfo->fGeometryProcessor, flushInfo->fPipeline,
-                         flushInfo->fFixedDynamicState, mesh);
+            target->recordDraw(
+                    flushInfo->fGeometryProcessor, mesh, 1, flushInfo->fFixedDynamicState, nullptr);
             flushInfo->fVertexOffset += kVerticesPerQuad * flushInfo->fInstancesToFlush;
             flushInfo->fInstancesToFlush = 0;
         }
+    }
+
+    void onExecute(GrOpFlushState* flushState, const SkRect& chainBounds) override {
+        fHelper.executeDrawsAndUploads(this, flushState, chainBounds);
     }
 
     const SkPMColor4f& color() const { return fShapes[0].fColor; }
@@ -873,9 +873,9 @@ bool GrSmallPathRenderer::onDrawPath(const DrawPathArgs& args) {
     SkASSERT(args.fShape->hasUnstyledKey());
     if (!fAtlas) {
         const GrBackendFormat format =
-                args.fContext->contextPriv().caps()->getBackendFormatFromColorType(
+                args.fContext->priv().caps()->getBackendFormatFromColorType(
                         kAlpha_8_SkColorType);
-        fAtlas = GrDrawOpAtlas::Make(args.fContext->contextPriv().proxyProvider(),
+        fAtlas = GrDrawOpAtlas::Make(args.fContext->priv().proxyProvider(),
                                      format,
                                      kAlpha_8_GrPixelConfig,
                                      ATLAS_TEXTURE_WIDTH, ATLAS_TEXTURE_HEIGHT,
@@ -940,7 +940,7 @@ struct GrSmallPathRenderer::PathTestStruct {
 };
 
 std::unique_ptr<GrDrawOp> GrSmallPathRenderer::createOp_TestingOnly(
-                                                        GrContext* context,
+                                                        GrRecordingContext* context,
                                                         GrPaint&& paint,
                                                         const GrShape& shape,
                                                         const SkMatrix& viewMatrix,
@@ -960,12 +960,12 @@ GR_DRAW_OP_TEST_DEFINE(SmallPathOp) {
     using PathTestStruct = GrSmallPathRenderer::PathTestStruct;
     static PathTestStruct gTestStruct;
 
-    if (context->contextPriv().contextID() != gTestStruct.fContextID) {
-        gTestStruct.fContextID = context->contextPriv().contextID();
+    if (context->priv().contextID() != gTestStruct.fContextID) {
+        gTestStruct.fContextID = context->priv().contextID();
         gTestStruct.reset();
         const GrBackendFormat format =
-                context->contextPriv().caps()->getBackendFormatFromColorType(kAlpha_8_SkColorType);
-        gTestStruct.fAtlas = GrDrawOpAtlas::Make(context->contextPriv().proxyProvider(),
+                context->priv().caps()->getBackendFormatFromColorType(kAlpha_8_SkColorType);
+        gTestStruct.fAtlas = GrDrawOpAtlas::Make(context->priv().proxyProvider(),
                                                  format, kAlpha_8_GrPixelConfig,
                                                  ATLAS_TEXTURE_WIDTH, ATLAS_TEXTURE_HEIGHT,
                                                  PLOT_WIDTH, PLOT_HEIGHT,

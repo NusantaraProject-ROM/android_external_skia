@@ -300,7 +300,7 @@ sk_sp<SkSurface> SkSurface::MakeRenderTarget(GrContext*, SkBudgeted, const SkIma
     return nullptr;
 }
 
-sk_sp<SkSurface> SkSurface::MakeRenderTarget(GrContext*, const SkSurfaceCharacterization&,
+sk_sp<SkSurface> SkSurface::MakeRenderTarget(GrRecordingContext*, const SkSurfaceCharacterization&,
                                              SkBudgeted) {
     return nullptr;
 }
@@ -308,7 +308,8 @@ sk_sp<SkSurface> SkSurface::MakeRenderTarget(GrContext*, const SkSurfaceCharacte
 sk_sp<SkSurface> SkSurface::MakeFromBackendTexture(GrContext*, const GrBackendTexture&,
                                                    GrSurfaceOrigin origin, int sampleCnt,
                                                    SkColorType, sk_sp<SkColorSpace>,
-                                                   const SkSurfaceProps*) {
+                                                   const SkSurfaceProps*,
+                                                   TextureReleaseProc, ReleaseContext) {
     return nullptr;
 }
 
@@ -317,7 +318,8 @@ sk_sp<SkSurface> SkSurface::MakeFromBackendRenderTarget(GrContext*,
                                                         GrSurfaceOrigin origin,
                                                         SkColorType,
                                                         sk_sp<SkColorSpace>,
-                                                        const SkSurfaceProps*) {
+                                                        const SkSurfaceProps*,
+                                                        RenderTargetReleaseProc, ReleaseContext) {
     return nullptr;
 }
 

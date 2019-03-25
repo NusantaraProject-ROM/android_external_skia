@@ -435,9 +435,9 @@ public:
         *serialize = true;
     }
 
-    SkStreamAsset* onOpenStream(int* ttcIndex) const override {
+    std::unique_ptr<SkStreamAsset> onOpenStream(int* ttcIndex) const override {
         *ttcIndex = fData->getIndex();
-        return fData->getStream()->duplicate().release();
+        return fData->getStream()->duplicate();
     }
 
     std::unique_ptr<SkFontData> onMakeFontData() const override {
@@ -483,15 +483,20 @@ public:
         *serialize = false;
     }
 
-    SkStreamAsset* onOpenStream(int* ttcIndex) const override {
+    std::unique_ptr<SkStreamAsset> onOpenStream(int* ttcIndex) const override {
         FCLocker lock;
         *ttcIndex = get_int(fPattern, FC_INDEX, 0);
-        return SkStream::MakeFromFile(get_string(fPattern, FC_FILE)).release();
+        return SkStream::MakeFromFile(get_string(fPattern, FC_FILE));
     }
 
     void onFilterRec(SkScalerContextRec* rec) const override {
+        // FontConfig provides 10-scale-bitmap-fonts.conf which applies an inverse "pixelsize"
+        // matrix. It is not known if this .conf is active or not, so it is not clear if
+        // "pixelsize" should be applied before this matrix. Since using a matrix with a bitmap
+        // font isn't a great idea, only apply the matrix to outline fonts.
         const FcMatrix* fcMatrix = get_matrix(fPattern, FC_MATRIX);
-        if (fcMatrix) {
+        bool fcOutline = get_bool(fPattern, FC_OUTLINE, true);
+        if (fcOutline && fcMatrix) {
             // fPost2x2 is column-major, left handed (y down).
             // FcMatrix is column-major, right handed (y up).
             SkMatrix fm;
