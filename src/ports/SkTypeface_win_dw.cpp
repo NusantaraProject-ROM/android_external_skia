@@ -299,7 +299,7 @@ int DWriteFontTypeface::onGetTableTags(SkFontTableTag tags[]) const {
     }
 
     int ttcIndex;
-    std::unique_ptr<SkStream> stream(this->openStream(&ttcIndex));
+    std::unique_ptr<SkStreamAsset> stream = this->openStream(&ttcIndex);
     return stream.get() ? SkFontStream::GetTableTags(stream.get(), ttcIndex, tags) : 0;
 }
 
@@ -357,12 +357,12 @@ sk_sp<SkTypeface> DWriteFontTypeface::onMakeClone(const SkFontArguments& args) c
 
         SkTScopedComPtr<IDWriteFontFace> newFontFace;
         HRN(newFontFace5->QueryInterface(&newFontFace));
-        return sk_sp<SkTypeface>(DWriteFontTypeface::Create(fFactory.get(),
-                                                            newFontFace.get(),
-                                                            fDWriteFont.get(),
-                                                            fDWriteFontFamily.get(),
-                                                            fDWriteFontFileLoader.get(),
-                                                            fDWriteFontCollectionLoader.get()));
+        return DWriteFontTypeface::Make(fFactory.get(),
+                                        newFontFace.get(),
+                                        fDWriteFont.get(),
+                                        fDWriteFontFamily.get(),
+                                        fDWriteFontFileLoader.get(),
+                                        fDWriteFontCollectionLoader.get());
     }
 
 #endif

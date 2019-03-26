@@ -41,7 +41,7 @@ const (
 	ISOLATE_WIN_TOOLCHAIN_NAME = "Housekeeper-PerCommit-IsolateWinToolchain"
 
 	DEFAULT_OS_DEBIAN    = "Debian-9.4"
-	DEFAULT_OS_LINUX_GCE = DEFAULT_OS_DEBIAN
+	DEFAULT_OS_LINUX_GCE = "Debian-9.8"
 	DEFAULT_OS_MAC       = "Mac-10.13.6"
 	DEFAULT_OS_UBUNTU    = "Ubuntu-14.04"
 	DEFAULT_OS_WIN       = "Windows-2016Server-14393"
@@ -274,6 +274,7 @@ func kitchenTask(name, recipe, isolate, serviceAccount string, dimensions []stri
 		"repository":           specs.PLACEHOLDER_REPO,
 		"revision":             specs.PLACEHOLDER_REVISION,
 		"swarm_out_dir":        outputDir,
+		"task_id":              specs.PLACEHOLDER_TASK_ID,
 	}
 	for k, v := range extraProps {
 		properties[k] = v
@@ -525,7 +526,7 @@ func defaultSwarmDimensions(parts map[string]string) []string {
 				glog.Fatalf("Please update defaultSwarmDimensions for SKQP::Emulator %s %s.", parts["os"], parts["model"])
 			}
 			d["cpu"] = "x86-64-i5-7260U"
-			d["os"] = "Debian-9.4"
+			d["os"] = DEFAULT_OS_DEBIAN
 			// KVM means Kernel-based Virtual Machine, that is, can this vm virtualize commands
 			// For us, this means, can we run an x86 android emulator on it.
 			// kjlubick tried running this on GCE, but it was a bit too slow on the large install.

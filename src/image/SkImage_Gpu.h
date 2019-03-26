@@ -31,13 +31,14 @@ public:
     GrTextureProxy* peekProxy() const override {
         return fProxy.get();
     }
-    sk_sp<GrTextureProxy> asTextureProxyRef() const override {
+    sk_sp<GrTextureProxy> asTextureProxyRef(GrRecordingContext*) const override {
         return fProxy;
     }
 
     bool onIsTextureBacked() const override { return SkToBool(fProxy.get()); }
 
-    sk_sp<SkImage> onMakeColorTypeAndColorSpace(SkColorType, sk_sp<SkColorSpace>) const final;
+    sk_sp<SkImage> onMakeColorTypeAndColorSpace(GrRecordingContext*,
+                                                SkColorType, sk_sp<SkColorSpace>) const final;
 
     /**
      * This is the implementation of SkDeferredDisplayListRecorder::makePromiseImage.
@@ -54,8 +55,7 @@ public:
                                              PromiseImageTextureFulfillProc textureFulfillProc,
                                              PromiseImageTextureReleaseProc textureReleaseProc,
                                              PromiseImageTextureDoneProc textureDoneProc,
-                                             PromiseImageTextureContext textureContext,
-                                             DelayReleaseCallback delayReleaseCallback);
+                                             PromiseImageTextureContext textureContext);
 
     static sk_sp<SkImage> ConvertYUVATexturesToRGB(GrContext*, SkYUVColorSpace yuvColorSpace,
                                                    const GrBackendTexture yuvaTextures[],
