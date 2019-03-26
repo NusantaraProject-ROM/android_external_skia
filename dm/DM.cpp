@@ -101,6 +101,8 @@ DEFINE_string(dont_write, "", "File extensions to skip writing to --writePath.")
 
 DEFINE_bool(gdi, false, "On Windows, use GDI instead of DirectWrite for font rendering.");
 
+DEFINE_bool(checkF16, false, "Ensure that F16Norm pixels are clamped.");
+
 using namespace DM;
 using sk_gpu_test::GrContextFactory;
 using sk_gpu_test::GLTestContext;
@@ -808,19 +810,8 @@ static bool gather_srcs() {
     }
 
     for (auto colorImage : colorImages) {
-        ColorCodecSrc* src = new ColorCodecSrc(colorImage, ColorCodecSrc::kBaseline_Mode,
-                                               kN32_SkColorType);
-        push_src("colorImage", "color_codec_baseline", src);
-
-        src = new ColorCodecSrc(colorImage, ColorCodecSrc::kDst_HPZR30w_Mode, kN32_SkColorType);
-        push_src("colorImage", "color_codec_HPZR30w", src);
-        // TODO (msarett):
-        // Should we test this Dst in F16 mode (even though the Dst gamma is 2.2 instead of sRGB)?
-
-        src = new ColorCodecSrc(colorImage, ColorCodecSrc::kDst_sRGB_Mode, kN32_SkColorType);
-        push_src("colorImage", "color_codec_sRGB_kN32", src);
-        src = new ColorCodecSrc(colorImage, ColorCodecSrc::kDst_sRGB_Mode, kRGBA_F16_SkColorType);
-        push_src("colorImage", "color_codec_sRGB_kF16", src);
+        push_src("colorImage", "decode_native", new ColorCodecSrc(colorImage, false));
+        push_src("colorImage", "decode_to_dst", new ColorCodecSrc(colorImage,  true));
     }
 
     return true;
@@ -1053,7 +1044,8 @@ static bool dump_png(SkBitmap bitmap, const char* path, const char* md5) {
     // PNGs can't hold out-of-gamut values, so if we're likely to be holding them,
     // convert to a wide gamut, giving us the best chance to have the PNG look like our colors.
     SkBitmap wide;
-    if (pm.colorType() >= kRGBA_F16_SkColorType) {
+    if (pm.colorType() >= kRGBA_F16Norm_SkColorType) {
+        // TODO: F16Norm being encoded this way is temporary, to help hunt down diffs with esrgb.
         wide.allocPixels(pm.info().makeColorSpace(rec2020()));
         SkAssertResult(wide.writePixels(pm, 0,0));
         SkAssertResult(wide.peekPixels(&pm));
@@ -1187,6 +1179,22 @@ struct Task {
                         }
                     }
                 }
+
+                SkPixmap pm;
+                if (FLAGS_checkF16 && bitmap.colorType() == kRGBA_F16Norm_SkColorType &&
+                        bitmap.peekPixels(&pm)) {
+                    bool unclamped = false;
+                    for (int y = 0; y < pm.height() && !unclamped; ++y)
+                    for (int x = 0; x < pm.width() && !unclamped; ++x) {
+                        Sk4f rgba = SkHalfToFloat_finite_ftz(*pm.addr64(x, y));
+                        float a = rgba[3];
+                        if (a > 1.0f || (rgba < 0.0f).anyTrue() || (rgba > a).anyTrue()) {
+                            SkDEBUGFAILF("F16Norm pixel [%d, %d] is unclamped: (%g, %g, %g, %g)\n",
+                                         x, y, rgba[0], rgba[1], rgba[2], rgba[3]);
+                            unclamped = true;
+                        }
+                    }
+                }
             });
         }
         done(task.sink.tag.c_str(), task.src.tag.c_str(), task.src.options.c_str(), name.c_str());
@@ -1246,12 +1254,33 @@ struct Task {
         return SkString("non-numeric");
     }
 
+    // Equivalence class to slice color type by in Gold.
+    // Basically the same as color type ignoring channel order.
+    static const char* color_depth(SkColorType ct) {
+        switch (ct) {
+            case kUnknown_SkColorType: break;
+
+            case kAlpha_8_SkColorType:      return "A8";
+            case kRGB_565_SkColorType:      return "565";
+            case kARGB_4444_SkColorType:    return "4444";
+            case kRGBA_8888_SkColorType:    return "8888";
+            case kRGB_888x_SkColorType:     return "888";
+            case kBGRA_8888_SkColorType:    return "8888";
+            case kRGBA_1010102_SkColorType: return "1010102";
+            case kRGB_101010x_SkColorType:  return "101010";
+            case kGray_8_SkColorType:       return "G8";
+            case kRGBA_F16Norm_SkColorType: return "F16Norm";  // TODO: "F16"?
+            case kRGBA_F16_SkColorType:     return "F16";
+            case kRGBA_F32_SkColorType:     return "F32";
+        }
+        return "Unknown";
+    }
+
     static void WriteToDisk(const Task& task,
                             SkString md5,
                             const char* ext,
                             SkStream* data, size_t len,
                             const SkBitmap* bitmap) {
-        SkColorSpace* cs = bitmap ? bitmap->info().colorSpace() : nullptr;
 
         JsonWriter::BitmapResult result;
         result.name          = task.src->name();
@@ -1259,9 +1288,14 @@ struct Task {
         result.sourceType    = task.src.tag;
         result.sourceOptions = task.src.options;
         result.ext           = ext;
-        result.gamut         = identify_gamut(cs);
-        result.transferFn    = identify_transfer_fn(cs);
         result.md5           = md5;
+        if (bitmap) {
+            result.gamut         = identify_gamut               (bitmap->colorSpace());
+            result.transferFn    = identify_transfer_fn         (bitmap->colorSpace());
+            result.colorType     = sk_tool_utils::colortype_name(bitmap->colorType ());
+            result.alphaType     = sk_tool_utils::alphatype_name(bitmap->alphaType ());
+            result.colorDepth    = color_depth                  (bitmap->colorType());
+        }
         JsonWriter::AddBitmapResult(result);
 
         // If an MD5 is uninteresting, we want it noted in the JSON file,

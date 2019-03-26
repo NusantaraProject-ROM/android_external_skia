@@ -862,6 +862,7 @@ static inline GrGLint config_alignment(GrPixelConfig config) {
         case kAlpha_half_GrPixelConfig:
         case kAlpha_half_as_Red_GrPixelConfig:
         case kRGBA_half_GrPixelConfig:
+        case kRGBA_half_Clamped_GrPixelConfig:
             return 2;
         case kRGBA_8888_GrPixelConfig:
         case kRGB_888_GrPixelConfig:  // We're really talking about GrColorType::kRGB_888x here.
@@ -3916,6 +3917,23 @@ bool GrGLGpu::onRegenerateMipMapLevels(GrTexture* texture) {
     glTex->setCachedParams(nullptr, params, this->getResetTimestamp());
 
     return true;
+}
+
+void GrGLGpu::querySampleLocations(
+        GrRenderTarget* renderTarget, const GrStencilSettings& stencilSettings,
+        SkTArray<SkPoint>* sampleLocations) {
+    this->flushStencil(stencilSettings);
+    this->flushHWAAState(renderTarget, true);
+    this->flushRenderTarget(static_cast<GrGLRenderTarget*>(renderTarget));
+
+    int effectiveSampleCnt;
+    GR_GL_GetIntegerv(this->glInterface(), GR_GL_SAMPLES, &effectiveSampleCnt);
+    SkASSERT(effectiveSampleCnt >= renderTarget->numStencilSamples());
+
+    sampleLocations->reset(effectiveSampleCnt);
+    for (int i = 0; i < effectiveSampleCnt; ++i) {
+        GL_CALL(GetMultisamplefv(GR_GL_SAMPLE_POSITION, i, &(*sampleLocations)[i].fX));
+    }
 }
 
 void GrGLGpu::xferBarrier(GrRenderTarget* rt, GrXferBarrierType type) {

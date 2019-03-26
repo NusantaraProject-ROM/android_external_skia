@@ -7,7 +7,6 @@
 
 #include "SkParticleEffect.h"
 
-#include "SkAnimTimer.h"
 #include "SkCanvas.h"
 #include "SkColorData.h"
 #include "SkPaint.h"
@@ -39,21 +38,20 @@ SkParticleEffect::SkParticleEffect(sk_sp<SkParticleEffectParams> params, const S
     this->setCapacity(fParams->fMaxCount);
 }
 
-void SkParticleEffect::start(const SkAnimTimer& timer, bool looping) {
+void SkParticleEffect::start(double now, bool looping) {
     fCount = 0;
-    fLastTime = fSpawnTime = timer.secs();
+    fLastTime = fSpawnTime = now;
     fSpawnRemainder = 0.0f;
     fLooping = looping;
 }
 
-void SkParticleEffect::update(const SkAnimTimer& timer) {
-    if (!timer.isRunning() || !this->isAlive() || !fParams->fDrawable) {
+void SkParticleEffect::update(double now) {
+    if (!this->isAlive() || !fParams->fDrawable) {
         return;
     }
 
-    double now = timer.secs();
     float deltaTime = static_cast<float>(now - fLastTime);
-    if (deltaTime < 0.0f) {
+    if (deltaTime <= 0.0f) {
         return;
     }
     fLastTime = now;
@@ -94,7 +92,7 @@ void SkParticleEffect::update(const SkAnimTimer& timer) {
         const int spawnBase = fCount;
 
         for (int i = 0; i < numToSpawn; ++i) {
-            // Mutate our SkRandom so each particle definitely gets a different stable generator
+            // Mutate our SkRandom so each particle definitely gets a different generator
             fRandom.nextU();
             fParticles[fCount].fAge = 0.0f;
             fParticles[fCount].fPose.fPosition = { 0.0f, 0.0f };
@@ -104,7 +102,7 @@ void SkParticleEffect::update(const SkAnimTimer& timer) {
             fParticles[fCount].fVelocity.fAngular = 0.0f;
             fParticles[fCount].fColor = { 1.0f, 1.0f, 1.0f, 1.0f };
             fParticles[fCount].fFrame = 0.0f;
-            fParticles[fCount].fRandom = fStableRandoms[fCount] = fRandom;
+            fParticles[fCount].fRandom = fRandom;
             fCount++;
         }
 
@@ -115,10 +113,12 @@ void SkParticleEffect::update(const SkAnimTimer& timer) {
             }
         }
 
-        // Now compute particle lifetimes (so the curve can refer to spawn-computed source values)
+        // Now stash copies of the random generators and compute particle lifetimes
+        // (so the curve can refer to spawn-computed source values)
         for (int i = spawnBase; i < fCount; ++i) {
             fParticles[i].fInvLifetime =
                 sk_ieee_float_divide(1.0f, fParams->fLifetime.eval(updateParams, fParticles[i]));
+            fStableRandoms[i] = fParticles[i].fRandom;
         }
     }
 
