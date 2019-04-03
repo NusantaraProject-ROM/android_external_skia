@@ -48,7 +48,7 @@ class SkTextBlobRunIterator;
  *
  * *WARNING* If you add new fields to this struct, then you may need to to update AssertEqual
  */
-class GrTextBlob : public SkNVRefCnt<GrTextBlob> {
+class GrTextBlob : public SkNVRefCnt<GrTextBlob>, public SkGlyphRunPainterInterface {
     struct Run;
 public:
     SK_DECLARE_INTERNAL_LLIST_INTERFACE(GrTextBlob);
@@ -147,7 +147,7 @@ public:
         }
 
         fRunCount++;
-        return &fRuns[fRunCount - 1];
+        return this->currentRun();
     }
 
     void setMinAndMaxScale(SkScalar scaledMin, SkScalar scaledMax) {
@@ -238,7 +238,7 @@ public:
 
     size_t size() const { return fSize; }
 
-    ~GrTextBlob() {
+    ~GrTextBlob() override {
         for (int i = 0; i < fRunCountLimit; i++) {
             fRuns[i].~Run();
         }
@@ -511,11 +511,41 @@ private:
         GrColor fColor;
     };  // Run
 
-    inline std::unique_ptr<GrAtlasTextOp> makeOp(
+    std::unique_ptr<GrAtlasTextOp> makeOp(
             const SubRun& info, int glyphCount, uint16_t run, uint16_t subRun,
             const SkMatrix& viewMatrix, SkScalar x, SkScalar y, const SkIRect& clipRect,
             const SkPaint& paint, const SkPMColor4f& filteredColor, const SkSurfaceProps&,
             const GrDistanceFieldAdjustTable*, GrTextTarget*);
+
+    // currentRun, startRun, and the process* calls are all used by the SkGlyphRunPainter, and
+    // live in SkGlyphRunPainter.cpp file.
+    Run* currentRun();
+
+    void startRun(const SkGlyphRun& glyphRun, bool useSDFT) override;
+
+    void processDeviceMasks(SkSpan<const SkGlyphPos> masks,
+                            SkStrikeInterface* strike) override;
+
+    void processSourcePaths(SkSpan<const SkGlyphPos> paths,
+                            SkStrikeInterface* strike, SkScalar cacheToSourceScale) override;
+
+    void processDevicePaths(SkSpan<const SkGlyphPos> paths) override;
+
+    void processSourceSDFT(SkSpan<const SkGlyphPos> masks,
+                           SkStrikeInterface* strike,
+                           const SkFont& runFont,
+                           SkScalar cacheToSourceScale,
+                           SkScalar minScale,
+                           SkScalar maxScale,
+                           bool hasWCoord) override;
+
+    void processSourceFallback(SkSpan<const SkGlyphPos> masks,
+                               SkStrikeInterface* strike,
+                               SkScalar cacheToSourceScale,
+                               bool hasW) override;
+
+    void processDeviceFallback(SkSpan<const SkGlyphPos> masks,
+                               SkStrikeInterface* strike) override;
 
     struct StrokeInfo {
         SkScalar fFrameWidth;

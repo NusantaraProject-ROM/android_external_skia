@@ -308,18 +308,17 @@ public:
         };
         auto state = alloc->make<State>();
 
-        p->append(SkRasterPipeline::store_rgba, state->orig_rgba);
+        p->append(SkRasterPipeline::store_src, state->orig_rgba);
         if (!fCF1) {
             fCF0->appendStages(p, dst, alloc, shaderIsOpaque);
             p->append(SkRasterPipeline::move_src_dst);
-            p->append(SkRasterPipeline::load_rgba, state->orig_rgba);
+            p->append(SkRasterPipeline::load_src, state->orig_rgba);
         } else {
-            fCF1->appendStages(p, dst, alloc, shaderIsOpaque);
-            p->append(SkRasterPipeline::store_rgba, state->filtered_rgba);
-            p->append(SkRasterPipeline::load_rgba, state->orig_rgba);
             fCF0->appendStages(p, dst, alloc, shaderIsOpaque);
-            p->append(SkRasterPipeline::move_src_dst);
-            p->append(SkRasterPipeline::load_rgba, state->filtered_rgba);
+            p->append(SkRasterPipeline::store_src, state->filtered_rgba);
+            p->append(SkRasterPipeline::load_src, state->orig_rgba);
+            fCF1->appendStages(p, dst, alloc, shaderIsOpaque);
+            p->append(SkRasterPipeline::load_dst, state->filtered_rgba);
         }
         float* storage = alloc->make<float>(fWeight);
         p->append(SkRasterPipeline::lerp_1_float, storage);
@@ -358,12 +357,12 @@ sk_sp<SkFlattenable> SkMixerColorFilter::CreateProc(SkReadBuffer& buffer) {
     sk_sp<SkColorFilter> cf0(buffer.readColorFilter());
     sk_sp<SkColorFilter> cf1(buffer.readColorFilter());
     const float weight = buffer.readScalar();
-    return MakeMixer(std::move(cf0), std::move(cf1), weight);
+    return MakeLerp(std::move(cf0), std::move(cf1), weight);
 }
 
-sk_sp<SkColorFilter> SkColorFilter::MakeMixer(sk_sp<SkColorFilter> cf0,
-                                              sk_sp<SkColorFilter> cf1,
-                                              float weight) {
+sk_sp<SkColorFilter> SkColorFilter::MakeLerp(sk_sp<SkColorFilter> cf0,
+                                             sk_sp<SkColorFilter> cf1,
+                                             float weight) {
     if (!cf0 && !cf1) {
         return nullptr;
     }

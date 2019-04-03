@@ -28,6 +28,13 @@ static const float kRec709ConversionMatrix[16] = {
     0.0f,    0.0f,    0.0f,    1.0f
 };
 
+static const float kIdentityConversionMatrix[16] = {
+    1.0f, 0.0f, 0.0f, 0.0f,
+    0.0f, 1.0f, 0.0f, 0.0f,
+    0.0f, 0.0f, 1.0f, 0.0f,
+    0.0f, 0.0f, 0.0f, 1.0f
+};
+
 std::unique_ptr<GrFragmentProcessor> GrYUVtoRGBEffect::Make(const sk_sp<GrTextureProxy> proxies[],
                                                             const SkYUVAIndex yuvaIndices[4],
                                                             SkYUVColorSpace yuvColorSpace,
@@ -60,6 +67,9 @@ std::unique_ptr<GrFragmentProcessor> GrYUVtoRGBEffect::Make(const sk_sp<GrTextur
             break;
         case kRec709_SkYUVColorSpace:
             mat.setColMajorf(kRec709ConversionMatrix);
+            break;
+        case kIdentity_SkYUVColorSpace:
+            mat.setColMajorf(kIdentityConversionMatrix);
             break;
     }
     return std::unique_ptr<GrFragmentProcessor>(new GrYUVtoRGBEffect(
@@ -98,7 +108,7 @@ public:
         (void)colorSpaceMatrix;
         fColorSpaceMatrixVar =
                 args.fUniformHandler->addUniform(kFragment_GrShaderFlag, kHalf4x4_GrSLType,
-                                                 kDefault_GrSLPrecision, "colorSpaceMatrix");
+                                                 "colorSpaceMatrix");
 
         int numSamplers = args.fTexSamplers.count();
 

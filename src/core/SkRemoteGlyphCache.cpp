@@ -210,9 +210,21 @@ SkBaseDevice* SkTextBlobCacheDiffCanvas::TrackLayerDevice::onCreateDevice(
 
 void SkTextBlobCacheDiffCanvas::TrackLayerDevice::drawGlyphRunList(
         const SkGlyphRunList& glyphRunList) {
-    for (auto& glyphRun : glyphRunList) {
-        this->processGlyphRun(glyphRunList.origin(), glyphRun, glyphRunList.paint());
-    }
+
+    #if SK_SUPPORT_GPU
+    GrTextContext::Options options;
+    options.fMinDistanceFieldFontSize = fSettings.fMinDistanceFieldFontSize;
+    options.fMaxDistanceFieldFontSize = fSettings.fMaxDistanceFieldFontSize;
+    GrTextContext::SanitizeOptions(&options);
+
+    fPainter.processGlyphRunList(glyphRunList,
+                                 this->ctm(),
+                                 this->surfaceProps(),
+                                 fSettings.fContextSupportsDistanceFieldText,
+                                 options,
+                                 nullptr);
+    #endif  // SK_SUPPORT_GPU
+
 }
 
 // -- SkTextBlobCacheDiffCanvas -------------------------------------------------------------------
@@ -581,6 +593,44 @@ void SkStrikeServer::SkGlyphCacheState::writeGlyphPath(const SkPackedGlyphID& gl
     size_t pathSize = path.writeToMemory(nullptr);
     serializer->write<uint64_t>(pathSize);
     path.writeToMemory(serializer->allocate(pathSize, kPathAlignment));
+}
+
+
+// This version of glyphMetrics only adds entries to result if their data need to be sent to the
+// GPU process.
+int SkStrikeServer::SkGlyphCacheState::glyphMetrics(
+        const SkGlyphID glyphIDs[], const SkPoint positions[], int n, SkGlyphPos result[]) {
+
+    int glyphsToSendCount = 0;
+    const SkPoint* posCursor = positions;
+    for (int i = 0; i < n; i++) {
+        SkPoint glyphPos = *posCursor++;
+        SkGlyphID glyphID = glyphIDs[i];
+        SkIPoint lookupPoint = SkStrikeCommon::SubpixelLookup(fAxisAlignmentForHText, glyphPos);
+        SkPackedGlyphID packedGlyphID = fIsSubpixel ? SkPackedGlyphID{glyphID, lookupPoint}
+                                                    : SkPackedGlyphID{glyphID};
+
+        // Check the cache for the glyph.
+        SkGlyph* glyphPtr = fGlyphMap.findOrNull(packedGlyphID);
+
+        // Has this glyph ever been seen before?
+        if (glyphPtr == nullptr) {
+
+            // Never seen before. Make a new glyph.
+            glyphPtr = fAlloc.make<SkGlyph>(packedGlyphID);
+            fGlyphMap.set(glyphPtr);
+            this->ensureScalerContext();
+            fContext->getMetrics(glyphPtr);
+
+            result[glyphsToSendCount++] = {glyphPtr, glyphPos};
+
+            // Make sure to send the glyph to the GPU because we always send the image for a glyph.
+            fCachedGlyphImages.add(packedGlyphID);
+            fPendingGlyphImages.push_back(packedGlyphID);
+        }
+    }
+
+    return glyphsToSendCount;
 }
 
 // SkStrikeClient -----------------------------------------

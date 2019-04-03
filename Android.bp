@@ -570,6 +570,7 @@ cc_library_static {
           "src/gpu/GrContext_Base.cpp",
           "src/gpu/GrDDLContext.cpp",
           "src/gpu/GrDefaultGeoProcFactory.cpp",
+          "src/gpu/GrDeinstantiateProxyTracker.cpp",
           "src/gpu/GrDistanceFieldGenFromVector.cpp",
           "src/gpu/GrDrawOpAtlas.cpp",
           "src/gpu/GrDrawOpTest.cpp",
@@ -617,6 +618,7 @@ cc_library_static {
           "src/gpu/GrResourceProvider.cpp",
           "src/gpu/GrSKSLPrettyPrint.cpp",
           "src/gpu/GrSWMaskHelper.cpp",
+          "src/gpu/GrSamplePatternDictionary.cpp",
           "src/gpu/GrShaderCaps.cpp",
           "src/gpu/GrShaderVar.cpp",
           "src/gpu/GrShape.cpp",
@@ -998,6 +1000,9 @@ cc_defaults {
             "libvulkan",
             "libnativewindow",
         ],
+        export_shared_lib_headers: [
+            "libvulkan",
+        ],
       },
       host: {
         static_libs: [
@@ -1010,7 +1015,9 @@ cc_defaults {
         ],
       },
       windows: {
-        enabled: true,
+        // clang-r353983 emits error when building Skia for Windows. Do not
+        // build it for now until the compiler issue is addressed.
+        // enabled: true,
         host_ldlibs: [
             "-lgdi32",
             "-loleaut32",
@@ -1231,6 +1238,7 @@ cc_test {
         "gm/crbug_899512.cpp",
         "gm/crbug_905548.cpp",
         "gm/crbug_918512.cpp",
+        "gm/crbug_938592.cpp",
         "gm/croppedrects.cpp",
         "gm/crosscontextimage.cpp",
         "gm/cubicpaths.cpp",
@@ -1408,6 +1416,7 @@ cc_test {
         "gm/rrectclipdrawpaint.cpp",
         "gm/rrects.cpp",
         "gm/runtimecolorfilter.cpp",
+        "gm/samplelocations.cpp",
         "gm/samplerstress.cpp",
         "gm/savelayer.cpp",
         "gm/scaledemoji.cpp",
@@ -1747,6 +1756,7 @@ cc_test {
         "tests/SRGBTest.cpp",
         "tests/SVGDeviceTest.cpp",
         "tests/SafeMathTest.cpp",
+        "tests/SamplePatternDictionaryTest.cpp",
         "tests/ScalarTest.cpp",
         "tests/ScaleToSidesTest.cpp",
         "tests/SerialProcsTest.cpp",
@@ -2181,6 +2191,7 @@ cc_test {
         "gm/crbug_899512.cpp",
         "gm/crbug_905548.cpp",
         "gm/crbug_918512.cpp",
+        "gm/crbug_938592.cpp",
         "gm/croppedrects.cpp",
         "gm/crosscontextimage.cpp",
         "gm/cubicpaths.cpp",
@@ -2358,6 +2369,7 @@ cc_test {
         "gm/rrectclipdrawpaint.cpp",
         "gm/rrects.cpp",
         "gm/runtimecolorfilter.cpp",
+        "gm/samplelocations.cpp",
         "gm/samplerstress.cpp",
         "gm/savelayer.cpp",
         "gm/scaledemoji.cpp",

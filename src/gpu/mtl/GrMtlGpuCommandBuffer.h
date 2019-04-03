@@ -64,8 +64,7 @@ public:
     void submit();
 
 private:
-    void internalBegin();
-    void internalEnd();
+    void addNullCommand();
 
     GrGpu* gpu() override { return fGpu; }
 
@@ -126,8 +125,8 @@ private:
     GrGpuRTCommandBuffer::LoadAndStoreInfo        fColorLoadAndStoreInfo;
     GrGpuRTCommandBuffer::StencilLoadAndStoreInfo fStencilLoadAndStoreInfo;
 
-    __strong id<MTLRenderCommandEncoder> fActiveRenderCmdEncoder;
-    MTLRenderPassDescriptor* fRenderPassDesc;
+    id<MTLRenderCommandEncoder> fActiveRenderCmdEncoder;
+    MTLRenderPassDescriptor*    fRenderPassDesc;
 
     struct CommandBufferInfo {
         SkRect fBounds;

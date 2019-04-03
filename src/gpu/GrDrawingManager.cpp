@@ -34,16 +34,9 @@
 #include "ccpr/GrCoverageCountingPathRenderer.h"
 #include "text/GrTextContext.h"
 
-GrDrawingManager::OpListDAG::OpListDAG(bool explicitlyAllocating,
-                                       GrContextOptions::Enable sortOpLists) {
-    if (GrContextOptions::Enable::kNo == sortOpLists) {
-        fSortOpLists = false;
-    } else if (GrContextOptions::Enable::kYes == sortOpLists) {
-        fSortOpLists = true;
-    } else {
-        // By default we always enable sorting when we're explicitly allocating GPU resources
-        fSortOpLists = explicitlyAllocating;
-    }
+GrDrawingManager::OpListDAG::OpListDAG(bool explicitlyAllocating, bool sortOpLists)
+        : fSortOpLists(sortOpLists) {
+    SkASSERT(!sortOpLists || explicitlyAllocating);
 }
 
 GrDrawingManager::OpListDAG::~OpListDAG() {}
@@ -151,7 +144,7 @@ GrDrawingManager::GrDrawingManager(GrRecordingContext* context,
                                    const GrPathRendererChain::Options& optionsForPathRendererChain,
                                    const GrTextContext::Options& optionsForTextContext,
                                    bool explicitlyAllocating,
-                                   GrContextOptions::Enable sortOpLists,
+                                   bool sortOpLists,
                                    GrContextOptions::Enable reduceOpListSplitting)
         : fContext(context)
         , fOptionsForPathRendererChain(optionsForPathRendererChain)
@@ -292,7 +285,7 @@ GrSemaphoresSubmitted GrDrawingManager::flush(GrSurfaceProxy* proxy,
     bool flushed = false;
 
     {
-        GrResourceAllocator alloc(resourceProvider);
+        GrResourceAllocator alloc(resourceProvider, flushState.deinstantiateProxyTracker());
         for (int i = 0; i < fDAG.numOpLists(); ++i) {
             if (fDAG.opList(i)) {
                 fDAG.opList(i)->gatherProxyIntervals(&alloc);
@@ -343,13 +336,20 @@ GrSemaphoresSubmitted GrDrawingManager::flush(GrSurfaceProxy* proxy,
     GrSemaphoresSubmitted result = gpu->finishFlush(proxy, access, flags, numSemaphores,
                                                     backendSemaphores);
 
+    flushState.deinstantiateProxyTracker()->deinstantiateAllProxies();
+
     // Give the cache a chance to purge resources that become purgeable due to flushing.
     if (flushed) {
         resourceCache->purgeAsNeeded();
+        flushed = false;
     }
     for (GrOnFlushCallbackObject* onFlushCBObject : fOnFlushCBObjects) {
         onFlushCBObject->postFlush(fTokenTracker.nextTokenToFlush(), fFlushingOpListIDs.begin(),
                                    fFlushingOpListIDs.count());
+        flushed = true;
+    }
+    if (flushed) {
+        resourceCache->purgeAsNeeded();
     }
     fFlushingOpListIDs.reset();
     fFlushing = false;
