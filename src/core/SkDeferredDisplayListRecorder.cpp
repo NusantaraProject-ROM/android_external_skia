@@ -34,8 +34,7 @@ sk_sp<SkImage> SkDeferredDisplayListRecorder::makePromiseTexture(
         PromiseImageTextureFulfillProc textureFulfillProc,
         PromiseImageTextureReleaseProc textureReleaseProc,
         PromiseImageTextureDoneProc textureDoneProc,
-        PromiseImageTextureContext textureContext,
-        DelayReleaseCallback delayReleaseCallback) {
+        PromiseImageTextureContext textureContext) {
     return nullptr;
 }
 
@@ -51,8 +50,7 @@ sk_sp<SkImage> SkDeferredDisplayListRecorder::makeYUVAPromiseTexture(
         PromiseImageTextureFulfillProc textureFulfillProc,
         PromiseImageTextureReleaseProc textureReleaseProc,
         PromiseImageTextureDoneProc textureDoneProc,
-        PromiseImageTextureContext textureContexts[],
-        DelayReleaseCallback delayReleaseCallback) {
+        PromiseImageTextureContext textureContexts[]) {
     return nullptr;
 }
 
@@ -117,6 +115,18 @@ bool SkDeferredDisplayListRecorder::init() {
         }
     }
 
+    if (fCharacterization.vulkanSecondaryCBCompatible()) {
+        // Because of the restrictive API allowed for a GrVkSecondaryCBDrawContext, we know ahead
+        // of time that we don't be able to support certain parameter combinations. Specifially we
+        // fail on usesGLFBO0 since we can't mix GL and Vulkan. We can't have a texturable object.
+        // And finally the GrVkSecondaryCBDrawContext always assumes a top left origin.
+        if (usesGLFBO0 ||
+            fCharacterization.isTextureable() ||
+            fCharacterization.origin() == kBottomLeft_GrSurfaceOrigin) {
+            return false;
+        }
+    }
+
     GrSurfaceDesc desc;
     desc.fFlags = kRenderTarget_GrSurfaceFlag;
     desc.fWidth = fCharacterization.width();
@@ -165,7 +175,8 @@ bool SkDeferredDisplayListRecorder::init() {
             surfaceFlags,
             optionalTextureInfo,
             SkBackingFit::kExact,
-            SkBudgeted::kYes);
+            SkBudgeted::kYes,
+            fCharacterization.vulkanSecondaryCBCompatible());
 
     sk_sp<GrSurfaceContext> c = fContext->priv().makeWrappedSurfaceContext(
                                                                  std::move(proxy),
@@ -222,8 +233,7 @@ sk_sp<SkImage> SkDeferredDisplayListRecorder::makePromiseTexture(
         PromiseImageTextureFulfillProc textureFulfillProc,
         PromiseImageTextureReleaseProc textureReleaseProc,
         PromiseImageTextureDoneProc textureDoneProc,
-        PromiseImageTextureContext textureContext,
-        DelayReleaseCallback delayReleaseCallback) {
+        PromiseImageTextureContext textureContext) {
     if (!fContext) {
         return nullptr;
     }
@@ -240,8 +250,7 @@ sk_sp<SkImage> SkDeferredDisplayListRecorder::makePromiseTexture(
                                            textureFulfillProc,
                                            textureReleaseProc,
                                            textureDoneProc,
-                                           textureContext,
-                                           delayReleaseCallback);
+                                           textureContext);
 }
 
 sk_sp<SkImage> SkDeferredDisplayListRecorder::makeYUVAPromiseTexture(
@@ -256,8 +265,7 @@ sk_sp<SkImage> SkDeferredDisplayListRecorder::makeYUVAPromiseTexture(
         PromiseImageTextureFulfillProc textureFulfillProc,
         PromiseImageTextureReleaseProc textureReleaseProc,
         PromiseImageTextureDoneProc textureDoneProc,
-        PromiseImageTextureContext textureContexts[],
-        DelayReleaseCallback delayReleaseCallback) {
+        PromiseImageTextureContext textureContexts[]) {
     if (!fContext) {
         return nullptr;
     }
@@ -274,8 +282,7 @@ sk_sp<SkImage> SkDeferredDisplayListRecorder::makeYUVAPromiseTexture(
                                                    textureFulfillProc,
                                                    textureReleaseProc,
                                                    textureDoneProc,
-                                                   textureContexts,
-                                                   delayReleaseCallback);
+                                                   textureContexts);
 }
 
 #endif

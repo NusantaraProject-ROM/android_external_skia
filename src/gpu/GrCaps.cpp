@@ -51,7 +51,6 @@ GrCaps::GrCaps(const GrContextOptions& options) {
     fMaxRenderTargetSize = 1;
     fMaxPreferredRenderTargetSize = 1;
     fMaxTextureSize = 1;
-    fMaxRasterSamples = 0;
     fMaxWindowRectangles = 0;
 
     // An default count of 4 was chosen because of the common pattern in Blink of:
@@ -149,6 +148,7 @@ static const char* pixel_config_name(GrPixelConfig config) {
         case kAlpha_half_GrPixelConfig: return "AlphaHalf";
         case kAlpha_half_as_Red_GrPixelConfig: return "AlphaHalf_asRed";
         case kRGBA_half_GrPixelConfig: return "RGBAHalf";
+        case kRGBA_half_Clamped_GrPixelConfig: return "RGBAHalfClamped";
         case kRGB_ETC1_GrPixelConfig: return "RGBETC1";
     }
     SK_ABORT("Invalid pixel config");
@@ -220,7 +220,6 @@ void GrCaps::dumpJSON(SkJSONWriter* writer) const {
     writer->appendS32("Max Texture Size", fMaxTextureSize);
     writer->appendS32("Max Render Target Size", fMaxRenderTargetSize);
     writer->appendS32("Max Preferred Render Target Size", fMaxPreferredRenderTargetSize);
-    writer->appendS32("Max Raster Samples", fMaxRasterSamples);
     writer->appendS32("Max Window Rectangles", fMaxWindowRectangles);
     writer->appendS32("Max Clip Analytic Fragment Processors", fMaxClipAnalyticFPs);
 

@@ -14,30 +14,33 @@
 #include "GrMtlPipelineState.h"
 #include "GrMtlUtil.h"
 
+#include "GrRenderTargetPriv.h"
+
 #import <simd/simd.h>
 
 GrMtlPipelineState* GrMtlPipelineStateBuilder::CreatePipelineState(
+        GrMtlGpu* gpu,
         GrRenderTarget* renderTarget, GrSurfaceOrigin origin,
         const GrPrimitiveProcessor& primProc,
         const GrTextureProxy* const primProcProxies[],
         const GrPipeline& pipeline,
-        GrProgramDesc* desc,
-        GrMtlGpu* gpu) {
-    GrMtlPipelineStateBuilder builder(renderTarget, origin, primProc, primProcProxies, pipeline,
-                                      desc, gpu);
+        Desc* desc) {
+    GrMtlPipelineStateBuilder builder(gpu, renderTarget, origin, pipeline, primProc,
+                                      primProcProxies, desc);
 
     if (!builder.emitAndInstallProcs()) {
         return nullptr;
     }
-    return builder.finalize(primProc, pipeline, desc);
+    return builder.finalize(renderTarget, primProc, pipeline, desc);
 }
 
-GrMtlPipelineStateBuilder::GrMtlPipelineStateBuilder(GrRenderTarget* renderTarget, GrSurfaceOrigin origin,
+GrMtlPipelineStateBuilder::GrMtlPipelineStateBuilder(GrMtlGpu* gpu,
+                                                     GrRenderTarget* renderTarget,
+                                                     GrSurfaceOrigin origin,
+                                                     const GrPipeline& pipeline,
                                                      const GrPrimitiveProcessor& primProc,
                                                      const GrTextureProxy* const primProcProxies[],
-                                                     const GrPipeline& pipeline,
-                                                     GrProgramDesc* desc,
-                                                     GrMtlGpu* gpu)
+                                                     GrProgramDesc* desc)
         : INHERITED(renderTarget, origin, primProc, primProcProxies, pipeline, desc)
         , fGpu(gpu)
         , fUniformHandler(this)
@@ -314,9 +317,10 @@ uint32_t buffer_size(uint32_t offset, uint32_t maxAlignment) {
     return offset + offsetDiff;
 }
 
-GrMtlPipelineState* GrMtlPipelineStateBuilder::finalize(const GrPrimitiveProcessor& primProc,
+GrMtlPipelineState* GrMtlPipelineStateBuilder::finalize(GrRenderTarget* renderTarget,
+                                                        const GrPrimitiveProcessor& primProc,
                                                         const GrPipeline& pipeline,
-                                                        GrProgramDesc* desc) {
+                                                        Desc* desc) {
     auto pipelineDescriptor = [[MTLRenderPipelineDescriptor alloc] init];
 
     fVS.extensions().appendf("#extension GL_ARB_separate_shader_objects : enable\n");
@@ -332,6 +336,7 @@ GrMtlPipelineState* GrMtlPipelineStateBuilder::finalize(const GrPrimitiveProcess
     settings.fSharpenTextures = fGpu->getContext()->priv().options().fSharpenMipmappedTextures;
     SkASSERT(!this->fragColorIsInOut());
 
+    // TODO: Store shaders in cache
     id<MTLLibrary> vertexLibrary = nil;
     id<MTLLibrary> fragmentLibrary = nil;
     vertexLibrary = this->createMtlShaderLibrary(fVS,
@@ -354,6 +359,11 @@ GrMtlPipelineState* GrMtlPipelineStateBuilder::finalize(const GrPrimitiveProcess
     pipelineDescriptor.fragmentFunction = fragmentFunction;
     pipelineDescriptor.vertexDescriptor = create_vertex_descriptor(primProc);
     pipelineDescriptor.colorAttachments[0] = create_color_attachment(this->config(), pipeline);
+    bool hasStencilAttachment = SkToBool(renderTarget->renderTargetPriv().getStencilAttachment());
+    GrMtlCaps* mtlCaps = (GrMtlCaps*)this->caps();
+    pipelineDescriptor.stencilAttachmentPixelFormat =
+        hasStencilAttachment ? mtlCaps->preferredStencilFormat().fInternalFormat
+                             : MTLPixelFormatInvalid;
 
     SkASSERT(pipelineDescriptor.vertexFunction);
     SkASSERT(pipelineDescriptor.fragmentFunction);
@@ -391,4 +401,38 @@ GrMtlPipelineState* GrMtlPipelineStateBuilder::finalize(const GrPrimitiveProcess
                                   std::move(fXferProcessor),
                                   std::move(fFragmentProcessors),
                                   fFragmentProcessorCnt);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+bool GrMtlPipelineStateBuilder::Desc::Build(Desc* desc,
+                                            GrRenderTarget* renderTarget,
+                                            const GrPrimitiveProcessor& primProc,
+                                            const GrPipeline& pipeline,
+                                            GrPrimitiveType primitiveType,
+                                            GrMtlGpu* gpu) {
+    if (!INHERITED::Build(desc, renderTarget, primProc,
+                          GrPrimitiveType::kLines == primitiveType, pipeline, gpu)) {
+        return false;
+    }
+
+    GrProcessorKeyBuilder b(&desc->key());
+
+    int keyLength = desc->key().count();
+    SkASSERT(0 == (keyLength % 4));
+    desc->fShaderKeyLength = SkToU32(keyLength);
+
+    b.add32(renderTarget->config());
+    b.add32(renderTarget->numColorSamples());
+    bool hasStencilAttachment = SkToBool(renderTarget->renderTargetPriv().getStencilAttachment());
+    b.add32(hasStencilAttachment ? gpu->mtlCaps().preferredStencilFormat().fInternalFormat
+                                 : MTLPixelFormatInvalid);
+    b.add32((uint32_t)pipeline.isStencilEnabled());
+    // Stencil samples don't seem to be tracked in the MTLRenderPipeline
+
+    b.add32(pipeline.getBlendInfoKey());
+
+    b.add32((uint32_t)primitiveType);
+
+    return true;
 }

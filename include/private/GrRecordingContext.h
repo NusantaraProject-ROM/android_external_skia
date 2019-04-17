@@ -32,6 +32,7 @@ protected:
 
     GrRecordingContext(GrBackendApi, const GrContextOptions&, uint32_t contextID);
     bool init(sk_sp<const GrCaps>, sk_sp<GrSkSLFPFactoryCache>) override;
+    void setupDrawingManager(bool explicitlyAllocate, bool sortOpLists);
 
     void abandonContext() override;
 
@@ -40,7 +41,7 @@ protected:
     sk_sp<GrOpMemoryPool> refOpMemoryPool();
     GrOpMemoryPool* opMemoryPool();
 
-    GrStrikeCache* getGlyphCache() { return fGlyphCache.get(); }
+    GrStrikeCache* getGrStrikeCache() { return fStrikeCache.get(); }
     GrTextBlobCache* getTextBlobCache();
     const GrTextBlobCache* getTextBlobCache() const;
 
@@ -109,7 +110,7 @@ private:
     // All the GrOp-derived classes use this pool.
     sk_sp<GrOpMemoryPool>             fOpMemoryPool;
 
-    std::unique_ptr<GrStrikeCache>    fGlyphCache;
+    std::unique_ptr<GrStrikeCache>    fStrikeCache;
     std::unique_ptr<GrTextBlobCache>  fTextBlobCache;
 
     GrAuditTrail                      fAuditTrail;

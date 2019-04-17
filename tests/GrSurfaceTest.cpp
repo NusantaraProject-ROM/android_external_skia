@@ -99,6 +99,7 @@ DEF_GPUTEST_FOR_ALL_CONTEXTS(GrSurfaceRenderability, reporter, ctxInfo) {
         kAlpha_half_GrPixelConfig,
         kAlpha_half_as_Red_GrPixelConfig,
         kRGBA_half_GrPixelConfig,
+        kRGBA_half_Clamped_GrPixelConfig,
         kRGB_ETC1_GrPixelConfig,
     };
     GR_STATIC_ASSERT(kGrPixelConfigCnt == SK_ARRAY_COUNT(configs));
@@ -361,8 +362,7 @@ static sk_sp<GrTexture> make_wrapped_texture(GrContext* context, bool renderable
         }
         delete releaseContext;
     };
-    texture->setRelease(
-            sk_make_sp<GrReleaseProcHelper>(release, new ReleaseContext{context, backendTexture}));
+    texture->setRelease(release, new ReleaseContext{context, backendTexture});
     return texture;
 }
 
@@ -424,7 +424,8 @@ DEF_GPUTEST(TextureIdleProcTest, reporter, options) {
                 // Makes a texture, possibly adds a key, and sets the callback.
                 auto make = [&m, &keyAdder, &proc, &idleIDs](GrContext* context, int num) {
                     sk_sp<GrTexture> texture = m(context);
-                    texture->setIdleProc(proc, new Context{&idleIDs, num});
+                    texture->addIdleProc(
+                            sk_make_sp<GrRefCntedCallback>(proc, new Context{&idleIDs, num}));
                     keyAdder(texture.get());
                     return texture;
                 };
@@ -610,7 +611,7 @@ DEF_GPUTEST_FOR_ALL_CONTEXTS(TextureIdleProcCacheManipulationTest, reporter, con
             auto idleTexture = idleMaker(context, false);
             auto otherTexture = otherMaker(context, false);
             otherTexture->ref();
-            idleTexture->setIdleProc(idleProc, otherTexture.get());
+            idleTexture->addIdleProc(sk_make_sp<GrRefCntedCallback>(idleProc, otherTexture.get()));
             otherTexture.reset();
             idleTexture.reset();
         }
@@ -627,7 +628,7 @@ DEF_GPUTEST_FOR_ALL_CONTEXTS(TextureIdleProcFlushTest, reporter, contextInfo) {
 
     for (const auto& idleMaker : {make_wrapped_texture, make_normal_texture}) {
         auto idleTexture = idleMaker(context, false);
-        idleTexture->setIdleProc(idleProc, context);
+        idleTexture->addIdleProc(sk_make_sp<GrRefCntedCallback>(idleProc, context));
         auto info = SkImageInfo::Make(10, 10, kRGBA_8888_SkColorType, kPremul_SkAlphaType);
         auto surf = SkSurface::MakeRenderTarget(context, SkBudgeted::kNo, info, 1, nullptr);
         // We'll draw two images to the canvas. One is a normal texture-backed image. The other is
@@ -660,7 +661,7 @@ DEF_GPUTEST_FOR_ALL_CONTEXTS(TextureIdleProcRerefTest, reporter, contextInfo) {
     // called).
     idleTexture->resourcePriv().removeScratchKey();
     context->flush();
-    idleTexture->setIdleProc(idleProc, idleTexture.get());
+    idleTexture->addIdleProc(sk_make_sp<GrRefCntedCallback>(idleProc, idleTexture.get()));
     idleTexture->setRelease(releaseProc, &isReleased);
     auto* raw = idleTexture.get();
     idleTexture.reset();

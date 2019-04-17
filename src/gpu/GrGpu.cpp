@@ -379,7 +379,26 @@ void GrGpu::didWriteToSurface(GrSurface* surface, GrSurfaceOrigin origin, const 
     }
 }
 
-GrSemaphoresSubmitted GrGpu::finishFlush(int numSemaphores,
+int GrGpu::findOrAssignSamplePatternKey(GrRenderTarget* renderTarget, const GrPipeline& pipeline) {
+    SkASSERT(this->caps()->sampleLocationsSupport());
+    SkASSERT(renderTarget->numStencilSamples() > 1);
+    SkASSERT(pipeline.isHWAntialiasState());
+
+    GrStencilSettings stencil;
+    if (pipeline.isStencilEnabled()) {
+        SkASSERT(renderTarget->renderTargetPriv().getStencilAttachment());
+        stencil.reset(*pipeline.getUserStencil(), pipeline.hasStencilClip(),
+                      renderTarget->renderTargetPriv().numStencilBits());
+    }
+
+    SkSTArray<16, SkPoint> sampleLocations;
+    this->querySampleLocations(renderTarget, stencil, &sampleLocations);
+    return fSamplePatternDictionary.findOrAssignSamplePatternKey(sampleLocations);
+}
+
+GrSemaphoresSubmitted GrGpu::finishFlush(GrSurfaceProxy* proxy,
+                                         SkSurface::BackendSurfaceAccess access,
+                                         SkSurface::FlushFlags flags, int numSemaphores,
                                          GrBackendSemaphore backendSemaphores[]) {
     this->stats()->incNumFinishFlushes();
     GrResourceProvider* resourceProvider = fContext->priv().resourceProvider();
@@ -401,7 +420,8 @@ GrSemaphoresSubmitted GrGpu::finishFlush(int numSemaphores,
             }
         }
     }
-    this->onFinishFlush((numSemaphores > 0 && this->caps()->fenceSyncSupport()));
+    this->onFinishFlush(proxy, access, flags,
+                        (numSemaphores > 0 && this->caps()->fenceSyncSupport()));
     return this->caps()->fenceSyncSupport() ? GrSemaphoresSubmitted::kYes
                                             : GrSemaphoresSubmitted::kNo;
 }

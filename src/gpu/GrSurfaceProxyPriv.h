@@ -61,8 +61,7 @@ public:
     }
 
     bool isSafeToDeinstantiate() const {
-        return SkToBool(fProxy->fTarget) &&
-               SkToBool(fProxy->fLazyInstantiateCallback) &&
+        return SkToBool(fProxy->fTarget) && SkToBool(fProxy->fLazyInstantiateCallback) &&
                GrSurfaceProxy::LazyInstantiationType::kDeinstantiate == lazyInstantiationType();
     }
 

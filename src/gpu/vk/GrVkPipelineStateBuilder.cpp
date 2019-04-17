@@ -331,15 +331,9 @@ GrVkPipelineState* GrVkPipelineStateBuilder::finalize(const GrStencilSettings& s
             this->storeShadersInCache(vert, vertInputs, frag, fragInputs, geom, geomInputs);
         }
     }
-    GrVkPipeline* pipeline = resourceProvider.createPipeline(this->numColorSamples(),
-                                                             fPrimProc,
-                                                             fPipeline,
-                                                             stencil,
-                                                             shaderStageInfo,
-                                                             numShaderStages,
-                                                             primitiveType,
-                                                             compatibleRenderPass,
-                                                             pipelineLayout);
+    GrVkPipeline* pipeline = resourceProvider.createPipeline(
+            this->renderTarget()->numColorSamples(), fPrimProc, fPipeline, stencil, shaderStageInfo,
+            numShaderStages, primitiveType, compatibleRenderPass, pipelineLayout);
     GR_VK_CALL(fGpu->vkInterface(), DestroyShaderModule(fGpu->device(), vertShaderModule,
                                                         nullptr));
     GR_VK_CALL(fGpu->vkInterface(), DestroyShaderModule(fGpu->device(), fragShaderModule,
@@ -374,23 +368,6 @@ GrVkPipelineState* GrVkPipelineStateBuilder::finalize(const GrStencilSettings& s
 
 //////////////////////////////////////////////////////////////////////////////
 
-uint32_t get_blend_info_key(const GrPipeline& pipeline) {
-    GrXferProcessor::BlendInfo blendInfo;
-    pipeline.getXferProcessor().getBlendInfo(&blendInfo);
-
-    static const uint32_t kBlendWriteShift = 1;
-    static const uint32_t kBlendCoeffShift = 5;
-    GR_STATIC_ASSERT(kLast_GrBlendCoeff < (1 << kBlendCoeffShift));
-    GR_STATIC_ASSERT(kFirstAdvancedGrBlendEquation - 1 < 4);
-
-    uint32_t key = blendInfo.fWriteColor;
-    key |= (blendInfo.fSrcBlend << kBlendWriteShift);
-    key |= (blendInfo.fDstBlend << (kBlendWriteShift + kBlendCoeffShift));
-    key |= (blendInfo.fEquation << (kBlendWriteShift + 2 * kBlendCoeffShift));
-
-    return key;
-}
-
 bool GrVkPipelineStateBuilder::Desc::Build(Desc* desc,
                                            GrRenderTarget* renderTarget,
                                            const GrPrimitiveProcessor& primProc,
@@ -398,7 +375,7 @@ bool GrVkPipelineStateBuilder::Desc::Build(Desc* desc,
                                            const GrStencilSettings& stencil,
                                            GrPrimitiveType primitiveType,
                                            GrVkGpu* gpu) {
-    if (!INHERITED::Build(desc, renderTarget->config(), primProc,
+    if (!INHERITED::Build(desc, renderTarget, primProc,
                           primitiveType == GrPrimitiveType::kPoints, pipeline, gpu)) {
         return false;
     }
@@ -415,7 +392,7 @@ bool GrVkPipelineStateBuilder::Desc::Build(Desc* desc,
 
     stencil.genKey(&b);
 
-    b.add32(get_blend_info_key(pipeline));
+    b.add32(pipeline.getBlendInfoKey());
 
     b.add32((uint32_t)primitiveType);
 

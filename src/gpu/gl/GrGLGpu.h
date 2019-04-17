@@ -184,6 +184,9 @@ private:
 
     void onResetTextureBindings() override;
 
+    void querySampleLocations(
+            GrRenderTarget*, const GrStencilSettings&, SkTArray<SkPoint>*) override;
+
     void xferBarrier(GrRenderTarget*, GrXferBarrierType) override;
 
     sk_sp<GrTexture> onCreateTexture(const GrSurfaceDesc& desc, SkBudgeted budgeted,
@@ -286,7 +289,8 @@ private:
 
     void flushBlend(const GrXferProcessor::BlendInfo& blendInfo, const GrSwizzle&);
 
-    void onFinishFlush(bool insertedSemaphores) override;
+    void onFinishFlush(GrSurfaceProxy*, SkSurface::BackendSurfaceAccess access,
+                       SkSurface::FlushFlags flags, bool insertedSemaphores) override;
 
     bool copySurfaceAsDraw(GrSurface* dst, GrSurfaceOrigin dstOrigin,
                            GrSurface* src, GrSurfaceOrigin srcOrigin,
@@ -376,7 +380,7 @@ private:
     void disableStencil();
 
     // rt is used only if useHWAA is true.
-    void flushHWAAState(GrRenderTarget* rt, bool useHWAA, bool stencilEnabled);
+    void flushHWAAState(GrRenderTarget* rt, bool useHWAA);
 
     void flushFramebufferSRGB(bool enable);
 
@@ -622,11 +626,6 @@ private:
     GrGLfloat fHWClearColor[4];
 
     GrGLuint fBoundDrawFramebuffer = 0;
-
-    // EXT_raster_multisample.
-    TriState                                fHWRasterMultisampleEnabled;
-    int                                     fHWNumRasterSamples;
-    ///@}
 
     /** IDs for copy surface program. (3 sampler types) */
     struct {

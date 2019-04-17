@@ -7,6 +7,7 @@
 
 #include "SkArenaAlloc.h"
 #include "SkColorFilter.h"
+#include "SkColorFilterPriv.h"
 #include "SkColorSpacePriv.h"
 #include "SkColorSpaceXformSteps.h"
 #include "SkColorSpaceXformer.h"
@@ -21,6 +22,7 @@
 
 #if SK_SUPPORT_GPU
 #include "GrFragmentProcessor.h"
+#include "effects/GrMixerEffect.h"
 #endif
 
 bool SkColorFilter::asColorMode(SkColor*, SkBlendMode*) const {
@@ -306,18 +308,17 @@ public:
         };
         auto state = alloc->make<State>();
 
-        p->append(SkRasterPipeline::store_rgba, state->orig_rgba);
+        p->append(SkRasterPipeline::store_src, state->orig_rgba);
         if (!fCF1) {
             fCF0->appendStages(p, dst, alloc, shaderIsOpaque);
             p->append(SkRasterPipeline::move_src_dst);
-            p->append(SkRasterPipeline::load_rgba, state->orig_rgba);
+            p->append(SkRasterPipeline::load_src, state->orig_rgba);
         } else {
-            fCF1->appendStages(p, dst, alloc, shaderIsOpaque);
-            p->append(SkRasterPipeline::store_rgba, state->filtered_rgba);
-            p->append(SkRasterPipeline::load_rgba, state->orig_rgba);
             fCF0->appendStages(p, dst, alloc, shaderIsOpaque);
-            p->append(SkRasterPipeline::move_src_dst);
-            p->append(SkRasterPipeline::load_rgba, state->filtered_rgba);
+            p->append(SkRasterPipeline::store_src, state->filtered_rgba);
+            p->append(SkRasterPipeline::load_src, state->orig_rgba);
+            fCF1->appendStages(p, dst, alloc, shaderIsOpaque);
+            p->append(SkRasterPipeline::load_dst, state->filtered_rgba);
         }
         float* storage = alloc->make<float>(fWeight);
         p->append(SkRasterPipeline::lerp_1_float, storage);
@@ -325,8 +326,11 @@ public:
 
 #if SK_SUPPORT_GPU
     std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(
-            GrRecordingContext* context, const GrColorSpaceInfo&) const override {
-        return nullptr;
+            GrRecordingContext* context, const GrColorSpaceInfo& dstColorSpaceInfo) const override {
+        return GrMixerEffect::Make(
+                fCF0->asFragmentProcessor(context, dstColorSpaceInfo),
+                fCF1 ? fCF1->asFragmentProcessor(context, dstColorSpaceInfo) : nullptr,
+                fWeight);
     }
 #endif
 
@@ -353,12 +357,12 @@ sk_sp<SkFlattenable> SkMixerColorFilter::CreateProc(SkReadBuffer& buffer) {
     sk_sp<SkColorFilter> cf0(buffer.readColorFilter());
     sk_sp<SkColorFilter> cf1(buffer.readColorFilter());
     const float weight = buffer.readScalar();
-    return MakeMixer(std::move(cf0), std::move(cf1), weight);
+    return MakeLerp(std::move(cf0), std::move(cf1), weight);
 }
 
-sk_sp<SkColorFilter> SkColorFilter::MakeMixer(sk_sp<SkColorFilter> cf0,
-                                              sk_sp<SkColorFilter> cf1,
-                                              float weight) {
+sk_sp<SkColorFilter> SkColorFilter::MakeLerp(sk_sp<SkColorFilter> cf0,
+                                             sk_sp<SkColorFilter> cf1,
+                                             float weight) {
     if (!cf0 && !cf1) {
         return nullptr;
     }
@@ -384,6 +388,100 @@ sk_sp<SkColorFilter> SkColorFilter::MakeMixer(sk_sp<SkColorFilter> cf0,
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+#if SK_SUPPORT_GPU
+#include "effects/GrSkSLFP.h"
+#include "GrRecordingContext.h"
+
+class SkRuntimeColorFilter : public SkColorFilter {
+public:
+    SkRuntimeColorFilter(int index, SkString sksl, sk_sp<SkData> inputs,
+                         void (*cpuFunction)(float[4], const void*))
+        : fIndex(index)
+        , fSkSL(std::move(sksl))
+        , fInputs(std::move(inputs))
+        , fCpuFunction(cpuFunction) {}
+
+#if SK_SUPPORT_GPU
+    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(
+            GrRecordingContext* context, const GrColorSpaceInfo&) const override {
+        return GrSkSLFP::Make(context, fIndex, "Runtime Color Filter", fSkSL,
+                              fInputs ? fInputs->data() : nullptr,
+                              fInputs ? fInputs->size() : 0);
+    }
+#endif
+
+    void onAppendStages(SkRasterPipeline* p, SkColorSpace*, SkArenaAlloc* alloc,
+                        bool shaderIsOpaque) const override {
+        // if this assert fails, it either means no CPU function was provided when this filter was
+        // created, or we have flattened and unflattened the filter, which nulls out this pointer.
+        // We don't currently have a means to flatten colorfilters containing CPU functions.
+        SkASSERT(fCpuFunction);
+        struct Ctx : public SkRasterPipeline_CallbackCtx {
+            SkRuntimeColorFilterFn cpuFn;
+            const void* inputs;
+        };
+        auto ctx = alloc->make<Ctx>();
+        ctx->inputs = fInputs->data();
+        ctx->cpuFn = fCpuFunction;
+        ctx->fn = [](SkRasterPipeline_CallbackCtx* arg, int active_pixels) {
+            auto ctx = (Ctx*)arg;
+            for (int i = 0; i < active_pixels; i++) {
+                ctx->cpuFn(ctx->rgba + i * 4, ctx->inputs);
+            }
+        };
+        p->append(SkRasterPipeline::callback, ctx);
+    }
+
+protected:
+    void flatten(SkWriteBuffer& buffer) const override {
+        // the client is responsible for ensuring that the indices match up between flattening and
+        // unflattening; we don't have a reasonable way to enforce that at the moment
+        buffer.writeInt(fIndex);
+        buffer.writeString(fSkSL.c_str());
+        if (fInputs) {
+            buffer.writeDataAsByteArray(fInputs.get());
+        } else {
+            buffer.writeByteArray(nullptr, 0);
+        }
+    }
+
+private:
+    SK_FLATTENABLE_HOOKS(SkRuntimeColorFilter)
+
+    int fIndex;
+    SkString fSkSL;
+    sk_sp<SkData> fInputs;
+    SkRuntimeColorFilterFn fCpuFunction;
+
+    friend class SkColorFilter;
+
+    typedef SkColorFilter INHERITED;
+};
+
+sk_sp<SkFlattenable> SkRuntimeColorFilter::CreateProc(SkReadBuffer& buffer) {
+    int index = buffer.readInt();
+    SkString sksl;
+    buffer.readString(&sksl);
+    sk_sp<SkData> inputs = buffer.readByteArrayAsData();
+    return sk_sp<SkFlattenable>(new SkRuntimeColorFilter(index, std::move(sksl), std::move(inputs),
+                                                         nullptr));
+}
+
+SkRuntimeColorFilterFactory::SkRuntimeColorFilterFactory(SkString sksl,
+                                                         SkRuntimeColorFilterFn cpuFunc)
+    : fIndex(GrSkSLFP::NewIndex())
+    , fSkSL(std::move(sksl))
+    , fCpuFunc(cpuFunc) {}
+
+sk_sp<SkColorFilter> SkRuntimeColorFilterFactory::make(sk_sp<SkData> inputs) {
+    return sk_sp<SkColorFilter>(new SkRuntimeColorFilter(fIndex, fSkSL, std::move(inputs),
+                                                         fCpuFunc));
+}
+
+#endif // SK_SUPPORT_GPU
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 #include "SkModeColorFilter.h"
 
 void SkColorFilter::RegisterFlattenables() {
@@ -391,4 +489,7 @@ void SkColorFilter::RegisterFlattenables() {
     SK_REGISTER_FLATTENABLE(SkModeColorFilter);
     SK_REGISTER_FLATTENABLE(SkSRGBGammaColorFilter);
     SK_REGISTER_FLATTENABLE(SkMixerColorFilter);
+#if SK_SUPPORT_GPU
+    SK_REGISTER_FLATTENABLE(SkRuntimeColorFilter);
+#endif
 }

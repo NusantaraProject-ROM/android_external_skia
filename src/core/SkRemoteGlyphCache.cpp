@@ -194,10 +194,10 @@ struct StrikeSpec {
 SkTextBlobCacheDiffCanvas::TrackLayerDevice::TrackLayerDevice(
         const SkIRect& bounds, const SkSurfaceProps& props, SkStrikeServer* server,
         sk_sp<SkColorSpace> colorSpace, const SkTextBlobCacheDiffCanvas::Settings& settings)
-    : SkNoPixelsDevice(bounds, props, std::move(colorSpace))
-    , fStrikeServer(server)
-    , fSettings(settings)
-    , fPainter{props, kUnknown_SkColorType, SkScalerContextFlags::kFakeGammaAndBoostContrast} {
+        : SkNoPixelsDevice(bounds, props, std::move(colorSpace))
+        , fStrikeServer(server)
+        , fSettings(settings)
+        , fPainter{props, kUnknown_SkColorType, imageInfo().colorSpace(), fStrikeServer} {
     SkASSERT(fStrikeServer);
 }
 
@@ -210,9 +210,21 @@ SkBaseDevice* SkTextBlobCacheDiffCanvas::TrackLayerDevice::onCreateDevice(
 
 void SkTextBlobCacheDiffCanvas::TrackLayerDevice::drawGlyphRunList(
         const SkGlyphRunList& glyphRunList) {
-    for (auto& glyphRun : glyphRunList) {
-        this->processGlyphRun(glyphRunList.origin(), glyphRun, glyphRunList.paint());
-    }
+
+    #if SK_SUPPORT_GPU
+    GrTextContext::Options options;
+    options.fMinDistanceFieldFontSize = fSettings.fMinDistanceFieldFontSize;
+    options.fMaxDistanceFieldFontSize = fSettings.fMaxDistanceFieldFontSize;
+    GrTextContext::SanitizeOptions(&options);
+
+    fPainter.processGlyphRunList(glyphRunList,
+                                 this->ctm(),
+                                 this->surfaceProps(),
+                                 fSettings.fContextSupportsDistanceFieldText,
+                                 options,
+                                 nullptr);
+    #endif  // SK_SUPPORT_GPU
+
 }
 
 // -- SkTextBlobCacheDiffCanvas -------------------------------------------------------------------
@@ -315,6 +327,24 @@ SkStrikeServer::SkGlyphCacheState* SkStrikeServer::getOrCreateCache(
 
 }
 
+SkScopedStrike SkStrikeServer::findOrCreateScopedStrike(const SkDescriptor& desc,
+                                                        const SkScalerContextEffects& effects,
+                                                        const SkTypeface& typeface) {
+    return SkScopedStrike{this->getOrCreateCache(desc, typeface, effects)};
+}
+
+void SkStrikeServer::checkForDeletedEntries() {
+    auto it = fRemoteGlyphStateMap.begin();
+    while (fRemoteGlyphStateMap.size() > fMaxEntriesInDescriptorMap &&
+           it != fRemoteGlyphStateMap.end()) {
+        if (fDiscardableHandleManager->isHandleDeleted(it->second->discardableHandleId())) {
+            it = fRemoteGlyphStateMap.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 SkStrikeServer::SkGlyphCacheState* SkStrikeServer::getOrCreateCache(
         const SkDescriptor& desc, const SkTypeface& typeface, SkScalerContextEffects effects) {
 
@@ -379,18 +409,6 @@ SkStrikeServer::SkGlyphCacheState* SkStrikeServer::getOrCreateCache(
 
     cacheStatePtr->setTypefaceAndEffects(&typeface, effects);
     return cacheStatePtr;
-}
-
-void SkStrikeServer::checkForDeletedEntries() {
-    auto it = fRemoteGlyphStateMap.begin();
-    while (fRemoteGlyphStateMap.size() > fMaxEntriesInDescriptorMap &&
-           it != fRemoteGlyphStateMap.end()) {
-        if (fDiscardableHandleManager->isHandleDeleted(it->second->discardableHandleId())) {
-            it = fRemoteGlyphStateMap.erase(it);
-        } else {
-            ++it;
-        }
-    }
 }
 
 // -- SkGlyphCacheState ----------------------------------------------------------------------------
@@ -575,6 +593,44 @@ void SkStrikeServer::SkGlyphCacheState::writeGlyphPath(const SkPackedGlyphID& gl
     size_t pathSize = path.writeToMemory(nullptr);
     serializer->write<uint64_t>(pathSize);
     path.writeToMemory(serializer->allocate(pathSize, kPathAlignment));
+}
+
+
+// This version of glyphMetrics only adds entries to result if their data need to be sent to the
+// GPU process.
+int SkStrikeServer::SkGlyphCacheState::glyphMetrics(
+        const SkGlyphID glyphIDs[], const SkPoint positions[], int n, SkGlyphPos result[]) {
+
+    int glyphsToSendCount = 0;
+    const SkPoint* posCursor = positions;
+    for (int i = 0; i < n; i++) {
+        SkPoint glyphPos = *posCursor++;
+        SkGlyphID glyphID = glyphIDs[i];
+        SkIPoint lookupPoint = SkStrikeCommon::SubpixelLookup(fAxisAlignmentForHText, glyphPos);
+        SkPackedGlyphID packedGlyphID = fIsSubpixel ? SkPackedGlyphID{glyphID, lookupPoint}
+                                                    : SkPackedGlyphID{glyphID};
+
+        // Check the cache for the glyph.
+        SkGlyph* glyphPtr = fGlyphMap.findOrNull(packedGlyphID);
+
+        // Has this glyph ever been seen before?
+        if (glyphPtr == nullptr) {
+
+            // Never seen before. Make a new glyph.
+            glyphPtr = fAlloc.make<SkGlyph>(packedGlyphID);
+            fGlyphMap.set(glyphPtr);
+            this->ensureScalerContext();
+            fContext->getMetrics(glyphPtr);
+
+            result[glyphsToSendCount++] = {glyphPtr, glyphPos};
+
+            // Make sure to send the glyph to the GPU because we always send the image for a glyph.
+            fCachedGlyphImages.add(packedGlyphID);
+            fPendingGlyphImages.push_back(packedGlyphID);
+        }
+    }
+
+    return glyphsToSendCount;
 }
 
 // SkStrikeClient -----------------------------------------

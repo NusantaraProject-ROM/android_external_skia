@@ -42,7 +42,7 @@ GrBackendTextureImageGenerator::Make(sk_sp<GrTexture> texture, GrSurfaceOrigin o
     // Attach our texture to this context's resource cache. This ensures that deletion will happen
     // in the correct thread/context. This adds the only ref to the texture that will persist from
     // this point. That ref will be released when the generator's RefHelper is freed.
-    context->priv().getResourceCache()->insertCrossContextGpuResource(texture.get());
+    context->priv().getResourceCache()->insertDelayedResourceUnref(texture.get());
 
     GrBackendTexture backendTexture = texture->getBackendTexture();
     GrBackendFormat backendFormat = backendTexture.getBackendFormat();
@@ -106,7 +106,7 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
     auto proxyProvider = context->priv().proxyProvider();
 
     fBorrowingMutex.acquire();
-    sk_sp<GrReleaseProcHelper> releaseProcHelper;
+    sk_sp<GrRefCntedCallback> releaseProcHelper;
     if (SK_InvalidGenID != fRefHelper->fBorrowingContextID) {
         if (fRefHelper->fBorrowingContextID != context->priv().contextID()) {
             fBorrowingMutex.release();
@@ -119,10 +119,10 @@ sk_sp<GrTextureProxy> GrBackendTextureImageGenerator::onGenerateTexture(
     } else {
         SkASSERT(!fRefHelper->fBorrowingContextReleaseProc);
         // The ref we add to fRefHelper here will be passed into and owned by the
-        // GrReleaseProcHelper.
+        // GrRefCntedCallback.
         fRefHelper->ref();
-        releaseProcHelper.reset(new GrReleaseProcHelper(ReleaseRefHelper_TextureReleaseProc,
-                                                        fRefHelper));
+        releaseProcHelper.reset(
+                new GrRefCntedCallback(ReleaseRefHelper_TextureReleaseProc, fRefHelper));
         fRefHelper->fBorrowingContextReleaseProc = releaseProcHelper.get();
     }
     fRefHelper->fBorrowingContextID = context->priv().contextID();

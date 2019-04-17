@@ -758,6 +758,17 @@ void GrGLCaps::initGLSL(const GrGLContextInfo& ctxInfo, const GrGLInterface* gli
         }
     }
 
+    if (kGL_GrGLStandard == standard) {
+        shaderCaps->fSampleVariablesSupport = ctxInfo.glslGeneration() >= k400_GrGLSLGeneration;
+    } else {
+        if (ctxInfo.glslGeneration() >= k320es_GrGLSLGeneration) {
+            shaderCaps->fSampleVariablesSupport = true;
+        } else if (ctxInfo.hasExtension("GL_OES_sample_variables")) {
+            shaderCaps->fSampleVariablesSupport = true;
+            shaderCaps->fSampleVariablesExtensionString = "GL_OES_sample_variables";
+        }
+    }
+
     shaderCaps->fVersionDeclString = get_glsl_version_decl_string(standard,
                                                                   shaderCaps->fGLSLGeneration,
                                                                   fIsCoreProfile);
@@ -804,6 +815,7 @@ void GrGLCaps::initGLSL(const GrGLContextInfo& ctxInfo, const GrGLInterface* gli
 
     shaderCaps->fFloatIs32Bits = is_float_fp32(ctxInfo, gli, GR_GL_HIGH_FLOAT);
     shaderCaps->fHalfIs32Bits = is_float_fp32(ctxInfo, gli, GR_GL_MEDIUM_FLOAT);
+    shaderCaps->fHasLowFragmentPrecision = kMali4xx_GrGLRenderer == ctxInfo.renderer();
 
     // Unsigned integers only supported in and after GLSL 1.30.
     shaderCaps->fUnsignedSupport = ctxInfo.glslGeneration() >= k130_GrGLSLGeneration;
@@ -985,11 +997,6 @@ void GrGLCaps::initFSAASupport(const GrContextOptions& contextOptions, const GrG
     // We disable MSAA across the board for Intel GPUs for performance reasons.
     if (kIntel_GrGLVendor == ctxInfo.vendor()) {
         fMSFBOType = kNone_MSFBOType;
-    }
-
-    // We only have a use for raster multisample if there is coverage modulation from mixed samples.
-    if (fUsesMixedSamples && ctxInfo.hasExtension("GL_EXT_raster_multisample")) {
-        GR_GL_GetIntegerv(gli, GR_GL_MAX_RASTER_SAMPLES, &fMaxRasterSamples);
     }
 }
 
@@ -1914,6 +1921,10 @@ void GrGLCaps::initConfigTable(const GrContextOptions& contextOptions,
         fConfigTable[kRGBA_half_GrPixelConfig].fFlags |= ConfigInfo::kCanUseTexStorage_Flag;
     }
     fConfigTable[kRGBA_half_GrPixelConfig].fSwizzle = GrSwizzle::RGBA();
+
+    // kRGBA_half_Clamped is just distinguished by clamps added to the shader. At the API level,
+    // it's identical to kRGBA_half.
+    fConfigTable[kRGBA_half_Clamped_GrPixelConfig] = fConfigTable[kRGBA_half_GrPixelConfig];
 
     // Compressed texture support
 
@@ -2981,6 +2992,11 @@ GrPixelConfig validate_sized_format(GrGLenum format, SkColorType ct, GrGLStandar
                 return kGray_8_as_Lum_GrPixelConfig;
             } else if (GR_GL_R8 == format) {
                 return kGray_8_as_Red_GrPixelConfig;
+            }
+            break;
+        case kRGBA_F16Norm_SkColorType:
+            if (GR_GL_RGBA16F == format) {
+                return kRGBA_half_Clamped_GrPixelConfig;
             }
             break;
         case kRGBA_F16_SkColorType:

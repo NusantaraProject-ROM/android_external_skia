@@ -29,7 +29,7 @@ VkPipelineStageFlags GrVkImage::LayoutToPipelineSrcStageFlags(const VkImageLayou
         return VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     } else if (VK_IMAGE_LAYOUT_PREINITIALIZED == layout) {
         return VK_PIPELINE_STAGE_HOST_BIT;
-    } else if (VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+    } else if (VK_IMAGE_LAYOUT_PRESENT_SRC_KHR == layout) {
         return VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     }
 
@@ -66,7 +66,7 @@ VkAccessFlags GrVkImage::LayoutToSrcAccessMask(const VkImageLayout layout) {
         flags = VK_ACCESS_TRANSFER_READ_BIT;
     } else if (VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL == layout) {
         flags = VK_ACCESS_SHADER_READ_BIT;
-    } else if (VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) {
+    } else if (VK_IMAGE_LAYOUT_PRESENT_SRC_KHR == layout) {
         flags = 0;
     }
     return flags;
@@ -93,7 +93,8 @@ void GrVkImage::setImageLayout(const GrVkGpu* gpu, VkImageLayout newLayout,
              VK_IMAGE_LAYOUT_PREINITIALIZED != newLayout);
     VkImageLayout currentLayout = this->currentLayout();
 
-    if (releaseFamilyQueue && fInfo.fCurrentQueueFamily == fInitialQueueFamily) {
+    if (releaseFamilyQueue && fInfo.fCurrentQueueFamily == fInitialQueueFamily &&
+        newLayout == currentLayout) {
         // We never transfered the image to this queue and we are releasing it so don't do anything.
         return;
     }
@@ -220,6 +221,17 @@ GrVkImage::~GrVkImage() {
     SkASSERT(!fResource);
 }
 
+void GrVkImage::prepareForPresent(GrVkGpu* gpu) {
+    VkImageLayout layout = this->currentLayout();
+    if (fInitialQueueFamily != VK_QUEUE_FAMILY_EXTERNAL &&
+        fInitialQueueFamily != VK_QUEUE_FAMILY_FOREIGN_EXT) {
+        if (gpu->vkCaps().supportsSwapchain()) {
+            layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        }
+    }
+    this->setImageLayout(gpu, layout, 0, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, false, true);
+}
+
 void GrVkImage::releaseImage(GrVkGpu* gpu) {
     if (fInfo.fCurrentQueueFamily != fInitialQueueFamily) {
         // The Vulkan spec is vague on what to put for the dstStageMask here. The spec for image
@@ -245,7 +257,7 @@ void GrVkImage::abandonImage() {
     }
 }
 
-void GrVkImage::setResourceRelease(sk_sp<GrReleaseProcHelper> releaseHelper) {
+void GrVkImage::setResourceRelease(sk_sp<GrRefCntedCallback> releaseHelper) {
     SkASSERT(fResource);
     // Forward the release proc on to GrVkImage::Resource
     fResource->setRelease(std::move(releaseHelper));
@@ -258,11 +270,10 @@ void GrVkImage::Resource::freeGPUData(GrVkGpu* gpu) const {
     GrVkMemory::FreeImageMemory(gpu, isLinear, fAlloc);
 }
 
-void GrVkImage::Resource::setIdleProc(GrVkTexture* owner, GrTexture::IdleProc proc,
-                                      void* context) const {
+void GrVkImage::Resource::replaceIdleProc(
+        GrVkTexture* owner, sk_sp<GrRefCntedCallback> idleCallback) const {
     fOwningTexture = owner;
-    fIdleProc = proc;
-    fIdleProcContext = context;
+    fIdleCallback = std::move(idleCallback);
 }
 
 void GrVkImage::Resource::removeOwningTexture() const { fOwningTexture = nullptr; }
@@ -271,22 +282,16 @@ void GrVkImage::Resource::notifyAddedToCommandBuffer() const { ++fNumCommandBuff
 
 void GrVkImage::Resource::notifyRemovedFromCommandBuffer() const {
     SkASSERT(fNumCommandBufferOwners);
-    if (--fNumCommandBufferOwners || !fIdleProc) {
+    if (--fNumCommandBufferOwners || !fIdleCallback) {
         return;
     }
-    if (fOwningTexture && fOwningTexture->resourcePriv().hasRefOrPendingIO()) {
-        return;
-    }
-    fIdleProc(fIdleProcContext);
     if (fOwningTexture) {
-        fOwningTexture->setIdleProc(nullptr, nullptr);
-        // Changing the texture's proc should change ours.
-        SkASSERT(!fIdleProc);
-        SkASSERT(!fIdleProc);
-    } else {
-        fIdleProc = nullptr;
-        fIdleProcContext = nullptr;
+        if (fOwningTexture->resourcePriv().hasRefOrPendingIO()) {
+            return;
+        }
+        fOwningTexture->removeIdleProc();
     }
+    fIdleCallback.reset();
 }
 
 void GrVkImage::BorrowedResource::freeGPUData(GrVkGpu* gpu) const {

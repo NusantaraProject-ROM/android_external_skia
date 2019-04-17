@@ -359,7 +359,7 @@ public:
         @param context         GPU context
         @param yuvColorSpace   How the YUV values are converted to RGB. One of:
                                            kJPEG_SkYUVColorSpace, kRec601_SkYUVColorSpace,
-                                           kRec709_SkYUVColorSpace
+                                           kRec709_SkYUVColorSpace, kIdentity_SkYUVColorSpace
         @param yuvaTextures    array of (up to four) YUVA textures on GPU which contain the,
                                possibly interleaved, YUVA planes
         @param yuvaIndices     array indicating which texture in yuvaTextures, and channel
@@ -384,7 +384,7 @@ public:
         @param context         GPU context
         @param yuvColorSpace   How the YUV values are converted to RGB. One of:
                                            kJPEG_SkYUVColorSpace, kRec601_SkYUVColorSpace,
-                                           kRec709_SkYUVColorSpace
+                                           kRec709_SkYUVColorSpace, kIdentity_SkYUVColorSpace
         @param yuvaTextures    array of (up to four) YUVA textures on GPU which contain the,
                                possibly interleaved, YUVA planes
         @param yuvaIndices     array indicating which texture in yuvaTextures, and channel
@@ -412,7 +412,7 @@ public:
         @param context         GPU context
         @param yuvColorSpace   How the YUV values are converted to RGB. One of:
                                            kJPEG_SkYUVColorSpace, kRec601_SkYUVColorSpace,
-                                           kRec709_SkYUVColorSpace
+                                           kRec709_SkYUVColorSpace, kIdentity_SkYUVColorSpace
         @param yuvaTextures    array of (up to four) YUVA textures on GPU which contain the,
                                possibly interleaved, YUVA planes
         @param yuvaIndices     array indicating which texture in yuvaTextures, and channel
@@ -444,7 +444,7 @@ public:
         @param context                GPU context
         @param yuvColorSpace          How the YUV values are converted to RGB. One of:
                                             kJPEG_SkYUVColorSpace, kRec601_SkYUVColorSpace,
-                                            kRec709_SkYUVColorSpace
+                                            kRec709_SkYUVColorSpace, kIdentity_SkYUVColorSpace
         @param yuvaPixmaps            array of (up to four) SkPixmap which contain the,
                                       possibly interleaved, YUVA planes
         @param yuvaIndices            array indicating which pixmap in yuvaPixmaps, and channel
@@ -486,7 +486,7 @@ public:
 
         @param context         GPU context
         @param yuvColorSpace   one of: kJPEG_SkYUVColorSpace, kRec601_SkYUVColorSpace,
-                               kRec709_SkYUVColorSpace
+                               kRec709_SkYUVColorSpace, kIdentity_SkYUVColorSpace
         @param nv12Textures    array of YUV textures on GPU
         @param imageOrigin     one of: kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin
         @param imageColorSpace range of colors; may be nullptr
@@ -507,7 +507,7 @@ public:
 
         @param context         GPU context
         @param yuvColorSpace   one of: kJPEG_SkYUVColorSpace, kRec601_SkYUVColorSpace,
-                               kRec709_SkYUVColorSpace
+                               kRec709_SkYUVColorSpace, kIdentity_SkYUVColorSpace
         @param nv12Textures    array of YUV textures on GPU
         @param imageOrigin     one of: kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin
         @param backendTexture  the resource that stores the final pixels
@@ -565,6 +565,22 @@ public:
             AHardwareBuffer* hardwareBuffer,
             SkAlphaType alphaType = kPremul_SkAlphaType,
             sk_sp<SkColorSpace> colorSpace = nullptr,
+            GrSurfaceOrigin surfaceOrigin = kTopLeft_GrSurfaceOrigin);
+
+    /** Creates SkImage from Android hardware buffer and uploads the data from the SkPixmap to it.
+        Returned SkImage takes a reference on the buffer.
+
+        Only available on Android, when __ANDROID_API__ is defined to be 26 or greater.
+
+        @param pixmap          SkPixmap that contains data to be uploaded to the AHardwareBuffer
+        @param hardwareBuffer  AHardwareBuffer Android hardware buffer
+        @param surfaceOrigin   one of: kBottomLeft_GrSurfaceOrigin, kTopLeft_GrSurfaceOrigin
+        @return                created SkImage, or nullptr
+    */
+    static sk_sp<SkImage> MakeFromAHardwareBufferWithData(
+            GrContext* context,
+            const SkPixmap& pixmap,
+            AHardwareBuffer* hardwareBuffer,
             GrSurfaceOrigin surfaceOrigin = kTopLeft_GrSurfaceOrigin);
 #endif
 

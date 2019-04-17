@@ -177,7 +177,7 @@ DEF_TEST(SkSLFPUniform, r) {
          },
          {
             "fColorVar = args.fUniformHandler->addUniform(kFragment_GrShaderFlag, kHalf4_GrSLType, "
-                                                         "kDefault_GrSLPrecision, \"color\");",
+                                                         "\"color\");",
          });
 }
 
@@ -196,7 +196,7 @@ DEF_TEST(SkSLFPInUniform, r) {
          },
          {
             "fColorVar = args.fUniformHandler->addUniform(kFragment_GrShaderFlag, kHalf4_GrSLType, "
-                                                         "kDefault_GrSLPrecision, \"color\");",
+                                                         "\"color\");",
             "pdman.set4fv(fColorVar, 1, reinterpret_cast<const float*>(&(_outer.color())));"
          });
 }
@@ -214,7 +214,7 @@ DEF_TEST(SkSLFPInUniformCType, r) {
          },
          {
             "fColorVar = args.fUniformHandler->addUniform(kFragment_GrShaderFlag, kHalf4_GrSLType, "
-                                                         "kDefault_GrSLPrecision, \"color\");",
+                                                         "\"color\");",
             "pdman.set4fv(fColorVar, 1, (_outer.color()).vec());"
          });
 }
@@ -235,7 +235,7 @@ DEF_TEST(SkSLFPTrackedInUniform, r) {
          {
             "SkRect fColorPrev = SkRect::MakeEmpty();",
             "fColorVar = args.fUniformHandler->addUniform(kFragment_GrShaderFlag, kHalf4_GrSLType, "
-                                                         "kDefault_GrSLPrecision, \"color\");",
+                                                         "\"color\");",
             "const SkRect& colorValue = _outer.color();",
             "if (fColorPrev.isEmpty() || fColorPrev != colorValue) {",
             "fColorPrev = colorValue;",
@@ -257,7 +257,7 @@ DEF_TEST(SkSLFPNonInlinedInUniform, r) {
          },
          {
             "fPointVar = args.fUniformHandler->addUniform(kFragment_GrShaderFlag, kHalf2_GrSLType, "
-                                                         "kDefault_GrSLPrecision, \"point\");",
+                                                         "\"point\");",
             "const SkPoint& pointValue = _outer.point();",
             "pdman.set2f(fPointVar, pointValue.fX, pointValue.fY);"
          });
@@ -285,7 +285,7 @@ DEF_TEST(SkSLFPConditionalInUniform, r) {
             "auto test = _outer.test();",
             "if (test) {",
             "fColorVar = args.fUniformHandler->addUniform(kFragment_GrShaderFlag, kHalf4_GrSLType, "
-                                                         "kDefault_GrSLPrecision, \"color\");",
+                                                         "\"color\");",
             "if (fColorVar.isValid()) {",
             "const SkPMColor4f& colorValue = _outer.color();",
             "if (fColorPrev != colorValue) {",
@@ -625,5 +625,29 @@ DEF_TEST(SkSLFPChildProcessorFieldAccess, r) {
             "fragBuilder->codeAppendf(\"\\n    %s = %s;\\n} else {\\n    %s = half4(0.5);\\n}\\n\""
                     ", args.fOutputColor, _child0.c_str(), args.fOutputColor);",
             "this->registerChildProcessor(src.childProcessor(fChild_index).clone());"
+         });
+}
+
+DEF_TEST(SkSLFPNullableChildProcessor, r) {
+    test(r,
+         "in fragmentProcessor? child;"
+         "void main() {"
+         "    if (child != null) {"
+         "        sk_OutColor = process(child);"
+         "    } else {"
+         "        sk_OutColor = half4(0.5);"
+         "    }"
+         "}",
+         *SkSL::ShaderCapsFactory::Default(),
+         {},
+         {
+            "SkString _child0(\"_child0\");",
+            "if (_outer.child_index() >= 0) {",
+                "this->emitChild(_outer.child_index(), &_child0, args);",
+            "} else {",
+                "fragBuilder->codeAppendf(\"half4 %s;\", _child0.c_str());",
+            "}",
+            "fragBuilder->codeAppendf(\"\\n    %s = %s;\\n} else {\\n    %s = half4(0.5);\\n}\\n\""
+                    ", args.fOutputColor, _child0.c_str(), args.fOutputColor);",
          });
 }

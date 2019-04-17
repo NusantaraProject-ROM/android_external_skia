@@ -193,7 +193,7 @@ sk_sp<SkSpecialImage> SkSpecialImage::MakeFromImage(GrRecordingContext* context,
     SkASSERT(rect_fits(subset, image->width(), image->height()));
 
 #if SK_SUPPORT_GPU
-    if (sk_sp<GrTextureProxy> proxy = as_IB(image)->asTextureProxyRef()) {
+    if (sk_sp<GrTextureProxy> proxy = as_IB(image)->asTextureProxyRef(context)) {
         if (!as_IB(image)->context()->priv().matches(context)) {
             return nullptr;
         }
@@ -254,21 +254,17 @@ public:
     }
 #endif
 
-// TODO: The raster implementations of image filters all currently assume that the pixels are
-// legacy N32. Until they actually check the format and operate on sRGB or F16 data appropriately,
-// we can't enable this. (They will continue to produce incorrect results, but less-so).
-#define RASTER_IMAGE_FILTERS_SUPPORT_SRGB_AND_F16 0
-
     sk_sp<SkSpecialSurface> onMakeSurface(const SkImageFilter::OutputProperties& outProps,
                                           const SkISize& size, SkAlphaType at,
                                           const SkSurfaceProps* props) const override {
-#if RASTER_IMAGE_FILTERS_SUPPORT_SRGB_AND_F16
-        SkColorSpace* colorSpace = outProps.colorSpace();
-#else
+#ifdef SK_SUPPORT_LEGACY_RASTERLAYERCOLORSPACE
         SkColorSpace* colorSpace = nullptr;
-#endif
         SkColorType colorType = colorSpace && colorSpace->gammaIsLinear()
-            ? kRGBA_F16_SkColorType : kN32_SkColorType;
+                                ? kRGBA_F16_SkColorType : kN32_SkColorType;
+#else
+        SkColorSpace* colorSpace = outProps.colorSpace();
+        SkColorType colorType = kN32_SkColorType;   // TODO: find ways to allow f16
+#endif
         SkImageInfo info = SkImageInfo::Make(size.width(), size.height(), colorType, at,
                                              sk_ref_sp(colorSpace));
         return SkSpecialSurface::MakeRaster(info, props);
@@ -302,13 +298,14 @@ public:
 
     sk_sp<SkSurface> onMakeTightSurface(const SkImageFilter::OutputProperties& outProps,
                                         const SkISize& size, SkAlphaType at) const override {
-#if RASTER_IMAGE_FILTERS_SUPPORT_SRGB_AND_F16
-        SkColorSpace* colorSpace = outProps.colorSpace();
-#else
+#ifdef SK_SUPPORT_LEGACY_RASTERLAYERCOLORSPACE
         SkColorSpace* colorSpace = nullptr;
-#endif
         SkColorType colorType = colorSpace && colorSpace->gammaIsLinear()
-            ? kRGBA_F16_SkColorType : kN32_SkColorType;
+        ? kRGBA_F16_SkColorType : kN32_SkColorType;
+#else
+        SkColorSpace* colorSpace = outProps.colorSpace();
+        SkColorType colorType = kN32_SkColorType;   // TODO: find ways to allow f16
+#endif
         SkImageInfo info = SkImageInfo::Make(size.width(), size.height(), colorType, at,
                                              sk_ref_sp(colorSpace));
         return SkSurface::MakeRaster(info);

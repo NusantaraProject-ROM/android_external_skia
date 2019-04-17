@@ -166,6 +166,16 @@ static Window::BackendType backend_type_for_window(Window::BackendType backendTy
     return Window::kRaster_BackendType == backendType ? Window::kNativeGL_BackendType : backendType;
 }
 
+class NullSlide : public Slide {
+    SkISize getDimensions() const override {
+        return SkISize::Make(640, 480);
+    }
+
+    void draw(SkCanvas* canvas) override {
+        canvas->clear(0xffff11ff);
+    }
+};
+
 const char* kName = "name";
 const char* kValue = "value";
 const char* kOptions = "options";
@@ -524,8 +534,8 @@ Viewer::Viewer(int argc, char** argv, void* platformData)
     fImGuiGamutPaint.setColor(SK_ColorWHITE);
     fImGuiGamutPaint.setFilterQuality(kLow_SkFilterQuality);
 
-    this->setCurrentSlide(this->startupSlide());
     fWindow->attach(backend_type_for_window(fBackendType));
+    this->setCurrentSlide(this->startupSlide());
 }
 
 void Viewer::initSlides() {
@@ -665,6 +675,11 @@ void Viewer::initSlides() {
             }
         }
     }
+
+    if (!fSlides.count()) {
+        sk_sp<Slide> slide(new NullSlide());
+        fSlides.push_back(std::move(slide));
+    }
 }
 
 
@@ -738,6 +753,22 @@ void Viewer::updateTitle() {
 
     paintFlag(&SkPaintFields::fAntiAlias, &SkPaint::isAntiAlias, "Antialias", "Alias");
     paintFlag(&SkPaintFields::fDither, &SkPaint::isDither, "DITHER", "No Dither");
+    if (fPaintOverrides.fFilterQuality) {
+        switch (fPaint.getFilterQuality()) {
+            case kNone_SkFilterQuality:
+                paintTitle.append("NoFilter");
+                break;
+            case kLow_SkFilterQuality:
+                paintTitle.append("LowFilter");
+                break;
+            case kMedium_SkFilterQuality:
+                paintTitle.append("MediumFilter");
+                break;
+            case kHigh_SkFilterQuality:
+                paintTitle.append("HighFilter");
+                break;
+        }
+    }
 
     fontFlag(&SkFontFields::fForceAutoHinting, &SkFont::isForceAutoHinting,
              "Force Autohint", "No Force Autohint");
@@ -1048,10 +1079,10 @@ public:
             const SkTextBlobBuilder::RunBuffer& runBuffer
                 = it.positioning() == SkTextBlobRunIterator::kDefault_Positioning
                     ? SkTextBlobBuilderPriv::AllocRunText(&builder, font,
-                        it.offset().x(),it.offset().y(), it.glyphCount(), it.textSize(), SkString())
+                        it.glyphCount(), it.offset().x(),it.offset().y(), it.textSize(), SkString())
                 : it.positioning() == SkTextBlobRunIterator::kHorizontal_Positioning
                     ? SkTextBlobBuilderPriv::AllocRunTextPosH(&builder, font,
-                        it.offset().y(), it.glyphCount(), it.textSize(), SkString())
+                        it.glyphCount(), it.offset().y(), it.textSize(), SkString())
                 : it.positioning() == SkTextBlobRunIterator::kFull_Positioning
                     ? SkTextBlobBuilderPriv::AllocRunTextPos(&builder, font,
                         it.glyphCount(), it.textSize(), SkString())
@@ -1123,6 +1154,9 @@ public:
         if (fPaintOverrides->fDither) {
             paint->writable()->setDither(fPaint->isDither());
         }
+        if (fPaintOverrides->fFilterQuality) {
+            paint->writable()->setFilterQuality(fPaint->getFilterQuality());
+        }
         return true;
     }
     SkPaint* fPaint;
@@ -1131,11 +1165,16 @@ public:
     Viewer::SkFontFields* fFontOverrides;
 };
 
-void Viewer::drawSlide(SkCanvas* canvas) {
-    SkAutoCanvasRestore autorestore(canvas, false);
+void Viewer::drawSlide(SkSurface* surface) {
+    if (fCurrentSlide < 0) {
+        return;
+    }
+
+    SkAutoCanvasRestore autorestore(surface->getCanvas(), false);
 
     // By default, we render directly into the window's surface/canvas
-    SkCanvas* slideCanvas = canvas;
+    SkSurface* slideSurface = surface;
+    SkCanvas* slideCanvas = surface->getCanvas();
     fLastImage.reset();
 
     // If we're in any of the color managed modes, construct the color space we're going to use
@@ -1160,14 +1199,15 @@ void Viewer::drawSlide(SkCanvas* canvas) {
     // Grab some things we'll need to make surfaces (for tiling or general offscreen rendering)
     SkColorType colorType = (ColorMode::kColorManagedF16 == fColorMode) ? kRGBA_F16_SkColorType
                                                                         : kN32_SkColorType;
-    SkSurfaceProps props(SkSurfaceProps::kLegacyFontHost_InitType);
-    canvas->getProps(&props);
 
     auto make_surface = [=](int w, int h) {
+        SkSurfaceProps props(SkSurfaceProps::kLegacyFontHost_InitType);
+        slideCanvas->getProps(&props);
+
         SkImageInfo info = SkImageInfo::Make(w, h, colorType, kPremul_SkAlphaType, colorSpace);
         return Window::kRaster_BackendType == this->fBackendType
                 ? SkSurface::MakeRaster(info, &props)
-                : canvas->makeSurface(info, &props);
+                : slideCanvas->makeSurface(info, &props);
     };
 
     // We need to render offscreen if we're...
@@ -1181,6 +1221,7 @@ void Viewer::drawSlide(SkCanvas* canvas) {
         colorSpace != nullptr) {
 
         offscreenSurface = make_surface(fWindow->width(), fWindow->height());
+        slideSurface = offscreenSurface.get();
         slideCanvas = offscreenSurface->getCanvas();
     }
 
@@ -1231,13 +1272,14 @@ void Viewer::drawSlide(SkCanvas* canvas) {
 
     // Force a flush so we can time that, too
     fStatsLayer.beginTiming(fFlushTimer);
-    slideCanvas->flush();
+    slideSurface->flush();
     fStatsLayer.endTiming(fFlushTimer);
 
     // If we rendered offscreen, snap an image and push the results to the window's canvas
     if (offscreenSurface) {
         fLastImage = offscreenSurface->makeImageSnapshot();
 
+        SkCanvas* canvas = surface->getCanvas();
         SkPaint paint;
         paint.setBlendMode(SkBlendMode::kSrc);
         int prePerspectiveCount = canvas->save();
@@ -1256,10 +1298,10 @@ void Viewer::onBackendCreated() {
     fWindow->show();
 }
 
-void Viewer::onPaint(SkCanvas* canvas) {
-    this->drawSlide(canvas);
+void Viewer::onPaint(SkSurface* surface) {
+    this->drawSlide(surface);
 
-    fCommands.drawHelp(canvas);
+    fCommands.drawHelp(surface->getCanvas());
 
     this->drawImGui();
 
@@ -1529,6 +1571,13 @@ void Viewer::drawImGui() {
                 }
             }
 
+            if (ImGui::CollapsingHeader("Tiling")) {
+                ImGui::Checkbox("Enable", &fTiled);
+                ImGui::Checkbox("Draw Boundaries", &fDrawTileBoundaries);
+                ImGui::SliderFloat("Horizontal", &fTileScale.fWidth, 0.1f, 1.0f);
+                ImGui::SliderFloat("Vertical", &fTileScale.fHeight, 0.1f, 1.0f);
+            }
+
             if (ImGui::CollapsingHeader("Transform")) {
                 float zoom = fZoomLevel;
                 if (ImGui::SliderFloat("Zoom", &zoom, MIN_ZOOM_LEVEL, MAX_ZOOM_LEVEL)) {
@@ -1551,12 +1600,6 @@ void Viewer::drawImGui() {
                     this->preTouchMatrixChanged();
                     paramsChanged = true;
                     fOffset = {0.5f, 0.5f};
-                }
-                if (ImGui::CollapsingHeader("Tiling")) {
-                    ImGui::Checkbox("Enable", &fTiled);
-                    ImGui::Checkbox("Draw Boundaries", &fDrawTileBoundaries);
-                    ImGui::SliderFloat("Horizontal", &fTileScale.fWidth, 0.1f, 1.0f);
-                    ImGui::SliderFloat("Vertical", &fTileScale.fHeight, 0.1f, 1.0f);
                 }
                 int perspectiveMode = static_cast<int>(fPerspectiveMode);
                 if (ImGui::Combo("Perspective", &perspectiveMode, "Off\0Real\0Fake\0\0")) {
@@ -1642,6 +1685,23 @@ void Viewer::drawImGui() {
                           "Default\0No Dither\0Dither\0\0",
                           &SkPaintFields::fDither,
                           &SkPaint::isDither, &SkPaint::setDither);
+
+                int filterQualityIdx = 0;
+                if (fPaintOverrides.fFilterQuality) {
+                    filterQualityIdx = SkTo<int>(fPaint.getFilterQuality()) + 1;
+                }
+                if (ImGui::Combo("Filter Quality", &filterQualityIdx,
+                                 "Default\0None\0Low\0Medium\0High\0\0"))
+                {
+                    if (filterQualityIdx == 0) {
+                        fPaintOverrides.fFilterQuality = false;
+                        fPaint.setFilterQuality(kNone_SkFilterQuality);
+                    } else {
+                        fPaint.setFilterQuality(SkTo<SkFilterQuality>(filterQualityIdx - 1));
+                        fPaintOverrides.fFilterQuality = true;
+                    }
+                    paramsChanged = true;
+                }
             }
 
             if (ImGui::CollapsingHeader("Font")) {

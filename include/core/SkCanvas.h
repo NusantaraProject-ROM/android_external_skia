@@ -41,6 +41,7 @@ class SkFont;
 class SkGlyphRunBuilder;
 class SkImage;
 class SkImageFilter;
+class SkPaintFilterCanvas;
 class SkPath;
 class SkPicture;
 class SkPixmap;
@@ -2563,7 +2564,7 @@ private:
     friend class SkPictureRecord;   // predrawNotify (why does it need it? <reed>)
     friend class SkOverdrawCanvas;
     friend class SkRasterHandleAllocator;
-
+    friend class ClipTileRenderer;  // GM needs getTopDevice() until API is in SkCanvas
 protected:
     // For use by SkNoDrawCanvas (via SkCanvasVirtualEnforcer, which can't be a friend)
     SkCanvas(const SkIRect& bounds);
@@ -2634,6 +2635,8 @@ private:
      *  If the clip is empty, this will return false.
      */
     bool androidFramework_isClipAA() const;
+
+    virtual SkPaintFilterCanvas* internal_private_asPaintFilterCanvas() const { return nullptr; }
 
     /**
      *  Keep track of the device clip bounds and if the matrix is scale-translate.  This allows

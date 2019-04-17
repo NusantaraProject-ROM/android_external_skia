@@ -29,6 +29,10 @@ namespace SkSL {
     class Compiler;
 }
 
+// Helper macros for autorelease pools
+#define SK_BEGIN_AUTORELEASE_BLOCK @autoreleasepool {
+#define SK_END_AUTORELEASE_BLOCK }
+
 class GrMtlGpu : public GrGpu {
 public:
     static sk_sp<GrGpu> Make(GrContext* context, const GrContextOptions& options,
@@ -127,6 +131,12 @@ private:
 
     void onResetContext(uint32_t resetBits) override {}
 
+    void querySampleLocations(
+            GrRenderTarget*, const GrStencilSettings&, SkTArray<SkPoint>*) override {
+        SkASSERT(!this->caps()->sampleLocationsSupport());
+        SK_ABORT("Sample locations not yet implemented for Metal.");
+    }
+
     void xferBarrier(GrRenderTarget*, GrXferBarrierType) override {}
 
     sk_sp<GrTexture> onCreateTexture(const GrSurfaceDesc& desc, SkBudgeted budgeted,
@@ -163,8 +173,13 @@ private:
 
     void onResolveRenderTarget(GrRenderTarget* target) override { return; }
 
-    void onFinishFlush(bool insertedSemaphores) override {
-        this->submitCommandBuffer(kSkip_SyncQueue);
+    void onFinishFlush(GrSurfaceProxy*, SkSurface::BackendSurfaceAccess access,
+                       SkSurface::FlushFlags flags, bool insertedSemaphores) override {
+        if (flags & SkSurface::kSyncCpu_FlushFlag) {
+            this->submitCommandBuffer(kForce_SyncQueue);
+        } else {
+            this->submitCommandBuffer(kSkip_SyncQueue);
+        }
     }
 
     // Function that uploads data onto textures with private storage mode (GPU access only).

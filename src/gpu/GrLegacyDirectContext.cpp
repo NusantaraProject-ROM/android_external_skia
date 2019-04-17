@@ -73,6 +73,15 @@ protected:
             return false;
         }
 
+        bool sortOpLists = this->explicitlyAllocateGPUResources();
+        if (GrContextOptions::Enable::kNo == this->options().fSortRenderTargets) {
+            sortOpLists = false;
+        } else if (GrContextOptions::Enable::kYes == this->options().fSortRenderTargets) {
+            sortOpLists = true;
+        }
+
+        this->setupDrawingManager(this->explicitlyAllocateGPUResources(), sortOpLists);
+
         SkASSERT(this->caps());
 
         GrDrawOpAtlas::AllowMultitexturing allowMultitexturing;
@@ -85,7 +94,7 @@ protected:
             allowMultitexturing = GrDrawOpAtlas::AllowMultitexturing::kYes;
         }
 
-        GrStrikeCache* glyphCache = this->priv().getGlyphCache();
+        GrStrikeCache* glyphCache = this->priv().getGrStrikeCache();
         GrProxyProvider* proxyProvider = this->priv().proxyProvider();
 
         fAtlasManager = new GrAtlasManager(proxyProvider, glyphCache,

@@ -46,11 +46,13 @@ GrShaderCaps::GrShaderCaps(const GrContextOptions& options) {
     fFlatInterpolationSupport = false;
     fPreferFlatInterpolation = false;
     fNoPerspectiveInterpolationSupport = false;
+    fSampleVariablesSupport = false;
     fExternalTextureSupport = false;
     fVertexIDSupport = false;
     fFPManipulationSupport = false;
     fFloatIs32Bits = true;
     fHalfIs32Bits = false;
+    fHasLowFragmentPrecision = false;
     fUnsignedSupport = false;
     fBuiltinFMASupport = false;
 
@@ -63,6 +65,7 @@ GrShaderCaps::GrShaderCaps(const GrContextOptions& options) {
     fExternalTextureExtensionString = nullptr;
     fSecondExternalTextureExtensionString = nullptr;
     fNoPerspectiveInterpolationExtensionString = nullptr;
+    fSampleVariablesExtensionString = nullptr;
     fFBFetchColorName = nullptr;
     fFBFetchExtensionString = nullptr;
     fImageLoadStoreExtensionString = nullptr;
@@ -117,11 +120,13 @@ void GrShaderCaps::dumpJSON(SkJSONWriter* writer) const {
     writer->appendBool("Flat interpolation support", fFlatInterpolationSupport);
     writer->appendBool("Prefer flat interpolation", fPreferFlatInterpolation);
     writer->appendBool("No perspective interpolation support", fNoPerspectiveInterpolationSupport);
+    writer->appendBool("Sample variables support", fSampleVariablesSupport);
     writer->appendBool("External texture support", fExternalTextureSupport);
     writer->appendBool("sk_VertexID support", fVertexIDSupport);
     writer->appendBool("Floating point manipulation support", fFPManipulationSupport);
     writer->appendBool("float == fp32", fFloatIs32Bits);
     writer->appendBool("half == fp32", fHalfIs32Bits);
+    writer->appendBool("Has poor fragment precision", fHasLowFragmentPrecision);
     writer->appendBool("Builtin fma() support", fBuiltinFMASupport);
 
     writer->appendS32("Max FS Samplers", fMaxFragmentSamplers);

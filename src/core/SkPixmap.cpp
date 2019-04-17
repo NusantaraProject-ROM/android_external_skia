@@ -119,6 +119,7 @@ float SkPixmap::getAlphaf(int x, int y) const {
             uint32_t u32 = static_cast<const uint32_t*>(srcPtr)[0];
             value = (u32 >> 30) * (1.0f/3);
         } break;
+        case kRGBA_F16Norm_SkColorType:
         case kRGBA_F16_SkColorType: {
             uint64_t px;
             memcpy(&px, srcPtr, sizeof(px));
@@ -304,6 +305,7 @@ SkColor SkPixmap::getColor(int x, int y) const {
                  | (uint32_t)( b * 255.0f ) <<  0
                  | (uint32_t)( a * 255.0f ) << 24;
         }
+        case kRGBA_F16Norm_SkColorType:
         case kRGBA_F16_SkColorType: {
             const uint64_t* addr =
                 (const uint64_t*)fPixels + y * (fRowBytes >> 3) + x;
@@ -388,6 +390,7 @@ bool SkPixmap::computeIsOpaque() const {
             }
             return true;
         }
+        case kRGBA_F16Norm_SkColorType:
         case kRGBA_F16_SkColorType: {
             const SkHalf* row = (const SkHalf*)this->addr();
             for (int y = 0; y < height; ++y) {

@@ -7,6 +7,7 @@
 
 #include "GrFillRectOp.h"
 
+#include "GrCaps.h"
 #include "GrGeometryProcessor.h"
 #include "GrMeshDrawOp.h"
 #include "GrPaint.h"
@@ -79,7 +80,7 @@ public:
                const GrPerspQuad& localQuad, GrQuadType localQuadType)
             : INHERITED(ClassID())
             , fHelper(args, aaType, stencil)
-            , fWideColor(!SkPMColor4fFitsInBytes(paintColor)) {
+            , fColorType(GrQuadPerEdgeAA::MinColorType(paintColor)) {
         // The color stored with the quad is the clear color if a scissor-clear is decided upon
         // when executing the op.
         fDeviceQuads.push_back(deviceQuad, deviceQuadType, { paintColor, edgeFlags });
@@ -121,7 +122,8 @@ public:
     }
 #endif
 
-    GrProcessorSet::Analysis finalize(const GrCaps& caps, const GrAppliedClip* clip) override {
+    GrProcessorSet::Analysis finalize(
+            const GrCaps& caps, const GrAppliedClip* clip, GrFSAAType fsaaType) override {
         // Initialize aggregate color analysis with the first quad's color (which always exists)
         SkASSERT(this->quadCount() > 0);
         GrProcessorAnalysisColor quadColors(fDeviceQuads.metadata(0).fColor);
@@ -141,14 +143,32 @@ public:
         GrProcessorAnalysisCoverage coverage = fHelper.aaType() == GrAAType::kCoverage ?
                 GrProcessorAnalysisCoverage::kSingleChannel :
                 GrProcessorAnalysisCoverage::kNone;
-        auto result = fHelper.finalizeProcessors(caps, clip, coverage, &quadColors);
+        auto result = fHelper.finalizeProcessors(caps, clip, fsaaType, coverage, &quadColors);
         // If there is a constant color after analysis, that means all of the quads should be set
         // to the same color (even if they started out with different colors).
         SkPMColor4f colorOverride;
         if (quadColors.isConstant(&colorOverride)) {
+            // TODO: Unified strategy for handling wide color outputs from processor analysis.
+            // skbug.com/8871
+            fColorType = GrQuadPerEdgeAA::MinColorType(colorOverride);
+            if (fColorType == ColorType::kHalf && !caps.halfFloatVertexAttributeSupport()) {
+                fColorType = ColorType::kByte;
+                colorOverride = {SkTPin(colorOverride.fR, 0.0f, 1.0f),
+                                 SkTPin(colorOverride.fG, 0.0f, 1.0f),
+                                 SkTPin(colorOverride.fB, 0.0f, 1.0f),
+                                 colorOverride.fA};
+            }
             for (int i = 0; i < this->quadCount(); ++i) {
                 fDeviceQuads.metadata(i).fColor = colorOverride;
             }
+        }
+        // Most SkShaders' FPs multiply their calculated color by the paint color or alpha. We want
+        // to use ColorType::kNone to optimize out that multiply. However, if there are no color
+        // FPs then were really writing a special shader for white rectangles and not saving any
+        // multiples. So in that case use bytes to avoid the extra shader (and possibly work around
+        // an ANGLE issue: crbug.com/942565).
+        if (fColorType == ColorType::kNone && !result.hasColorFragmentProcessor()) {
+            fColorType = ColorType::kByte;
         }
 
         return result;
@@ -177,10 +197,9 @@ private:
         using Domain = GrQuadPerEdgeAA::Domain;
         static constexpr SkRect kEmptyDomain = SkRect::MakeEmpty();
 
-        VertexSpec vertexSpec(fDeviceQuads.quadType(),
-                              fWideColor ? ColorType::kHalf : ColorType::kByte,
-                              fLocalQuads.quadType(), fHelper.usesLocalCoords(), Domain::kNo,
-                              fHelper.aaType(), fHelper.compatibleWithAlphaAsCoverage());
+        VertexSpec vertexSpec(fDeviceQuads.quadType(), fColorType, fLocalQuads.quadType(),
+                              fHelper.usesLocalCoords(), Domain::kNo, fHelper.aaType(),
+                              fHelper.compatibleWithAlphaAsCoverage());
         // Make sure that if the op thought it was a solid color, the vertex spec does not use
         // local coords.
         SkASSERT(!fHelper.isTrivial() || !fHelper.usesLocalCoords());
@@ -257,7 +276,7 @@ private:
         // If the processor sets are compatible, the two ops are always compatible; it just needs to
         // adjust the state of the op to be the more general quad and aa types of the two ops and
         // then concatenate the per-quad data.
-        fWideColor |= that->fWideColor;
+        fColorType = SkTMax(fColorType, that->fColorType);
 
         // The helper stores the aa type, but isCompatible(with true arg) allows the two ops' aa
         // types to be none and coverage, in which case this op's aa type must be lifted to coverage
@@ -296,8 +315,8 @@ private:
         }
 
         // clear compatible won't need to be updated, since device quad type and paint is the same,
-        // but this quad has a new color, so maybe update wide color
-        fWideColor |= !SkPMColor4fFitsInBytes(color);
+        // but this quad has a new color, so maybe update color type
+        fColorType = SkTMax(fColorType, GrQuadPerEdgeAA::MinColorType(color));
 
         // Update the bounds and add the quad to this op's storage
         SkRect newBounds = this->bounds();
@@ -327,7 +346,7 @@ private:
     // No metadata attached to the local quads; this list is empty when local coords are not needed.
     GrQuadList fLocalQuads;
 
-    unsigned fWideColor: 1;
+    ColorType fColorType;
 
     typedef GrMeshDrawOp INHERITED;
 };

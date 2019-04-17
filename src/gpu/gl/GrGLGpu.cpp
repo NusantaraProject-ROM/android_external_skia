@@ -579,11 +579,6 @@ void GrGLGpu::onResetContext(uint32_t resetBits) {
         fMSAAEnabled = kUnknown_TriState;
 
         if (this->caps()->usesMixedSamples()) {
-            if (0 != this->caps()->maxRasterSamples()) {
-                fHWRasterMultisampleEnabled = kUnknown_TriState;
-                fHWNumRasterSamples = 0;
-            }
-
             // The skia blend modes all use premultiplied alpha and therefore expect RGBA coverage
             // modulation. This state has no effect when not rendering to a mixed sampled target.
             GL_CALL(CoverageModulation(GR_GL_RGBA));
@@ -867,6 +862,7 @@ static inline GrGLint config_alignment(GrPixelConfig config) {
         case kAlpha_half_GrPixelConfig:
         case kAlpha_half_as_Red_GrPixelConfig:
         case kRGBA_half_GrPixelConfig:
+        case kRGBA_half_Clamped_GrPixelConfig:
             return 2;
         case kRGBA_8888_GrPixelConfig:
         case kRGB_888_GrPixelConfig:  // We're really talking about GrColorType::kRGB_888x here.
@@ -2058,7 +2054,7 @@ bool GrGLGpu::flushGLState(GrRenderTarget* renderTarget,
         this->disableScissor();
     }
     this->flushWindowRectangles(pipeline.getWindowRectsState(), glRT, origin);
-    this->flushHWAAState(glRT, pipeline.isHWAntialiasState(), !stencil.isDisabled());
+    this->flushHWAAState(glRT, pipeline.isHWAntialiasState());
 
     // This must come after textures are flushed because a texture may need
     // to be msaa-resolved (which will modify bound FBO state).
@@ -2852,7 +2848,7 @@ void GrGLGpu::disableStencil() {
     }
 }
 
-void GrGLGpu::flushHWAAState(GrRenderTarget* rt, bool useHWAA, bool stencilEnabled) {
+void GrGLGpu::flushHWAAState(GrRenderTarget* rt, bool useHWAA) {
     // rt is only optional if useHWAA is false.
     SkASSERT(rt || !useHWAA);
     SkASSERT(!useHWAA || rt->isStencilBufferMultisampled());
@@ -2869,32 +2865,6 @@ void GrGLGpu::flushHWAAState(GrRenderTarget* rt, bool useHWAA, bool stencilEnabl
                 fMSAAEnabled = kNo_TriState;
             }
         }
-    }
-
-    if (0 != this->caps()->maxRasterSamples()) {
-        if (useHWAA && GrFSAAType::kMixedSamples == rt->fsaaType() && !stencilEnabled) {
-            // Since stencil is disabled and we want more samples than are in the color buffer, we
-            // need to tell the rasterizer explicitly how many to run.
-            if (kYes_TriState != fHWRasterMultisampleEnabled) {
-                GL_CALL(Enable(GR_GL_RASTER_MULTISAMPLE));
-                fHWRasterMultisampleEnabled = kYes_TriState;
-            }
-            int numStencilSamples = rt->numStencilSamples();
-            // convert to GL's understanding of sample counts where 0 means nonMSAA.
-            numStencilSamples = 1 == numStencilSamples ? 0 : numStencilSamples;
-            if (numStencilSamples != fHWNumRasterSamples) {
-                SkASSERT(numStencilSamples <= this->caps()->maxRasterSamples());
-                GL_CALL(RasterSamples(numStencilSamples, GR_GL_TRUE));
-                fHWNumRasterSamples = numStencilSamples;
-            }
-        } else {
-            if (kNo_TriState != fHWRasterMultisampleEnabled) {
-                GL_CALL(Disable(GR_GL_RASTER_MULTISAMPLE));
-                fHWRasterMultisampleEnabled = kNo_TriState;
-            }
-        }
-    } else {
-        SkASSERT(!useHWAA || GrFSAAType::kMixedSamples != rt->fsaaType() || stencilEnabled);
     }
 }
 
@@ -3726,7 +3696,7 @@ bool GrGLGpu::copySurfaceAsDraw(GrSurface* dst, GrSurfaceOrigin dstOrigin,
     blendInfo.reset();
     this->flushBlend(blendInfo, GrSwizzle::RGBA());
     this->flushColorWrite(true);
-    this->flushHWAAState(nullptr, false, false);
+    this->flushHWAAState(nullptr, false);
     this->disableScissor();
     this->disableWindowRectangles();
     this->disableStencil();
@@ -3890,7 +3860,7 @@ bool GrGLGpu::onRegenerateMipMapLevels(GrTexture* texture) {
     blendInfo.reset();
     this->flushBlend(blendInfo, GrSwizzle::RGBA());
     this->flushColorWrite(true);
-    this->flushHWAAState(nullptr, false, false);
+    this->flushHWAAState(nullptr, false);
     this->disableScissor();
     this->disableWindowRectangles();
     this->disableStencil();
@@ -3947,6 +3917,23 @@ bool GrGLGpu::onRegenerateMipMapLevels(GrTexture* texture) {
     glTex->setCachedParams(nullptr, params, this->getResetTimestamp());
 
     return true;
+}
+
+void GrGLGpu::querySampleLocations(
+        GrRenderTarget* renderTarget, const GrStencilSettings& stencilSettings,
+        SkTArray<SkPoint>* sampleLocations) {
+    this->flushStencil(stencilSettings);
+    this->flushHWAAState(renderTarget, true);
+    this->flushRenderTarget(static_cast<GrGLRenderTarget*>(renderTarget));
+
+    int effectiveSampleCnt;
+    GR_GL_GetIntegerv(this->glInterface(), GR_GL_SAMPLES, &effectiveSampleCnt);
+    SkASSERT(effectiveSampleCnt >= renderTarget->numStencilSamples());
+
+    sampleLocations->reset(effectiveSampleCnt);
+    for (int i = 0; i < effectiveSampleCnt; ++i) {
+        GL_CALL(GetMultisamplefv(GR_GL_SAMPLE_POSITION, i, &(*sampleLocations)[i].fX));
+    }
 }
 
 void GrGLGpu::xferBarrier(GrRenderTarget* rt, GrXferBarrierType type) {
@@ -4279,10 +4266,14 @@ GrGLAttribArrayState* GrGLGpu::HWVertexArrayState::bindInternalVertexArray(GrGLG
     return attribState;
 }
 
-void GrGLGpu::onFinishFlush(bool insertedSemaphore) {
+void GrGLGpu::onFinishFlush(GrSurfaceProxy*, SkSurface::BackendSurfaceAccess access,
+                            SkSurface::FlushFlags flags, bool insertedSemaphore) {
     // If we inserted semaphores during the flush, we need to call GLFlush.
     if (insertedSemaphore) {
         GL_CALL(Flush());
+    }
+    if (flags & SkSurface::kSyncCpu_FlushFlag) {
+        GL_CALL(Finish());
     }
 }
 
