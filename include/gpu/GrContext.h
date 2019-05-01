@@ -242,6 +242,16 @@ public:
     ///////////////////////////////////////////////////////////////////////////
     // Misc.
 
+
+    /**
+     * Inserts a list of GPU semaphores that the current GPU-backed API must wait on before
+     * executing any more commands on the GPU. Skia will take ownership of the underlying semaphores
+     * and delete them once they have been signaled and waited on. If this call returns false, then
+     * the GPU back-end will not wait on any passed in semaphores, and the client will still own the
+     * semaphores.
+     */
+    bool wait(int numSemaphores, const GrBackendSemaphore* waitSemaphores);
+
     /**
      * Call to ensure all drawing to the context has been issued to the underlying 3D API.
      */
@@ -260,16 +270,31 @@ public:
      * themselves can be deleted as soon as this function returns.
      *
      * If the backend API is OpenGL only uninitialized GrBackendSemaphores are supported.
-     * If the backend API is Vulkan either initialized or unitialized semaphores are supported.
-     * If unitialized, the semaphores which are created will be valid for use only with the VkDevice
-     * with which they were created.
+     * If the backend API is Vulkan either initialized or uninitialized semaphores are supported.
+     * If uninitialized, the semaphores which are created will be valid for use only with the
+     * VkDevice with which they were created.
      *
-     * If this call returns GrSemaphoresSubmited::kNo, the GPU backend will not have created or
+     * If this call returns GrSemaphoresSubmitted::kNo, the GPU backend will not have created or
      * added any semaphores to signal on the GPU. Thus the client should not have the GPU wait on
      * any of the semaphores. However, any pending commands to the context will still be flushed.
+     *
+     * If a finishedProc is provided, the finishedProc will be called when all work submitted to the
+     * gpu from this flush call and all previous flush calls has finished on the GPU. If the flush
+     * call fails due to an error and nothing ends up getting sent to the GPU, the finished proc is
+     * called immediately.
+     */
+    GrSemaphoresSubmitted flush(GrFlushFlags flags, int numSemaphores,
+                                GrBackendSemaphore signalSemaphores[],
+                                GrGpuFinishedProc finishedProc = nullptr,
+                                GrGpuFinishedContext finishedContext = nullptr);
+
+    /**
+     * Deprecated.
      */
     GrSemaphoresSubmitted flushAndSignalSemaphores(int numSemaphores,
-                                                   GrBackendSemaphore signalSemaphores[]);
+                                                   GrBackendSemaphore signalSemaphores[]) {
+        return this->flush(kNone_GrFlushFlags, numSemaphores, signalSemaphores);
+    }
 
     // Provides access to functions that aren't part of the public API.
     GrContextPriv priv();

@@ -72,15 +72,15 @@ public:
 
     FixedFunctionFlags fixedFunctionFlags() const override { return FixedFunctionFlags::kNone; }
 
-    GrProcessorSet::Analysis finalize(
-            const GrCaps& caps, const GrAppliedClip*, GrFSAAType fsaaType) override {
+    GrProcessorSet::Analysis finalize(const GrCaps& caps, const GrAppliedClip*,
+                                      GrFSAAType fsaaType, GrClampType clampType) override {
         // Set the color to unknown because the subclass may change the color later.
         GrProcessorAnalysisColor gpColor;
         gpColor.setToUnknown();
         // We ignore the clip so pass this rather than the GrAppliedClip param.
         static GrAppliedClip kNoClip;
         return fHelper.finalizeProcessors(
-                caps, &kNoClip, fsaaType, GrProcessorAnalysisCoverage::kNone, &gpColor);
+                caps, &kNoClip, fsaaType, clampType, GrProcessorAnalysisCoverage::kNone, &gpColor);
     }
 
 protected:
@@ -583,7 +583,7 @@ DEF_GPUTEST_FOR_GL_RENDERING_CONTEXTS(OnFlushCallbackTest, reporter, ctxInfo) {
     }
 
     rtc->prepareForExternalIO(SkSurface::BackendSurfaceAccess::kNoAccess,
-                              SkSurface::kNone_FlushFlags, 0, nullptr);
+                              kNone_GrFlushFlags, 0, nullptr, nullptr, nullptr);
 
     SkBitmap readBack;
     readBack.allocN32Pixels(kFinalWidth, kFinalHeight);
