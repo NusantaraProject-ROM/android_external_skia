@@ -1072,7 +1072,11 @@ void SkGpuDevice::drawSpecial(SkSpecialImage* special, int left, int top, const 
     if (GrPixelConfigIsAlphaOnly(config)) {
         fp = GrFragmentProcessor::MakeInputPremulAndMulByOutput(std::move(fp));
     } else {
-        fp = GrFragmentProcessor::MulChildByInputAlpha(std::move(fp));
+        if (paint.getColor4f().isOpaque()) {
+            fp = GrFragmentProcessor::OverrideInput(std::move(fp), SK_PMColor4fWHITE, false);
+        } else {
+            fp = GrFragmentProcessor::MulChildByInputAlpha(std::move(fp));
+        }
     }
 
     GrPaint grPaint;
@@ -1612,18 +1616,19 @@ void SkGpuDevice::drawDrawable(SkDrawable* drawable, const SkMatrix* matrix, SkC
 ///////////////////////////////////////////////////////////////////////////////
 
 void SkGpuDevice::flush() {
-    this->flushAndSignalSemaphores(SkSurface::BackendSurfaceAccess::kNoAccess,
-                                   SkSurface::kNone_FlushFlags, 0, nullptr);
+    this->flush(SkSurface::BackendSurfaceAccess::kNoAccess, kNone_GrFlushFlags, 0, nullptr, nullptr,
+                nullptr);
 }
 
-GrSemaphoresSubmitted SkGpuDevice::flushAndSignalSemaphores(SkSurface::BackendSurfaceAccess access,
-                                                            SkSurface::FlushFlags flags,
-                                                            int numSemaphores,
-                                                            GrBackendSemaphore signalSemaphores[]) {
+GrSemaphoresSubmitted SkGpuDevice::flush(SkSurface::BackendSurfaceAccess access, GrFlushFlags flags,
+                                         int numSemaphores, GrBackendSemaphore signalSemaphores[],
+                                         GrGpuFinishedProc finishedProc,
+                                         GrGpuFinishedContext finishedContext) {
     ASSERT_SINGLE_OWNER
 
     return fRenderTargetContext->prepareForExternalIO(access, flags, numSemaphores,
-                                                      signalSemaphores);
+                                                      signalSemaphores, finishedProc,
+                                                      finishedContext);
 }
 
 bool SkGpuDevice::wait(int numSemaphores, const GrBackendSemaphore* waitSemaphores) {
