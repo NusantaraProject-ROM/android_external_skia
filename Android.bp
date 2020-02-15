@@ -13,8 +13,10 @@ cc_library_static {
         "-Wno-implicit-fallthrough",
         "-Wno-missing-field-initializers",
         "-Wno-thread-safety-analysis",
+        "-Wno-unknown-warning-option",
         "-Wno-unused-parameter",
         "-Wno-unused-variable",
+        "-Wno-array-suspicious",
         "-fvisibility=hidden",
     ],
 
